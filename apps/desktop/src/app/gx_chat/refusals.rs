@@ -117,6 +117,7 @@ fn rpc_method_name(wire: &str) -> &'static str {
         ChatRpcMethod::ImportNativeAttachments => "importNativeAttachments",
         ChatRpcMethod::ReadNativeComposer => "readNativeComposer",
         ChatRpcMethod::RunProjectDocsAction => "runProjectDocsAction",
+        ChatRpcMethod::ReadCoordinatorThreads => "readCoordinatorThreads",
         ChatRpcMethod::Other(_) => "other",
     }
 }

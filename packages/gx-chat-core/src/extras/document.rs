@@ -32,6 +32,7 @@ pub fn document(state: &ChatState, context: &ChatContext, into: &mut Document) {
         state.session.coordinator_threads.as_ref(),
         extras.panels.threads_collapsed,
         extras.panels.threads_show_all,
+        extras.panels.threads_all.as_ref().map(|(_, rows)| rows),
     ));
 
     let working = state.session.server_working || state.session.external_working;

@@ -43,8 +43,19 @@ pub fn handle_with_ids(
             Vec::new()
         }
         ActionKind::ToggleCoordinatorThreadsMore => {
-            state.extras.panels.threads_show_all = flag(action, "expanded");
-            Vec::new()
+            let panels = &mut state.extras.panels;
+            panels.threads_show_all = flag(action, "expanded");
+            if !panels.threads_show_all {
+                panels.threads_all = None;
+                panels.threads_all_request = None;
+            }
+            crate::extras::coordinator_threads::read_all_threads(
+                panels,
+                state.session.coordinator_threads.as_ref(),
+                next_request_id,
+            )
+            .into_iter()
+            .collect()
         }
         // Opening a thread is the host's: it focuses (and wakes) another session.
         ActionKind::OpenCoordinatorThread => vec![Effect::HostAction {

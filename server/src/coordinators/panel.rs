@@ -6,9 +6,12 @@
 //! SEE-ALSO: server/src/server/coordinator_runtime.rs (refresh and republish), server/src/session_chat_follower/frames.rs and session_chat_read.rs (carry it), packages/gx-chat-core/src/extras/coordinator_threads.rs (the panel).
 //!
 //! CDXC:Coordinators 2026-10-06 WHY:
-//! Every thread is sent, resolved ones included, with no cap: the panel's "N more" row must reach each thread the coordinator has so the user can still open and talk to any of them (the user: "Don't actually 'hide' them please"). The core orders and folds them by `activeAt`.
+//! A frame carries only a summary: the working threads, the ones that need the user's approval, the 3 most recently active others, the total and a `revision` of the full list. With ~95 threads the whole list was ~30KB on every chat state frame. The full list, resolved threads included, is read once when the user opens the panel's "N more" row (`/api/readCoordinatorThreads`), and read again when the revision moves while it stays open, so every thread stays reachable (the user: "Don't actually 'hide' them please").
+//! SEE-ALSO: packages/gx-chat-core/src/extras/coordinator_threads.rs (`OTHER_ROWS_SHOWN`, which `SUMMARY_OTHER_ROWS` must match, and the read).
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::sync::{Mutex, OnceLock};
 
 use rusqlite::Connection;
@@ -23,9 +26,64 @@ use super::state::{
 use crate::domain::DomainRepository;
 use crate::presentation::now_iso;
 
-fn panels() -> &'static Mutex<HashMap<SessionKey, Value>> {
-    static PANELS: OnceLock<Mutex<HashMap<SessionKey, Value>>> = OnceLock::new();
+/// Threads that neither work nor need approval a frame's summary carries, newest first.
+const SUMMARY_OTHER_ROWS: usize = 3;
+
+/// One coordinator's cached panel: what frames carry, and what "N more" reads.
+#[derive(PartialEq)]
+struct CachedPanel {
+    summary: Value,
+    /// Every thread, in the panel's order.
+    threads: Vec<Value>,
+}
+
+fn panels() -> &'static Mutex<HashMap<SessionKey, CachedPanel>> {
+    static PANELS: OnceLock<Mutex<HashMap<SessionKey, CachedPanel>>> = OnceLock::new();
     PANELS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Working first, then blocked on the user, then the rest; each newest first.
+fn panel_rank(row: &Value) -> u8 {
+    match (row["state"].as_str(), row["needsApproval"] == true) {
+        (Some("working"), _) => 0,
+        (_, true) => 1,
+        _ => 2,
+    }
+}
+
+fn cached_panel(mut threads: Vec<Value>) -> CachedPanel {
+    threads.sort_by(|left, right| {
+        panel_rank(left).cmp(&panel_rank(right)).then_with(|| {
+            right["activeAt"]
+                .as_str()
+                .unwrap_or_default()
+                .cmp(left["activeAt"].as_str().unwrap_or_default())
+        })
+    });
+    let mut hasher = DefaultHasher::new();
+    serde_json::to_string(&threads)
+        .unwrap_or_default()
+        .hash(&mut hasher);
+    let pinned = threads.iter().filter(|row| panel_rank(row) < 2).count();
+    let summary = json!({
+        "threads": threads.iter().take(pinned + SUMMARY_OTHER_ROWS).collect::<Vec<_>>(),
+        "total": threads.len(),
+        "revision": format!("{:016x}", hasher.finish()),
+    });
+    CachedPanel { summary, threads }
+}
+
+/// `/api/readCoordinatorThreads`: every thread of the coordinator, for the panel's "N more".
+pub fn read_coordinator_threads(key: &SessionKey) -> Value {
+    let panels = panels().lock().ok();
+    match panels.as_ref().and_then(|panels| panels.get(key)) {
+        Some(panel) => json!({
+            "threads": panel.threads,
+            "total": panel.threads.len(),
+            "revision": panel.summary["revision"],
+        }),
+        None => json!({ "threads": [], "total": 0, "revision": "" }),
+    }
 }
 
 /// Adds `coordinatorThreads` to a chat frame or read result of a coordinator session.
@@ -37,7 +95,7 @@ pub fn insert_coordinator_threads(
     let value = panels().lock().ok().and_then(|panels| {
         panels
             .get(&(project_id.to_string(), session_id.to_string()))
-            .cloned()
+            .map(|panel| panel.summary.clone())
     });
     if let Some(value) = value {
         frame.insert("coordinatorThreads".to_string(), value);
@@ -54,7 +112,7 @@ pub fn refresh_coordinator_panels(
     };
     let threads = list_threads(db).unwrap_or_default();
     let generated_at = now_iso();
-    let mut next: HashMap<SessionKey, Value> = HashMap::new();
+    let mut next: HashMap<SessionKey, CachedPanel> = HashMap::new();
     for coordinator in coordinators {
         let key = coordinator.key();
         if repository
@@ -126,14 +184,14 @@ pub fn refresh_coordinator_panels(
             }
             rows.push(row);
         }
-        next.insert(key, json!({ "threads": rows }));
+        next.insert(key, cached_panel(rows));
     }
     let Ok(mut panels) = panels().lock() else {
         return Vec::new();
     };
     let mut changed = next
         .iter()
-        .filter(|(key, value)| panels.get(*key) != Some(*value))
+        .filter(|(key, panel)| panels.get(*key).map(|cached| &cached.summary) != Some(&panel.summary))
         .map(|(key, _)| key.clone())
         .collect::<Vec<_>>();
     // A coordinator that went away keeps its last panel on any open chat; nothing to republish.

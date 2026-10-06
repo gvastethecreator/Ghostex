@@ -6,10 +6,17 @@
 //!
 //! CDXC:Coordinators 2026-10-06 DECISION:
 //! The user, on the panel grouped Working / Finished / Sleeping / Done: "We need to simplify the sections here. I don't like sleeping, done, finished. User doesn't care about 'sleeping' or 'awake'. Also done and finished mean the same thing." Then: "I don't think 'Needs you' is an actual case, since threads just talk to the main agent in a coordinator; they never actually directly 'need me'." And: "Don't hide them. We show the last active few like we do now and I can click to see more in the threads component in the chat view." So there are no group headings: working threads first, then the 3 most recently active other threads (kept from the 2026-10-05 "show latest 3" decision, which this supersedes otherwise), then a "N more" row that lists every thread in place and folds them again. Every row still opens its thread, resolved ones included. The header says only how many work and how many threads there are. The rare thread blocked on something only the user can grant (a permission or folder-trust prompt) stays in the list right after the working ones with an amber "Needs your approval" tag instead of a group.
-//! SEE-ALSO: server/src/coordinators/panel.rs (the field), apps/desktop/src/app/native_chat/coordinator_threads.rs and apps/mobile/app/src/chat/native/cards/AgentPanels.tsx (the renderers), packages/gx-core/src/sidebar_view/threads.rs (the sidebar's two-hour rule).
+//!
+//! CDXC:Coordinators 2026-10-06 WHY:
+//! gxserver's frames carry only a summary (working, needs approval, the 3 most recent others, the total and a revision), because the whole list was ~30KB on every state frame. "N more" reads the full list once (`readCoordinatorThreads`), keeps it while the list is open, reads it again when a frame brings a new revision, and drops it when the list folds. Until the read answers, the summary rows stay listed.
+//! SEE-ALSO: server/src/coordinators/panel.rs (the field, the summary and the read), apps/desktop/src/app/native_chat/coordinator_threads.rs and apps/mobile/app/src/chat/native/cards/AgentPanels.tsx (the renderers), packages/gx-core/src/sidebar_view/threads.rs (the sidebar's two-hour rule).
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
+
+use crate::effect::Effect;
+use crate::state::PanelsState;
+use crate::wire::ChatRpcMethod;
 
 /// One thread row.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -49,6 +56,7 @@ pub struct CoordinatorThreadsPanel {
 pub const NEEDS_APPROVAL_LABEL: &str = "Needs your approval";
 
 /// Threads that neither work nor need approval listed before the rest fold behind `more_label`.
+/// gxserver's summary carries exactly this many (`SUMMARY_OTHER_ROWS` in its `panel.rs`).
 const OTHER_ROWS_SHOWN: usize = 3;
 
 fn text(value: &Value, key: &str) -> String {
@@ -68,15 +76,66 @@ fn plural(count: usize, one: &str, many: &str) -> String {
     format!("{count} {}", if count == 1 { one } else { many })
 }
 
-/// The panel, or `None` for a session that is not a coordinator or has no threads yet.
-pub fn coordinator_threads_panel(
+/// The read "N more" needs now: the list is open and what it holds (if anything) is not the
+/// revision the latest frame names. A gxserver that sends no revision sends every thread on its
+/// frames, so there is nothing to read.
+pub fn read_all_threads(
+    panels: &mut PanelsState,
     threads: Option<&Value>,
-    collapsed: bool,
-    show_all: bool,
-) -> Option<CoordinatorThreadsPanel> {
-    let mut rows: Vec<(String, CoordinatorThreadRow)> = threads?
-        .get("threads")
-        .and_then(Value::as_array)
+    next_request_id: impl FnOnce() -> u64,
+) -> Option<Effect> {
+    if !panels.threads_show_all || panels.threads_all_request.is_some() {
+        return None;
+    }
+    let revision = threads?
+        .get("revision")
+        .and_then(Value::as_str)
+        .filter(|revision| !revision.is_empty())?;
+    if panels
+        .threads_all
+        .as_ref()
+        .is_some_and(|(loaded, _)| loaded == revision)
+    {
+        return None;
+    }
+    let request_id = next_request_id();
+    panels.threads_all_request = Some((request_id, revision.to_string()));
+    Some(Effect::SendRpc {
+        request_id,
+        method: ChatRpcMethod::ReadCoordinatorThreads,
+        params: Box::new(json!({})),
+    })
+}
+
+/// Takes the answer to [`read_all_threads`]; `false` when `request_id` is not that read.
+pub fn settle_read(
+    panels: &mut PanelsState,
+    request_id: u64,
+    answer: Result<&Value, String>,
+) -> bool {
+    let asked = match panels.threads_all_request.take() {
+        Some((id, asked)) if id == request_id => asked,
+        other => {
+            panels.threads_all_request = other;
+            return false;
+        }
+    };
+    panels.threads_all = Some(match answer {
+        Ok(result) => (
+            result
+                .get("revision")
+                .and_then(Value::as_str)
+                .unwrap_or(&asked)
+                .to_string(),
+            result.get("threads").cloned().unwrap_or(Value::Null),
+        ),
+        Err(_) => (asked, Value::Null),
+    });
+    true
+}
+
+fn parse_rows(rows: Option<&Value>) -> Vec<(String, CoordinatorThreadRow)> {
+    rows.and_then(Value::as_array)
         .into_iter()
         .flatten()
         .map(|row| {
@@ -96,8 +155,31 @@ pub fn coordinator_threads_panel(
                 },
             )
         })
-        .collect();
-    if rows.is_empty() {
+        .collect()
+}
+
+/// The panel, or `None` for a session that is not a coordinator or has no threads yet. `threads`
+/// is the frames' summary; `all` the full list "N more" read, while it is open.
+pub fn coordinator_threads_panel(
+    threads: Option<&Value>,
+    collapsed: bool,
+    show_all: bool,
+    all: Option<&Value>,
+) -> Option<CoordinatorThreadsPanel> {
+    let threads = threads?;
+    let summary = parse_rows(threads.get("threads"));
+    let all = all.filter(|all| all.is_array()).filter(|_| show_all);
+    let mut rows = match all {
+        Some(all) => parse_rows(Some(all)),
+        None => summary,
+    };
+    // An older gxserver sends every thread and no total.
+    let total = threads
+        .get("total")
+        .and_then(Value::as_u64)
+        .map_or(0, |total| total as usize)
+        .max(rows.len());
+    if total == 0 {
         return None;
     }
     // Working, then blocked on the user, then the rest; each newest first (ISO times sort as text).
@@ -111,7 +193,6 @@ pub fn coordinator_threads_panel(
             .cmp(&rank(right))
             .then_with(|| right_at.cmp(left_at))
     });
-    let total = rows.len();
     let working = rows.iter().filter(|(_, row)| row.working).count();
     let approval = rows.iter().filter(|(_, row)| row.needs_approval).count();
     let pinned = working + approval;
@@ -144,8 +225,13 @@ pub fn coordinator_threads_panel(
 }
 
 /// The document value, `null` when there is no panel.
-pub fn project(threads: Option<&Value>, collapsed: bool, show_all: bool) -> Value {
-    coordinator_threads_panel(threads, collapsed, show_all)
+pub fn project(
+    threads: Option<&Value>,
+    collapsed: bool,
+    show_all: bool,
+    all: Option<&Value>,
+) -> Value {
+    coordinator_threads_panel(threads, collapsed, show_all, all)
         .and_then(|panel| serde_json::to_value(panel).ok())
         .unwrap_or(Value::Null)
 }
