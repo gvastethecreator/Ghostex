@@ -252,6 +252,48 @@ pub(crate) fn queue_startup_command_and_wake(
     Ok(())
 }
 
+/// CDXC:Drafts 2026-10-06 WHY:
+/// A draft's agent is started by the client that opens it (the desktop's attach, the phone's background attach), so a draft created with `ghostex create-agent --defer-start` that no client opened had no zmx daemon, and a chat message sent to it waited in the queue forever. The first message to such a draft wakes it, as a send to a sleeping session does (2026-09-25 decision); a draft whose daemon is already up is left alone.
+pub(crate) fn start_draft_agent_if_missing(state: &AppState, target: &SessionChatSendTarget) {
+    let state = state.clone();
+    let target = SessionChatSendTarget {
+        project_id: target.project_id.clone(),
+        session_id: target.session_id.clone(),
+        zmx_name: target.zmx_name.clone(),
+        session: Value::Null,
+    };
+    tokio::spawn(async move {
+        if !provider_missing(&state, &target).await {
+            return;
+        }
+        let body = json!({
+            "params": { "projectId": target.project_id, "sessionId": target.session_id }
+        });
+        let woke = crate::server::handle_zmx_lifecycle_http(
+            &state,
+            "/api/wakeSession".to_string(),
+            uuid::Uuid::new_v4().to_string(),
+            &body,
+        )
+        .await
+        .response
+        .status()
+        .is_success();
+        crate::session_chat_send_diagnostics::record_send_recovery(
+            &state,
+            if woke {
+                "sessionChatSendWokeSession"
+            } else {
+                "sessionChatSendWakeFailed"
+            },
+            &target.project_id,
+            &target.session_id,
+            "The draft's agent was not running when its first message was queued.",
+            &[],
+        );
+    });
+}
+
 /// A send accepted now and typed by the queue once the agent's input box appears; the chat draws
 /// it in the transcript, not in the queue strip.
 pub(crate) fn queue_startup_send(

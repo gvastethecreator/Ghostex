@@ -219,7 +219,7 @@ async fn send_session_chat_message_attempt(
         && image_paths.is_empty()
         && crate::agentbox::pending_session_agentbox(&target.session).is_none()
     {
-        return crate::session_chat_send_wake::queue_startup_send(
+        let queued = crate::session_chat_send_wake::queue_startup_send(
             state,
             endpoint_path,
             request_id,
@@ -227,6 +227,10 @@ async fn send_session_chat_message_attempt(
             &target,
             &text,
         );
+        if queued.response.status().is_success() {
+            crate::session_chat_send_wake::start_draft_agent_if_missing(state, &target);
+        }
+        return queued;
     }
     // A message never reaches the agent ahead of the model change the user picked before it
     // (2026-09-27 decision in session_chat_model_selection_alert.rs): it waits behind the change in

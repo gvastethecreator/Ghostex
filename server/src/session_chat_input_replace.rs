@@ -53,6 +53,8 @@ pub async fn clear_session_chat_composer(
     let method = composer_clear_method(&agent);
     let mut interrupt_sent = false;
     let mut shell_escape_sent = false;
+    let mut composer_seen = false;
+    let mut not_ready_reason = None;
     loop {
         if cancelled() {
             return Err(SessionChatSendError::not_attempted(
@@ -66,7 +68,18 @@ pub async fn clear_session_chat_composer(
             );
             let ready =
                 detect_session_chat_composer_readiness(Some(&agent), &screen, notice.as_ref());
-            if ready.state == SessionChatComposerState::Ready {
+            if ready.state != SessionChatComposerState::Ready {
+                // CDXC:SessionChat 2026-10-06 WHY:
+                // A send made while the agent boots passes the pre-send gate (an unreadable screen fails open) and waits here. When Claude's folder-trust question then appeared, the wait ran out and reported "The terminal draft could not be cleared", though no input box ever existed. A question the chat shows as a card is named at once, the way the pre-send gate names it; any other missing input box reports what the screen showed.
+                if let Some(notice) = notice.as_ref().filter(|notice| notice.is_answerable()) {
+                    return Err(SessionChatSendError::new(
+                        SessionChatSendFailure::ComposerNotReady,
+                        format!("{}. Answer it in chat before sending.", notice.title),
+                    ));
+                }
+                not_ready_reason = ready.reason.clone().or(not_ready_reason);
+            } else {
+                composer_seen = true;
                 if let Some(input) = session_chat_composer_input(&agent, &screen) {
                     if input.is_empty() && !input.shell_mode {
                         return Ok(());
@@ -115,6 +128,15 @@ pub async fn clear_session_chat_composer(
             break;
         }
         tokio::time::sleep(Duration::from_millis(SESSION_CHAT_CLEAR_INPUT_SETTLE_MS)).await;
+    }
+    if !composer_seen {
+        return Err(SessionChatSendError::new(
+            SessionChatSendFailure::ComposerNotReady,
+            not_ready_reason.unwrap_or_else(|| {
+                "The agent's input box did not appear, so nothing was typed. Your chat draft has been kept."
+                    .to_string()
+            }),
+        ));
     }
     Err(SessionChatSendError::new(
         SessionChatSendFailure::ComposerNotCleared,

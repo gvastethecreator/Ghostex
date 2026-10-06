@@ -4,7 +4,7 @@ Read this when the user reports that pressing Enter in the chat did nothing, the
 
 ## 1. gxserver's send log (always on)
 
-`~/.local/state/ghostex/logs/session-chat-send-failures.jsonl` (5 MB, rotated to `.1`–`.3`). gxserver writes it on every machine, with no debug switch:
+`~/.local/state/ghostex/logs/session-chat-send-failures.jsonl` on macOS and Linux, `%LOCALAPPDATA%\Ghostex\Logs\session-chat-send-failures.jsonl` on native Windows (5 MB, rotated to `.1`–`.3`). gxserver writes it on every machine, with no debug switch:
 
 - `sessionChatSendFailure`: every refused `/api/sendSessionChatMessage`, `setSessionChatDraft`, `queueSessionChatPrompt` and `sendSessionChatQueuedPrompt`, with `code`, `message`, `projectId`, `sessionId` and a text fingerprint (never the text).
 - `sessionChatSendFailureTerminal`: the same refusal followed by the session's **visible terminal screen** (`terminal.text`) captured right after the failure, or `captureError` when the zmx daemon could not be reached (`No such file or directory` means the daemon was gone, so the session was asleep).
@@ -39,6 +39,8 @@ To see every kind of failure there has been, group the `sessionChatSendFailure` 
 ## 3. The live screen
 
 `/Applications/Ghostex.app/Contents/Resources/Web/gxserver/bin/zmx history <zmxName>` prints the session's scrollback now (the zmx name is `S90-<projectId>-<sessionId>`, also in Copy Details as "Persistence").
+
+On every platform, `ghostex read-text <selector> [--lines n]` prints the same screen through gxserver (`send-text`, `send-enter` and `send-key` type into it). On native Windows the daemon is wmx: run `wmx.exe history <zmxName>` from the folder of the running `gxserver.exe` (`Get-Process gxserver | Select-Object Path`, usually `C:\Program Files\Ghostex\resources\native\`), not a copy left by an older per-user install under `%LOCALAPPDATA%\Ghostex\current`, whose `list` can hang. `The system cannot find the file specified. (os error 2)` from any of these means the session has no daemon: it is asleep, or it is a draft created with `create-agent --defer-start` that no client has opened yet.
 
 ## What the codes mean
 
