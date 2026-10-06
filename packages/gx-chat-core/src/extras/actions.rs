@@ -42,8 +42,8 @@ pub fn handle_with_ids(
             state.extras.panels.threads_collapsed = !flag(action, "open");
             Vec::new()
         }
-        ActionKind::ToggleCoordinatorThreadsDone => {
-            state.extras.panels.threads_show_done = flag(action, "expanded");
+        ActionKind::ToggleCoordinatorThreadsMore => {
+            state.extras.panels.threads_show_all = flag(action, "expanded");
             Vec::new()
         }
         // Opening a thread is the host's: it focuses (and wakes) another session.

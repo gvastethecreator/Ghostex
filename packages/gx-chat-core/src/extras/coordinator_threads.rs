@@ -1,11 +1,12 @@
-//! A coordinator's Threads panel: its threads grouped by what they need, above the composer.
+//! A coordinator's Threads panel, above the composer: one list of its threads, the working ones
+//! first, then the latest others, with the rest a click away.
 //!
 //! CDXC:Coordinators 2026-09-30 WHY:
-//! The panel answers "what needs me, what is running, what finished" without opening the sidebar, which the phone does not have. Grouping, order, labels and the done fold are decided here once for the desktop, web and phone renderers; gxserver only sends each thread's state and one line of detail (`coordinatorThreads`).
+//! The panel shows a coordinator's threads without opening the sidebar, which the phone does not have. Order, labels and the fold are decided here once for the desktop, web and phone renderers; gxserver only sends each thread's state, activity time and one line of detail (`coordinatorThreads`).
 //!
-//! CDXC:Coordinators 2026-10-05 DECISION:
-//! The user, on the panel that showed only "8 done" and no rows: "I think we shouldn't collapse all the done ones, let's show latest 3 from them so it looks better pls". The 3 most recently finished threads (gxserver sends done rows newest first) are normal rows after the running and waiting ones, and only the rest fold into "N more done"; with 3 or fewer done threads nothing folds.
-//! SEE-ALSO: server/src/coordinators/panel.rs (the field), apps/desktop/src/app/native_chat/coordinator_threads.rs and apps/mobile/app/src/chat/native/cards/AgentPanels.tsx (the renderers).
+//! CDXC:Coordinators 2026-10-06 DECISION:
+//! The user, on the panel grouped Working / Finished / Sleeping / Done: "We need to simplify the sections here. I don't like sleeping, done, finished. User doesn't care about 'sleeping' or 'awake'. Also done and finished mean the same thing." Then: "I don't think 'Needs you' is an actual case, since threads just talk to the main agent in a coordinator; they never actually directly 'need me'." And: "Don't hide them. We show the last active few like we do now and I can click to see more in the threads component in the chat view." So there are no group headings: working threads first, then the 3 most recently active other threads (kept from the 2026-10-05 "show latest 3" decision, which this supersedes otherwise), then a "N more" row that lists every thread in place and folds them again. Every row still opens its thread, resolved ones included. The header says only how many work and how many threads there are. The rare thread blocked on something only the user can grant (a permission or folder-trust prompt) stays in the list right after the working ones with an amber "Needs your approval" tag instead of a group.
+//! SEE-ALSO: server/src/coordinators/panel.rs (the field), apps/desktop/src/app/native_chat/coordinator_threads.rs and apps/mobile/app/src/chat/native/cards/AgentPanels.tsx (the renderers), packages/gx-core/src/sidebar_view/threads.rs (the sidebar's two-hour rule).
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,49 +20,36 @@ pub struct CoordinatorThreadRow {
     pub project_id: String,
     pub session_id: String,
     pub title: String,
-    /// One line: the question it waits on, its task while working, or its last report.
+    /// One line: its task while working, the prompt it is blocked on, or its last report.
     pub detail: String,
-    pub state: String,
+    pub working: bool,
+    /// Blocked on something only the user can grant; drawn with the amber tag.
+    pub needs_approval: bool,
     /// The worktree branch, when it has one.
     pub branch: String,
     pub lifecycle_state: String,
-}
-
-/// One heading and its rows.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CoordinatorThreadGroup {
-    pub state: String,
-    pub label: String,
-    pub rows: Vec<CoordinatorThreadRow>,
 }
 
 /// The panel.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CoordinatorThreadsPanel {
-    /// "1 waiting on you · 2 working · 3 done".
+    /// "1 working · 94 threads".
     pub meta: String,
-    pub groups: Vec<CoordinatorThreadGroup>,
-    /// A thread waits on someone, which tints the header.
+    pub rows: Vec<CoordinatorThreadRow>,
+    /// A thread needs the user's approval, which marks the header.
     pub attention: bool,
     pub collapsed: bool,
-    pub show_done: bool,
-    /// "5 more done" / "Hide done", or "" when every done thread is already listed.
-    pub done_label: String,
+    pub show_all: bool,
+    /// "91 more" / "Show fewer", or "" when every thread is already listed.
+    pub more_label: String,
 }
 
-/// Done threads listed as normal rows while the rest stay folded behind `done_label`.
-const DONE_ROWS_SHOWN: usize = 3;
+/// The tag a row blocked on the user carries.
+pub const NEEDS_APPROVAL_LABEL: &str = "Needs your approval";
 
-const GROUPS: [(&str, &str); 6] = [
-    ("waiting", "Waiting on you"),
-    ("working", "Working"),
-    ("finished", "Finished"),
-    ("sleeping", "Sleeping"),
-    ("closed", "Closed"),
-    ("done", "Done"),
-];
+/// Threads that neither work nor need approval listed before the rest fold behind `more_label`.
+const OTHER_ROWS_SHOWN: usize = 3;
 
 fn text(value: &Value, key: &str) -> String {
     value
@@ -71,101 +59,93 @@ fn text(value: &Value, key: &str) -> String {
         .to_string()
 }
 
-fn known_state(state: &str) -> &'static str {
-    GROUPS
-        .iter()
-        .find(|(known, _)| *known == state)
-        .map(|(known, _)| *known)
-        .unwrap_or("finished")
-}
-
 /// `true` when the session is a coordinator, whatever its thread count.
 pub fn is_coordinator(threads: Option<&Value>) -> bool {
     threads.is_some_and(Value::is_object)
+}
+
+fn plural(count: usize, one: &str, many: &str) -> String {
+    format!("{count} {}", if count == 1 { one } else { many })
 }
 
 /// The panel, or `None` for a session that is not a coordinator or has no threads yet.
 pub fn coordinator_threads_panel(
     threads: Option<&Value>,
     collapsed: bool,
-    show_done: bool,
+    show_all: bool,
 ) -> Option<CoordinatorThreadsPanel> {
-    let threads = threads?;
-    let rows: Vec<&Value> = threads
+    let mut rows: Vec<(String, CoordinatorThreadRow)> = threads?
         .get("threads")
         .and_then(Value::as_array)
-        .map(|rows| rows.iter().collect())
-        .unwrap_or_default();
-    let done_count = threads
-        .get("doneCount")
-        .and_then(Value::as_u64)
-        .unwrap_or_else(|| {
-            rows.iter()
-                .filter(|row| text(row, "state") == "done")
-                .count() as u64
-        });
-    if rows.is_empty() && done_count == 0 {
+        .into_iter()
+        .flatten()
+        .map(|row| {
+            let working = text(row, "state") == "working";
+            (
+                text(row, "activeAt"),
+                CoordinatorThreadRow {
+                    key: format!("{}:{}", text(row, "projectId"), text(row, "sessionId")),
+                    project_id: text(row, "projectId"),
+                    session_id: text(row, "sessionId"),
+                    title: text(row, "title"),
+                    detail: text(row, "detail"),
+                    working,
+                    needs_approval: !working && row.get("needsApproval") == Some(&Value::Bool(true)),
+                    branch: text(row, "branch"),
+                    lifecycle_state: text(row, "lifecycleState"),
+                },
+            )
+        })
+        .collect();
+    if rows.is_empty() {
         return None;
     }
-    let mut groups = Vec::new();
-    let mut counts = Vec::new();
-    for (state, label) in GROUPS {
-        let group_rows: Vec<CoordinatorThreadRow> = rows
-            .iter()
-            .filter(|row| known_state(&text(row, "state")) == state)
-            .map(|row| CoordinatorThreadRow {
-                key: format!("{}:{}", text(row, "projectId"), text(row, "sessionId")),
-                project_id: text(row, "projectId"),
-                session_id: text(row, "sessionId"),
-                title: text(row, "title"),
-                detail: text(row, "detail"),
-                state: state.to_string(),
-                branch: text(row, "branch"),
-                lifecycle_state: text(row, "lifecycleState"),
-            })
-            .collect();
-        let count = if state == "done" {
-            done_count as usize
-        } else {
-            group_rows.len()
-        };
-        if count > 0 {
-            counts.push(match state {
-                "waiting" => format!("{count} waiting on you"),
-                _ => format!("{count} {state}"),
-            });
-        }
-        let group_rows = if state == "done" && !show_done {
-            group_rows.into_iter().take(DONE_ROWS_SHOWN).collect()
-        } else {
-            group_rows
-        };
-        if group_rows.is_empty() {
-            continue;
-        }
-        groups.push(CoordinatorThreadGroup {
-            state: state.to_string(),
-            label: label.to_string(),
-            rows: group_rows,
-        });
+    // Working, then blocked on the user, then the rest; each newest first (ISO times sort as text).
+    let rank = |row: &CoordinatorThreadRow| match (row.working, row.needs_approval) {
+        (true, _) => 0,
+        (false, true) => 1,
+        (false, false) => 2,
+    };
+    rows.sort_by(|(left_at, left), (right_at, right)| {
+        rank(left)
+            .cmp(&rank(right))
+            .then_with(|| right_at.cmp(left_at))
+    });
+    let total = rows.len();
+    let working = rows.iter().filter(|(_, row)| row.working).count();
+    let approval = rows.iter().filter(|(_, row)| row.needs_approval).count();
+    let pinned = working + approval;
+    let hidden = total.saturating_sub(pinned + OTHER_ROWS_SHOWN);
+    let mut meta = Vec::new();
+    if working > 0 {
+        meta.push(format!("{working} working"));
     }
+    if approval > 0 {
+        meta.push(plural(approval, "needs your approval", "need your approval"));
+    }
+    meta.push(plural(total, "thread", "threads"));
+    let rows: Vec<CoordinatorThreadRow> = rows
+        .into_iter()
+        .map(|(_, row)| row)
+        .take(if show_all { total } else { total - hidden })
+        .collect();
     Some(CoordinatorThreadsPanel {
-        meta: counts.join(" \u{b7} "),
-        attention: groups.iter().any(|group| group.state == "waiting"),
+        meta: meta.join(" \u{b7} "),
+        attention: approval > 0,
         collapsed,
-        show_done,
-        done_label: match (done_count as usize > DONE_ROWS_SHOWN, show_done) {
+        show_all,
+        more_label: match (hidden > 0, show_all) {
             (false, _) => String::new(),
-            (true, true) => "Hide done".to_string(),
-            (true, false) => format!("{} more done", done_count as usize - DONE_ROWS_SHOWN),
+            (true, true) => "Show fewer".to_string(),
+            (true, false) => format!("{hidden} more"),
         },
-        groups,
+        rows,
     })
 }
 
 /// The document value, `null` when there is no panel.
-pub fn project(threads: Option<&Value>, collapsed: bool, show_done: bool) -> Value {
-    coordinator_threads_panel(threads, collapsed, show_done)
+pub fn project(threads: Option<&Value>, collapsed: bool, show_all: bool) -> Value {
+    coordinator_threads_panel(threads, collapsed, show_all)
         .and_then(|panel| serde_json::to_value(panel).ok())
         .unwrap_or(Value::Null)
 }

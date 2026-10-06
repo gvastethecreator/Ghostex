@@ -112,6 +112,10 @@ pub fn collapse_into_storage(state: &SidebarCollapseState, existing: Option<&str
         flag_map(&state.collapsed_coordinators),
     );
     object.insert(
+        "expandedCoordinatorOlderThreadsById".to_string(),
+        flag_map(&state.expanded_coordinator_older_threads),
+    );
+    object.insert(
         "collapsedProjectSessionSectionsById".to_string(),
         persisted_section_collapse(&state.section_collapse),
     );
@@ -208,6 +212,9 @@ fn normalize_collapse_state(state: Option<&Value>) -> SidebarCollapseState {
         expanded_session_lists: flag_set(state.get("expandedProjectSessionListsById")),
         expanded_hover_actions: flag_set(state.get("expandedSessionCardHoverActionsById")),
         collapsed_coordinators: flag_set(state.get("collapsedCoordinatorsById")),
+        expanded_coordinator_older_threads: flag_set(
+            state.get("expandedCoordinatorOlderThreadsById"),
+        ),
         section_collapse: normalize_section_collapse(
             state.get("collapsedProjectSessionSectionsById"),
         ),

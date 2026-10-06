@@ -1,14 +1,26 @@
-//! A coordinator's tree in the sidebar: indented thread rows with a tree line, and the icon and badge on
-//! the coordinator row. Visual only; the row itself stays the click, drag and menu target.
+//! A coordinator's tree in the sidebar: indented thread rows with a tree line, the icon and badge on
+//! the coordinator row, and its "N older threads" row. Visual only; the row itself stays the click,
+//! drag and menu target.
 //!
-//! SEE-ALSO: packages/gx-core/src/sidebar_view/threads.rs (the order and depth),
-//! apps/desktop/src/app/gx_store/sidebar_snapshot.rs (`threadDepth`, `threadLast`, `coordinatorThreads`).
+//! SEE-ALSO: packages/gx-core/src/sidebar_view/threads.rs (the order, depth and which threads are
+//! older), apps/desktop/src/app/gx_store/sidebar_snapshot.rs (`threadDepth`, `threadLast`,
+//! `coordinatorThreads`).
+
+use std::sync::Arc;
 
 use gpui::prelude::FluentBuilder;
-use gpui::{AnyElement, IntoElement, ParentElement, Styled, div, px, rgb};
-use serde_json::Value;
+use gpui::{
+    AnyElement, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled,
+    div, px, rgb,
+};
+use gpui_component::v_flex;
+use serde_json::{Value, json};
 
-use super::{appearance::SidebarAppearance, model::NativeSidebarSession};
+use super::{
+    appearance::SidebarAppearance,
+    model::{NativeSidebarGroup, NativeSidebarSession},
+};
+use crate::GhostexGpuiApp;
 use crate::app::helpers::*;
 
 /// Indent per tree level; one agent icon plus the row gap, so a thread's icon sits under its
@@ -150,6 +162,122 @@ pub(crate) fn coordinator_badge(
             })
             .into_any_element(),
     )
+}
+
+/// An expanded coordinator whose older threads wait behind its "N older threads" row.
+struct OlderThreadsRow {
+    coordinator: String,
+    depth: f32,
+    count: u64,
+    shown: bool,
+}
+
+fn older_threads_row(session: &NativeSidebarSession) -> Option<OlderThreadsRow> {
+    let threads = session.details.get("coordinatorThreads")?;
+    let count = threads.get("older").and_then(Value::as_u64).unwrap_or(0);
+    if count == 0 || threads.get("collapsed").and_then(Value::as_bool) == Some(true) {
+        return None;
+    }
+    Some(OlderThreadsRow {
+        coordinator: session.session_id.clone(),
+        depth: thread_depth(session),
+        count,
+        shown: threads.get("olderShown").and_then(Value::as_bool) == Some(true),
+    })
+}
+
+impl GhostexGpuiApp {
+    /// A heading's rows, with each expanded coordinator's "N older threads" row after the last row
+    /// of its tree. The rows between two of those stay one virtualized list.
+    pub(super) fn render_native_session_rows(
+        &self,
+        group: &NativeSidebarGroup,
+        sessions: Vec<Arc<NativeSidebarSession>>,
+        appearance: &SidebarAppearance,
+        cx: &mut gpui::Context<Self>,
+    ) -> AnyElement {
+        if !sessions.iter().any(|session| older_threads_row(session).is_some()) {
+            return self.render_native_session_list(group, sessions, appearance, cx);
+        }
+        let mut parts = Vec::new();
+        let mut segment = Vec::new();
+        let mut open: Vec<OlderThreadsRow> = Vec::new();
+        let close = |row: OlderThreadsRow,
+                         segment: &mut Vec<Arc<NativeSidebarSession>>,
+                         parts: &mut Vec<AnyElement>,
+                         cx: &mut gpui::Context<Self>| {
+            if !segment.is_empty() {
+                parts.push(self.render_native_session_list(
+                    group,
+                    std::mem::take(segment),
+                    appearance,
+                    cx,
+                ));
+            }
+            parts.push(self.render_older_threads_row(row, appearance, cx));
+        };
+        for session in sessions {
+            let depth = thread_depth(&session);
+            while open.last().is_some_and(|row| row.depth >= depth) {
+                let row = open.pop().expect("checked above");
+                close(row, &mut segment, &mut parts, cx);
+            }
+            if let Some(row) = older_threads_row(&session) {
+                open.push(row);
+            }
+            segment.push(session);
+        }
+        while let Some(row) = open.pop() {
+            close(row, &mut segment, &mut parts, cx);
+        }
+        if !segment.is_empty() {
+            parts.push(self.render_native_session_list(group, segment, appearance, cx));
+        }
+        v_flex().w_full().flex_shrink_0().children(parts).into_any_element()
+    }
+
+    /// The quiet row that lists a coordinator's older threads, or tucks them away again.
+    fn render_older_threads_row(
+        &self,
+        row: OlderThreadsRow,
+        appearance: &SidebarAppearance,
+        cx: &mut gpui::Context<Self>,
+    ) -> AnyElement {
+        let scale = appearance.scale;
+        let label = match (row.shown, row.count) {
+            (true, _) => "Hide older threads".to_string(),
+            (false, 1) => "1 older thread".to_string(),
+            (false, count) => format!("{count} older threads"),
+        };
+        let coordinator = row.coordinator.clone();
+        div()
+            .id(gpui::SharedString::from(format!(
+                "native-sidebar-older-threads-{}",
+                row.coordinator
+            )))
+            .role(gpui::Role::Button)
+            .aria_label(label.clone())
+            .mx(px(super::session_list::SESSION_INSET_X * scale))
+            .mb(px(super::session_list::SESSION_SPACING * scale))
+            .h(px(24.0 * scale))
+            .pl(px((5.0 + (row.depth + 1.0) * THREAD_INDENT) * scale))
+            .flex()
+            .items_center()
+            .rounded(px(5.0 * scale))
+            .text_size(px(11.5 * scale))
+            .text_color(appearance.muted)
+            .cursor_pointer()
+            .hover(|style| style.bg(appearance.session_hover))
+            .child(label)
+            .on_click(cx.listener(move |app, _, _, cx| {
+                cx.stop_propagation();
+                app.dispatch_native_sidebar_ui(
+                    json!({"type": "toggleCoordinatorOlder", "sessionId": coordinator}),
+                    cx,
+                );
+            }))
+            .into_any_element()
+    }
 }
 
 /// Whether a coordinator's threads can be folded, and if so whether they are folded now.

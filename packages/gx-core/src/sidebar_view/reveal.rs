@@ -68,6 +68,8 @@ pub struct SidebarRevealPlan {
     pub collapsed_group: bool,
     /// The folded coordinators above the row, by sidebar row id.
     pub collapsed_coordinators: Vec<String>,
+    /// The coordinators above the row whose older threads have to be listed, by sidebar row id.
+    pub older_threads_of: Vec<String>,
     /// The group or its collection is hidden and Show Hidden is off.
     pub show_hidden: bool,
     /// The ticked tag filters leave the row out.
@@ -132,6 +134,17 @@ impl SidebarRevealPlan {
             intents.push(SidebarUiIntent::ToggleCoordinatorCollapsed {
                 sidebar_session_id: sidebar_session_id.clone(),
             });
+        }
+        for sidebar_session_id in &self.older_threads_of {
+            if !ui
+                .collapse
+                .expanded_coordinator_older_threads
+                .contains(sidebar_session_id)
+            {
+                intents.push(SidebarUiIntent::ToggleCoordinatorOlderThreads {
+                    sidebar_session_id: sidebar_session_id.clone(),
+                });
+            }
         }
         if self.expand_list
             && !ui
@@ -215,6 +228,7 @@ pub fn reveal_plan(
             .collapsed_groups
             .contains(&found.group_id),
         collapsed_coordinators: found.folded_by.clone(),
+        older_threads_of: found.older_of.clone(),
         collapsed_collection_storage_id: collection_storage_id.clone().filter(|storage_id| {
             inputs
                 .ui
@@ -296,6 +310,13 @@ pub fn reveal_plan(
             .collapse
             .collapsed_coordinators
             .remove(sidebar_session_id);
+    }
+    for sidebar_session_id in &found.older_of {
+        probe
+            .ui
+            .collapse
+            .expanded_coordinator_older_threads
+            .insert(sidebar_session_id.clone());
     }
     let opened = SidebarViewModel::build_from_scratch(core, probe, now_ms);
     plan.expand_list = !opened
@@ -445,6 +466,8 @@ struct Located {
     effective_tag: Option<String>,
     /// The folded coordinators above the row, nearest first.
     folded_by: Vec<String>,
+    /// The coordinators above the row whose older threads it waits behind, nearest first.
+    older_of: Vec<String>,
 }
 
 fn locate(
@@ -463,9 +486,11 @@ fn locate(
     // A thread under a folded coordinator: its ancestors up the tree, and the top one, whose
     // heading is the thread's.
     let mut folded_by = Vec::new();
+    let mut older_of = Vec::new();
     let mut heading_row = sidebar_session_id;
     if let Some(index) = index.filter(|index| sessions[*index].nesting.folded) {
         let mut depth = sessions[index].nesting.depth;
+        let mut tucked = sessions[index].nesting.older_hidden;
         for ancestor in sessions[..index].iter().rev() {
             if ancestor.nesting.depth >= depth {
                 continue;
@@ -474,6 +499,10 @@ fn locate(
             if ancestor.nesting.collapsed {
                 folded_by.push(ancestor.row.sidebar_session_id.clone());
             }
+            if tucked {
+                older_of.push(ancestor.row.sidebar_session_id.clone());
+            }
+            tucked = ancestor.nesting.older_hidden;
             if depth == 0 {
                 heading_row = &ancestor.row.sidebar_session_id;
                 break;
@@ -509,6 +538,7 @@ fn locate(
         drawn,
         effective_tag: row.and_then(|row| row.effective_tag.clone()),
         folded_by,
+        older_of,
     })
 }
 

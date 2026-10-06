@@ -1478,13 +1478,16 @@ version of the Projects features in Cursor and Claude Code.
 - **Threads in the sidebar**: a coordinator's row shows a crown in
   place of its agent's logo, and a crew icon
   with one number: how many of its threads are working; when none are
-  working, how many are waiting on you; when neither, how many thread sessions
-  it has in the sidebar. The icon and number are orange when the number counts
+  working, how many are waiting on you; when neither, how many threads it
+  lists. The icon and number are orange when the number counts
   working threads, light blue when it counts threads waiting on you, and grey
-  when it counts them all. Its
-  threads sit indented right under it with their own status dots; the chevron
-  beside the crown folds them away and back (remembered across restarts), and a
-  folded coordinator keeps its number and colour. Click a thread to watch it or
+  otherwise. Its
+  threads sit indented right under it with their own status dots: the ones
+  working, waiting, or active in the last 2 hours. Older threads wait behind an
+  "N older threads" row at the end, which lists them all (and "Hide older
+  threads" tucks them away again; both remembered across restarts). The chevron
+  that replaces the crown when you hover the coordinator folds its threads away
+  and back, and a folded coordinator keeps its number and colour. Click a thread to watch it or
   talk to it directly; answer its questions and approvals there. A thread keeps
   the name its coordinator gave it, like the coordinator keeps its own (Rename in
   the sidebar still changes it). Pinning the
@@ -1500,10 +1503,13 @@ version of the Projects features in Cursor and Claude Code.
   everything it knew. Ask the coordinator to keep a thread open if you want to
   look at it.
 - **Threads panel in the chat**: above the coordinator's message box, the
-  Threads panel lists its threads under Waiting on you, Working and Finished,
-  each with one line (what it asks, what it is doing, or how its last report
-  began) and its branch; tap or click a thread to open it, and use "N done" to
-  list the finished ones. It shows on the phone and in the browser too.
+  Threads panel lists the working threads first, then the three most recently
+  active others, each with one line (what it is doing or how its last report
+  began) and its branch; "N more" lists every thread, closed ones included, and
+  "Show fewer" folds them again. Tap or click any thread to open it and talk to
+  it. A thread stuck on something only you can allow (a permission prompt or a
+  folder-trust question) carries an amber "Needs your approval" tag. It shows on
+  the phone and in the browser too.
 - **Reports come back by themselves**: when a thread finishes a turn, Ghostex
   sends its final message to the coordinator (a "Message from" card in its
   chat); when a thread waits on a question, an approval, or a screen such as

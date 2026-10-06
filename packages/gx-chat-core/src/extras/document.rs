@@ -31,7 +31,7 @@ pub fn document(state: &ChatState, context: &ChatContext, into: &mut Document) {
     into.coordinator_threads_panel = Tri::Value(coordinator_threads::project(
         state.session.coordinator_threads.as_ref(),
         extras.panels.threads_collapsed,
-        extras.panels.threads_show_done,
+        extras.panels.threads_show_all,
     ));
 
     let working = state.session.server_working || state.session.external_working;

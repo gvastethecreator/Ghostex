@@ -61,7 +61,7 @@ pub struct SessionState {
     pub app_commands: Vec<Value>,
     /// The prompt the agent handed back after an Escape. Unchanged on omission.
     pub returned_prompt: Option<Value>,
-    /// A coordinator's threads (`{ threads, doneCount }`); present only for a coordinator.
+    /// A coordinator's threads (`{ threads }`); present only for a coordinator.
     /// Unchanged on omission.
     pub coordinator_threads: Option<Value>,
     /// Latched once gxserver has read this session's screen; an omission never unsets it.

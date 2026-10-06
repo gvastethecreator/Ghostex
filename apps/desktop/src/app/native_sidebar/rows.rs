@@ -105,7 +105,7 @@ impl GhostexGpuiApp {
                                             .iter()
                                             .map(|session| (session.session_id.as_str(), session))
                                             .collect::<std::collections::HashMap<_, _>>();
-                                        let rows = self.render_native_session_list(
+                                        let rows = self.render_native_session_rows(
                                             group,
                                             ids.iter()
                                                 .filter_map(|id| {

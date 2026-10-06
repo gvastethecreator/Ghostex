@@ -29,6 +29,7 @@ pub struct SidebarCollapseDiff {
     expanded_session_lists: SetDiff,
     expanded_hover_actions: SetDiff,
     collapsed_coordinators: SetDiff,
+    expanded_coordinator_older_threads: SetDiff,
     section_collapse: BTreeMap<String, Option<SectionCollapse>>,
     selected_space_by_section: BTreeMap<String, Option<String>>,
     /// Per SECTION, not per Space: `rememberSidebarSpaceSession` rebuilds a whole section's object
@@ -93,6 +94,10 @@ impl SidebarCollapseDiff {
                 &base.collapsed_coordinators,
                 &next.collapsed_coordinators,
             ),
+            expanded_coordinator_older_threads: SetDiff::between(
+                &base.expanded_coordinator_older_threads,
+                &next.expanded_coordinator_older_threads,
+            ),
             section_collapse: map_diff(&base.section_collapse, &next.section_collapse),
             selected_space_by_section: map_diff(
                 &base.selected_space_by_section,
@@ -112,6 +117,7 @@ impl SidebarCollapseDiff {
             && self.expanded_session_lists.is_empty()
             && self.expanded_hover_actions.is_empty()
             && self.collapsed_coordinators.is_empty()
+            && self.expanded_coordinator_older_threads.is_empty()
             && self.section_collapse.is_empty()
             && self.selected_space_by_section.is_empty()
             && self.recent_sessions_by_space.is_empty()
@@ -158,6 +164,11 @@ impl SidebarCollapseDiff {
             &mut object,
             "collapsedCoordinatorsById",
             &self.collapsed_coordinators,
+        );
+        apply_set(
+            &mut object,
+            "expandedCoordinatorOlderThreadsById",
+            &self.expanded_coordinator_older_threads,
         );
         if !self.section_collapse.is_empty() {
             let mut sections = match object.get("collapsedProjectSessionSectionsById") {

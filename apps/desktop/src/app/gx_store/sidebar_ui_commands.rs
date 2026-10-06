@@ -59,6 +59,9 @@ impl GhostexGpuiApp {
             "toggleCoordinator" => Some(SidebarUiIntent::ToggleCoordinatorCollapsed {
                 sidebar_session_id: text("sessionId")?,
             }),
+            "toggleCoordinatorOlder" => Some(SidebarUiIntent::ToggleCoordinatorOlderThreads {
+                sidebar_session_id: text("sessionId")?,
+            }),
             "selectMachine" => Some(SidebarUiIntent::SelectMachine {
                 machine_id: text("machineId")?,
             }),
