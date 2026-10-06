@@ -238,6 +238,8 @@ fn answer_prompt(state: &mut ChatState, answer: &Value) -> Vec<Effect> {
     {
         state.questions.answered_notice_key = state.questions.active_notice_key.clone();
     }
+    let restore_dismissed =
+        matches!(kind.as_str(), "question" | "approval").then(|| dismiss_answered_prompt(state));
     let request_id = allocate(state);
     state.questions.answer_request = Some(AnswerRequest {
         request_id,
@@ -245,12 +247,29 @@ fn answer_prompt(state: &mut ChatState, answer: &Value) -> Vec<Effect> {
         answer_kind: kind,
         submitted: AnswerDrafts::new(),
         content_key: None,
+        restore_dismissed,
     });
     vec![Effect::SendRpc {
         request_id,
         method: ChatRpcMethod::AnswerSessionChatPrompt,
         params: Box::new(with_identity(state, answer.clone())),
     }]
+}
+
+/// CDXC:SessionChat 2026-10-06 DECISION: User: "I don't want to see the question asking component which I already answered appear again after I sent the answer needlessly. It looks wrong." The question or approval card hides the moment its answer goes out, not when gxserver's reply lands (on Windows it reads the terminal first, so the busy card stayed up for half a second), and the answered prompt stays hidden while gxserver keeps reporting it or a stale read re-reports it. Only a different prompt, or the same question from a new asking call (another `toolUseId`), shows the card again; a refused answer brings this card back with its error.
+///
+/// Returns the dismissal it replaced, for the refusal to put back.
+fn dismiss_answered_prompt(state: &mut ChatState) -> (Option<String>, Option<String>) {
+    let tool_use_id = InteractivePrompt::parse(state.session.prompt.as_ref())
+        .and_then(|prompt| prompt.tool_use_id().map(str::to_string));
+    let questions = &mut state.questions;
+    let previous = (
+        questions.dismissed_prompt.take(),
+        questions.dismissed_tool_use_id.take(),
+    );
+    questions.dismissed_prompt = questions.prompt_key.clone();
+    questions.dismissed_tool_use_id = tool_use_id;
+    previous
 }
 
 /// CDXC:SessionChat 2026-09-30 DECISION: User: clicking Close on a card like the side question card closes it instantly (optimistic), for every similar card in the chat. A dialog's Close and the side question's Fork both shut the dialog on the agent's screen, so they hide the card at once like a picked row; keys that only move inside a dialog keep it up.
@@ -365,6 +384,7 @@ pub(crate) fn advance(state: &mut ChatState, prompt: &InteractivePrompt) -> Vec<
     state.questions.answering = true;
     // `answering = true; publish(chat)` before the answer goes out.
     state.core.request_publish();
+    let restore_dismissed = Some(dismiss_answered_prompt(state));
     let request_id = allocate(state);
     state.questions.answer_request = Some(AnswerRequest {
         request_id,
@@ -372,6 +392,7 @@ pub(crate) fn advance(state: &mut ChatState, prompt: &InteractivePrompt) -> Vec<
         answer_kind: "question".to_string(),
         submitted: indexed_drafts(&drafts),
         content_key: state.questions.question_content_key.clone(),
+        restore_dismissed,
     });
     vec![Effect::SendRpc {
         request_id,
@@ -392,7 +413,7 @@ fn question_cancel(state: &mut ChatState) -> Vec<Effect> {
             return Vec::new();
         }
     }
-    state.questions.dismissed_prompt = state.questions.prompt_key.clone();
+    dismiss_answered_prompt(state);
     let mut effects = Vec::new();
     if let Some(content_key) = state.questions.question_content_key.clone() {
         effects.push(clear_card_drafts(state, &content_key));

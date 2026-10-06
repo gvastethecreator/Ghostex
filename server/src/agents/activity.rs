@@ -534,14 +534,32 @@ pub(crate) fn next_session_chat_prompt_setting(
         .or_else(|| params.get("tool_use_id"))
         .and_then(Value::as_str);
     let tool_input = params.get("toolInput").or_else(|| params.get("tool_input"));
+    let stored = previous.and_then(crate::session_chat::parse_stored_session_chat_prompt);
     if let Some(prompt) =
         crate::session_chat::derive_session_chat_prompt(tool_name, tool_input, event_name)
     {
-        return serde_json::to_string(&prompt.with_tool_use_id(tool_use_id.map(str::to_string)))
+        let prompt = prompt.with_tool_use_id(tool_use_id.map(str::to_string));
+        /*
+        CDXC:SessionChat 2026-10-06 WHY:
+        Claude Code follows an AskUserQuestion's PreToolUse (which carries the call's
+        tool_use_id) with a PermissionRequest for the same call that carries none. Storing that
+        one dropped the id, so every client saw the same question flip between two identities,
+        which reset its card mid-answer and left nothing to tell a re-asked question from the
+        answered one. The same prompt from an event without an id keeps the stored id.
+        */
+        let prompt = match stored.as_ref() {
+            Some(stored)
+                if prompt.tool_use_id().is_none()
+                    && stored.clone().with_tool_use_id(None) == prompt =>
+            {
+                prompt.with_tool_use_id(stored.tool_use_id().map(str::to_string))
+            }
+            _ => prompt,
+        };
+        return serde_json::to_string(&prompt)
             .ok()
             .or_else(|| previous.map(str::to_string));
     }
-    let stored = previous.and_then(crate::session_chat::parse_stored_session_chat_prompt);
     let clear = match stored.as_ref() {
         Some(stored) => crate::session_chat::session_chat_prompt_clear_decision(
             Some(stored),

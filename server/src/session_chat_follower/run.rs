@@ -429,7 +429,7 @@ pub async fn run_session_chat_follower(
                 };
                 // The tail window replaces everything the client had, so the
                 // question fold restarts from it.
-                transcript_prompt = SessionChatTranscriptPromptState::default();
+                transcript_prompt.restart();
                 transcript_prompt.advance(&tail.messages);
                 transcript_prompt.advance(&appended);
                 // A subscribing client gets the detected pills value and any
@@ -448,6 +448,7 @@ pub async fn run_session_chat_follower(
                         live.working,
                         snapshot_detection.activity.clone(),
                     );
+                transcript_prompt.observe_stored(live.prompt.as_ref());
                 let prompt = resolve_session_chat_prompt(live.prompt.clone(), &transcript_prompt)
                     .or_else(|| snapshot_detection.prompt.clone());
                 emit_snapshot_frame(
@@ -605,6 +606,7 @@ pub async fn run_session_chat_follower(
         a tool result after it means "answered". The hook prompt still wins when
         both exist, so approvals and richer hook payloads are unaffected.
         */
+        transcript_prompt.observe_stored(live.prompt.as_ref());
         let effective_prompt = resolve_session_chat_prompt(live.prompt.clone(), &transcript_prompt)
             .or_else(|| read_cached_detection().prompt);
         let previous_options = published_options.clone();
@@ -857,6 +859,7 @@ pub async fn run_session_chat_follower(
                     detection.tasks.as_ref(),
                     published_tasks.as_ref(),
                 );
+                transcript_prompt.observe_stored(live.prompt.as_ref());
                 let detected_prompt =
                     resolve_session_chat_prompt(live.prompt.clone(), &transcript_prompt)
                         .or_else(|| detection.prompt.clone());

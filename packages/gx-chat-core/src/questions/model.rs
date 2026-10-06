@@ -85,6 +85,15 @@ impl InteractivePrompt {
         matches!(self, Self::Question { .. })
     }
 
+    /// The asking call's id, when gxserver knew it.
+    pub fn tool_use_id(&self) -> Option<&str> {
+        match self {
+            Self::Question { tool_use_id, .. } | Self::Approval { tool_use_id, .. } => {
+                tool_use_id.as_deref().filter(|id| !id.is_empty())
+            }
+        }
+    }
+
     /// The prompt carried by `state.session.prompt`, or `None` when nothing is blocking.
     pub fn parse(value: Option<&Value>) -> Option<Self> {
         serde_json::from_value(value?.clone()).ok()

@@ -663,6 +663,11 @@ pub struct SessionChatTranscriptPromptState {
     pending: Option<SessionChatInteractivePrompt>,
     last_question: Option<SessionChatInteractivePrompt>,
     answered: bool,
+    /// The question the hooks last stored, while they still store it.
+    hook_question: Option<SessionChatInteractivePrompt>,
+    /// The question the hooks stored and then retired (its PostToolUse, an
+    /// answer, an interrupt), which the transcript must not bring back.
+    hook_retired: Option<SessionChatInteractivePrompt>,
 }
 
 impl SessionChatTranscriptPromptState {
@@ -687,16 +692,21 @@ impl SessionChatTranscriptPromptState {
             }
             for block in &message.blocks {
                 match block {
-                    SessionChatBlock::ToolCall { name, input, .. }
-                        if is_ask_user_question_tool(name) =>
-                    {
+                    SessionChatBlock::ToolCall {
+                        name,
+                        input,
+                        call_id,
+                    } if is_ask_user_question_tool(name) => {
                         self.answered = false;
+                        // The call's own id, the one the hooks report as `tool_use_id`, so a
+                        // card read from the transcript is the same prompt as the hook's.
                         self.pending =
                             parse_session_chat_questions(Some(name), input).map(|questions| {
                                 SessionChatInteractivePrompt::Question {
                                     questions,
                                     tool_use_id: None,
                                 }
+                                .with_tool_use_id(call_id.clone())
                             });
                         self.last_question = self.pending.clone();
                     }
@@ -714,6 +724,47 @@ impl SessionChatTranscriptPromptState {
 
     pub fn pending(&self) -> Option<&SessionChatInteractivePrompt> {
         self.pending.as_ref()
+    }
+
+    /// CDXC:SessionChat 2026-10-06 WHY: Claude's PostToolUse hook retires the stored question about half a second before the tool result reaches the transcript, and in that gap the transcript still reads the call as pending. Falling back to it re-published the question the user had just answered, so every chat drew the answerable card again until the result landed. A follower reports the stored prompt here on every pass, and a pending transcript question the hooks already retired is not a card.
+    pub fn observe_stored(&mut self, stored: Option<&SessionChatInteractivePrompt>) {
+        match stored {
+            Some(SessionChatInteractivePrompt::Question { .. }) => {
+                self.hook_question = stored.cloned();
+                self.hook_retired = None;
+            }
+            Some(_) => {}
+            None => {
+                if let Some(question) = self.hook_question.take() {
+                    self.hook_retired = Some(question);
+                }
+            }
+        }
+    }
+
+    /// Restarts the fold over a new tail window of the same conversation,
+    /// keeping what the hooks stored and retired.
+    pub fn restart(&mut self) {
+        *self = Self {
+            hook_question: self.hook_question.take(),
+            hook_retired: self.hook_retired.take(),
+            ..Self::default()
+        };
+    }
+
+    /// The pending question, unless it is the call the hooks already retired.
+    fn unretired_pending(&self) -> Option<&SessionChatInteractivePrompt> {
+        let pending = self.pending.as_ref()?;
+        let retired = self.hook_retired.as_ref().is_some_and(|retired| {
+            match (retired.tool_use_id(), pending.tool_use_id()) {
+                (Some(retired_id), Some(pending_id)) => retired_id == pending_id,
+                _ => {
+                    session_chat_prompt_question_texts(retired)
+                        == session_chat_prompt_question_texts(pending)
+                }
+            }
+        });
+        (!retired).then_some(pending)
     }
 
     /// True once the most recent AskUserQuestion call has its tool result.
@@ -786,7 +837,7 @@ pub fn resolve_session_chat_prompt(
                 Some(prompt)
             }
         }
-        None => transcript.pending().cloned(),
+        None => transcript.unretired_pending().cloned(),
     }
 }
 
