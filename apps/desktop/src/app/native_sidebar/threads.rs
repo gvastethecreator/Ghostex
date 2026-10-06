@@ -5,10 +5,7 @@
 //! apps/desktop/src/app/gx_store/sidebar_snapshot.rs (`threadDepth`, `threadLast`, `coordinatorThreads`).
 
 use gpui::prelude::FluentBuilder;
-use gpui::{
-    AnyElement, InteractiveElement as _, IntoElement, ParentElement,
-    StatefulInteractiveElement as _, Styled, div, px, rgb,
-};
+use gpui::{AnyElement, IntoElement, ParentElement, Styled, div, px, rgb};
 use serde_json::Value;
 
 use super::{appearance::SidebarAppearance, model::NativeSidebarSession};
@@ -155,59 +152,29 @@ pub(crate) fn coordinator_badge(
     )
 }
 
-impl crate::GhostexGpuiApp {
-    /// The fold chevron beside a coordinator's crown, on a coordinator with threads drawn under it:
-    /// pointing right while folded, down while open, like a project's.
-    pub(crate) fn render_coordinator_chevron(
-        &self,
-        session: &NativeSidebarSession,
-        appearance: &SidebarAppearance,
-        cx: &mut gpui::Context<Self>,
-    ) -> Option<AnyElement> {
-        let threads = session.details.get("coordinatorThreads")?;
-        if threads.get("collapsible").and_then(Value::as_bool) != Some(true) {
-            return None;
-        }
-        let collapsed = threads.get("collapsed").and_then(Value::as_bool) == Some(true);
-        let scale = appearance.scale;
-        let session_id = session.session_id.clone();
-        Some(
-            div()
-                .id(gpui::SharedString::from(format!(
-                    "native-coordinator-chevron-{session_id}"
-                )))
-                .role(gpui::Role::Button)
-                .aria_label(if collapsed {
-                    "Show threads"
-                } else {
-                    "Hide threads"
-                })
-                .flex_shrink_0()
-                .size(px(14.0 * scale))
-                .ml(px(-3.0 * scale))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(3.0 * scale))
-                .hover(|chevron| chevron.bg(appearance.session_hover))
-                .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .on_click(cx.listener(move |app, _, _, cx| {
-                    cx.stop_propagation();
-                    app.dispatch_native_sidebar_ui(
-                        serde_json::json!({"type": "toggleCoordinator", "sessionId": session_id}),
-                        cx,
-                    );
-                }))
-                .child(
-                    gpui::svg()
-                        .path(crate::app::consts::COMMAND_ICON_CHEVRON_RIGHT)
-                        .size(px(14.0 * scale))
-                        .text_color(appearance.muted)
-                        .with_transformation(gpui::Transformation::rotate(gpui::percentage(
-                            if collapsed { 0.0 } else { 0.25 },
-                        ))),
-                )
-                .into_any_element(),
-        )
+/// Whether a coordinator's threads can be folded, and if so whether they are folded now.
+pub(crate) fn coordinator_fold_state(session: &NativeSidebarSession) -> Option<bool> {
+    let threads = session.details.get("coordinatorThreads")?;
+    if threads.get("collapsible").and_then(Value::as_bool) != Some(true) {
+        return None;
     }
+    Some(threads.get("collapsed").and_then(Value::as_bool) == Some(true))
+}
+
+/// The fold chevron a hovered coordinator card draws in the crown's spot: pointing right while the
+/// threads are folded, down while they are open, like a project's.
+///
+/// CDXC:Coordinators 2026-10-06 DECISION:
+/// User: "Please don't show the chevron here separately, this chevron needs to be shown instead of the coordinator icon when I hover on the coordinator card in the sidebar." The card has no chevron slot of its own; the crown's spot is the one hit area (`render_native_session_identity`) and shows this chevron while the card is hovered. This supersedes the separate chevron beside the crown that `render_coordinator_chevron` drew from 2026-09-30.
+pub(crate) fn coordinator_fold_chevron(collapsed: bool, appearance: &SidebarAppearance) -> AnyElement {
+    gpui::svg()
+        .path(crate::app::consts::COMMAND_ICON_CHEVRON_RIGHT)
+        .size(px(14.0 * appearance.scale))
+        .text_color(appearance.muted)
+        .with_transformation(gpui::Transformation::rotate(gpui::percentage(if collapsed {
+            0.0
+        } else {
+            0.25
+        })))
+        .into_any_element()
 }

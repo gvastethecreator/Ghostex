@@ -12,6 +12,7 @@ impl GhostexGpuiApp {
         &self,
         session: &NativeSidebarSession,
         icon: AnyElement,
+        hovered: bool,
         appearance: &SidebarAppearance,
         cx: &mut gpui::Context<Self>,
     ) -> AnyElement {
@@ -36,7 +37,25 @@ impl GhostexGpuiApp {
                 .and_then(Value::as_str)
                 .is_some();
         let id = session.session_id.clone();
+        // CDXC:Coordinators 2026-10-06 DECISION: User: the fold chevron replaces the coordinator's crown while its card is hovered, with no chevron slot of its own. The crown's spot is the single fold hit area and the accessibility button, hovered or not; a pending delayed send or close-after-done keeps its own clock icon and click.
+        let fold = super::threads::coordinator_fold_state(session).filter(|_| !(delayed || closing));
+        let icon = match fold {
+            Some(collapsed) if hovered => super::threads::coordinator_fold_chevron(collapsed, appearance),
+            _ => icon,
+        };
         div().id(format!("native-session-identity-{id}")).size(px(15.0 * appearance.scale)).flex_shrink_0().flex().items_center().justify_center().child(icon)
+            .when_some(fold, |identity, collapsed| {
+                let id = id.clone();
+                identity
+                    .role(gpui::Role::Button)
+                    .aria_label(if collapsed { "Show threads" } else { "Hide threads" })
+                    .cursor_pointer()
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(cx.listener(move |app, _, _, cx| {
+                        cx.stop_propagation();
+                        app.dispatch_native_sidebar_ui(json!({"type": "toggleCoordinator", "sessionId": id}), cx);
+                    }))
+            })
             .when(delayed || closing, |identity| identity.cursor_pointer().on_click(cx.listener(move |app, _, _, cx| {
                 cx.stop_propagation();
                 if delayed { app.dispatch_native_sidebar_ui(json!({"type": "sessionAction", "sessionId": id, "action": "delayedSend"}), cx); }
