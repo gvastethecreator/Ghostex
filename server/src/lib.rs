@@ -102,6 +102,7 @@ pub(crate) mod session_chat_draft_diagnostics;
 pub(crate) mod session_chat_draft_handoffs;
 pub(crate) mod session_chat_draft_recovery;
 pub(crate) mod session_chat_draft_versions;
+pub(crate) mod session_chat_empryo_launch_selection;
 pub mod session_chat_empryo_mirror;
 pub mod session_chat_files;
 pub(crate) mod session_chat_fleet_process;

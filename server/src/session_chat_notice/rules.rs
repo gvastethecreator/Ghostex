@@ -701,10 +701,11 @@ pub(super) fn notice_rules(agent: SessionChatOptionAgent) -> &'static [NoticeRul
         SessionChatOptionAgent::Claude => CLAUDE_RULES,
         SessionChatOptionAgent::Codex => CODEX_RULES,
         SessionChatOptionAgent::Cursor => CURSOR_RULES,
-        // Grok, Hermes, Omp and Pi have no phrase-catalog rules here. Hermes
+        // Grok, Hermes, Omp, Pi and Empryo have no phrase-catalog rules here. Hermes
         // and Pi have source-derived focused-component detectors after this
         // catalog; the other agents rely on measured composer readiness.
         SessionChatOptionAgent::Antigravity
+        | SessionChatOptionAgent::Empryo
         | SessionChatOptionAgent::Grok
         | SessionChatOptionAgent::Hermes
         | SessionChatOptionAgent::Omp

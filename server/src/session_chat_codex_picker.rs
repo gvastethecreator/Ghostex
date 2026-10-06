@@ -1261,7 +1261,10 @@ pub(crate) async fn select_session_chat_model(
     };
     if !matches!(
         agent.as_deref(),
-        Some("codex" | "claude" | "cursor" | "grok" | "antigravity" | "hermes" | "pi" | "omp")
+        Some(
+            "codex" | "claude" | "cursor" | "grok" | "antigravity" | "hermes" | "pi" | "omp"
+                | "empryo"
+        )
     ) {
         return Err(DomainStateError {
             code: "unsupportedAgent",

@@ -127,6 +127,12 @@ pub(crate) fn dispatch_agent_http_blocking(
                     }
                 }
             }
+            // An Empryo launch model waits for Empryo to be up, which its first hook reports.
+            if endpoint_path == "/api/ingestAgentHookEvent" {
+                crate::session_chat_empryo_launch_selection::queue_empryo_launch_selection_from_hook(
+                    state, &db, &result,
+                );
+            }
             let should_queue_agent_title_metadata_check =
                 should_schedule_agent_title_metadata_check(&endpoint_path, &result);
             let should_schedule_first_prompt_auto_title =

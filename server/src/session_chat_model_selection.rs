@@ -174,6 +174,7 @@ pub(crate) fn validate_selection(
             | "hermes"
             | "pi"
             | "omp"
+            | "empryo"
     ) || !token(model)
         || (!effort.is_empty() && !token(effort))
     {
