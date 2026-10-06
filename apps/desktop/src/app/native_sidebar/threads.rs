@@ -260,7 +260,9 @@ impl GhostexGpuiApp {
             .mx(px(super::session_list::SESSION_INSET_X * scale))
             .mb(px(super::session_list::SESSION_SPACING * scale))
             .h(px(24.0 * scale))
-            .pl(px((5.0 + (row.depth + 1.0) * THREAD_INDENT) * scale))
+            // Lines up with the thread titles: a thread row's inset, its 15px icon and the 6px gap
+            // after it (`render_native_sidebar_session`).
+            .pl(px((5.0 + (row.depth + 1.0) * THREAD_INDENT + 15.0 + 6.0) * scale))
             .flex()
             .items_center()
             .rounded(px(5.0 * scale))
