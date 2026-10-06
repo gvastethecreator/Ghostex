@@ -587,6 +587,10 @@ Fork (a session's right-click menu, or More actions in its chat) opens the new
 session beside the original and switches to it. It starts as
 `Fork: <original name>` and saves that name through the agent's own rename
 command so it survives reopening the conversation.
+Fork works for Claude, Codex, Pi and Empryo sessions. Empryo has no fork command
+of its own, so Ghostex copies the Empryo conversation up to its last finished
+reply under a new id and opens that copy; fork an Empryo session once a turn has
+finished.
 Once a conversation has forks, a small branch button in the chat's top right
 lists every session that shares the earlier history, including the thread you
 forked away from, and switches to the one you pick; a stopped branch is resumed

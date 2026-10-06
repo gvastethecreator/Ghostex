@@ -27,7 +27,7 @@ use crate::session_chat::{extract_string, parse_json_object};
 
 const EMPRYO_SESSION_ID_MAX_LENGTH: usize = 128;
 
-fn is_safe_empryo_session_id(session_id: &str) -> bool {
+pub(crate) fn is_safe_empryo_session_id(session_id: &str) -> bool {
     !session_id.is_empty()
         && session_id.len() <= EMPRYO_SESSION_ID_MAX_LENGTH
         && session_id
@@ -187,7 +187,7 @@ const OBSERVED_KINDS: [&str; 4] = [
     "\"k\":\"assistant\"",
 ];
 
-fn pending_prompts(patch: &Value) -> Option<Vec<(String, String)>> {
+pub(crate) fn pending_prompts(patch: &Value) -> Option<Vec<(String, String)>> {
     let pending = patch.get("pendingPrompts")?.as_object()?;
     Some(
         pending
