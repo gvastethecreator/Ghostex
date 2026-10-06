@@ -1298,11 +1298,27 @@ Related settings: `terminalFontFamily`, `terminalFontSize`,
 ## Agents, actions, and orchestration
 
 Agents are the launch buttons per project: Claude Code, Codex, Gemini CLI,
-OpenCode, Pi, and more are built in, and custom commands can be added in
-Settings > Agents. An agent row whose CLI is missing shows Install CLI, and one
-with a newer release shows Update CLI. Expand an agent row to install or update
-its CLI, see its installed version (and the newer one when available) and
-command output, or open its Install docs link. Claude Code, Codex, Cursor Agent
+OpenCode, Pi, and more are built in. In Settings > Agents every agent has a
+switch: turn on the agents you use and they appear in the New session menu, the
+sidebar's Select Agent and on your phone; drag the rows to set their order.
+Turning an agent off keeps its settings and its place, so turning it back on
+restores it. Agents you turned off but used before stay dimmed in the list;
+agents you never used wait under More agents, where one click turns one on.
+Turning on an agent whose CLI is missing offers its install right in its row;
+when the CLI is already there, Ghostex asks once whether to turn on its session
+resume hook (Install the hook when I turn on an agent, in the Session resume
+hooks card, skips the question). When an agent that is on needs attention (CLI
+not installed, resume hook off), a line above the list says so, with Fix all;
+an available CLI update shows as Update available on its row. The first time
+you open the page after using Ghostex for a while, it offers once to turn off
+the built-in agents you never used; nothing turns off by itself. Add custom
+agent, at the end of the list, adds your own command or a variant of a built-in
+agent: Works like gives it that agent's logo, chat view, resume hook and
+permission handling. Custom agents can be turned off, or deleted from their
+expanded row; built-in agents are only turned off. Expand an agent row to edit
+its name, command, permission mode and default view, duplicate it as a custom
+agent, install or update its CLI, see its installed version (and the newer one
+when available) and command output, or open its Install docs link. Claude Code, Codex, Cursor Agent
 and Grok Build install through their official installers (PowerShell on
 Windows). When an installer leaves its folder off PATH (Claude Code's does), Ghostex
 adds it to your user PATH so new terminals find the command; Add to PATH
@@ -1439,9 +1455,11 @@ Cross-agent orchestration also works through the `$ghostex-cli` skill. For
    did. Agents message each other the same way, so several sessions can split a
    job between them and report back without you relaying every step.
 
-Related settings: Settings > Agents (Default Prompt Agent, Agent approvals,
-Agent Hooks, Default view per agent), `agentAcceptAllEnabled`,
-`showQuickModelPickerInTerminal` (Option+P model picker).
+Related settings: Settings > Agents (agent switches, Add custom agent, Default
+view per agent; Defaults: Default Prompt Agent, Title Generation Agent, Agent
+approvals; Session resume hooks), `agentAcceptAllEnabled`,
+`agentHooksAutoInstall`, `showQuickModelPickerInTerminal` (Option+P model
+picker).
 
 ## Coordinators
 

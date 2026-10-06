@@ -74,6 +74,21 @@ pub(crate) fn gpui_sidebar_agent_metadata_write_from_command(
                 request_id,
             })
         }
+        Some("setSidebarAgentsEnabled") => {
+            let agent_ids = command
+                .get("agentIds")
+                .and_then(serde_json::Value::as_array)
+                .map(|items| gpui_normalized_string_order_from_values(items))
+                .unwrap_or_default();
+            let enabled = command
+                .get("enabled")
+                .and_then(serde_json::Value::as_bool)
+                .ok_or_else(|| GPUI_SIDEBAR_METADATA_GENERIC_ERROR.to_string())?;
+            if agent_ids.is_empty() {
+                return Err(GPUI_SIDEBAR_METADATA_GENERIC_ERROR.to_string());
+            }
+            Ok(GpuiSidebarAgentMetadataWrite::SetEnabled { agent_ids, enabled })
+        }
         _ => Err(GPUI_SIDEBAR_METADATA_GENERIC_ERROR.to_string()),
     }
 }
@@ -274,6 +289,14 @@ pub(crate) fn gpui_sidebar_agent_mutation_params(
                 serde_json::Value::String("order".to_string()),
             );
             params.insert("agentIds".to_string(), gpui_string_array_value(agent_ids));
+        }
+        GpuiSidebarAgentMetadataWrite::SetEnabled { agent_ids, enabled } => {
+            params.insert(
+                "operation".to_string(),
+                serde_json::Value::String("setEnabled".to_string()),
+            );
+            params.insert("agentIds".to_string(), gpui_string_array_value(agent_ids));
+            params.insert("enabled".to_string(), serde_json::Value::Bool(*enabled));
         }
     }
     serde_json::Value::Object(params)

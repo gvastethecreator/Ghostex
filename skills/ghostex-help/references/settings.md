@@ -184,6 +184,7 @@ How to use this file:
 
 - **gpuiTitlebarActionCommandByProject** `gpuiTitlebarActionCommandByProject` (structured value; change it in Settings, not with `ghostex settings set`): App-managed state saved with the settings; not a user preference.
 - **gpuiTitlebarOpenTargetByProject** `gpuiTitlebarOpenTargetByProject` (structured value; change it in Settings, not with `ghostex settings set`): App-managed state saved with the settings; not a user preference.
+- **agentsTidyUpOfferDismissed** `agentsTidyUpOfferDismissed` (boolean, default false) [not agent-writable]: App-managed state saved with the settings; not a user preference.
 - **settingsModalNavigation** `settingsModalNavigation` (structured value; change it in Settings, not with `ghostex settings set`): App-managed state saved with the settings; not a user preference.
 - **projectWebsiteViews** `projectWebsiteViews` (structured value; change it in Settings, not with `ghostex settings set`): App-managed state saved with the settings; not a user preference.
 - **appIconSourceId** `appIconSourceId` (text, default (empty)) [advanced, not agent-writable]: App-managed state saved with the settings; not a user preference.
@@ -280,7 +281,12 @@ How to use this file:
 - **Hide account emails** `hideAccountEmails` (boolean, default false) [not agent-writable]: Hide account email addresses in the Accounts page and account switchers.
 ## Agents (tab `agents`)
 
-### Config
+### Agents
+
+- **Turn agents on or off** `agentSwitches` (Settings UI row without a settings key; use `ghostex settings open`): Turn on the agents you use; they appear in the New session menu, the sidebar's Select Agent and on your phone. Drag to set their order. Agents you turned off but used before stay dimmed in the list; agents you never used wait under More agents. Expand a row to edit its command, permission mode and default view, or to install or update its CLI.
+- **Add custom agent** `addCustomAgent` (Settings UI row without a settings key; use `ghostex settings open`): Add your own command, or a variant of a built-in agent with other flags. Works like gives it that agent's logo, chat view, resume hook and permission handling. Custom agents can be turned off or deleted.
+- **Default view per agent** `preferredAgentInterfaceOverrides` (structured value; change it in Settings, not with `ghostex settings set`): Agents that support Ghostex's Chat View are marked with a chat bubble and can open in Chat or Terminal regardless of the global Default Agent View. Inherit keeps following that global setting.
+### Defaults
 
 - **Default Prompt Agent** `defaultPromptAgent` (Settings UI row without a settings key; use `ghostex settings open`): Choose the agent used by Git helper prompts, project board Start Work, and the default worktree first-prompt selection.
 - **Title Generation Agent** `titleGenerationAgent` (Settings UI row without a settings key; use `ghostex settings open`): Choose the headless agent Ghostex uses for first-prompt session title generation. Hover the info icon to see the exact command Ghostex sends.
@@ -290,11 +296,10 @@ How to use this file:
 - **Default Prompt Agent** `defaultPromptAgentId` (text, default codex): Agent id used when Ghostex sends a prompt on your behalf (for example PR review). Use an id from the configured agents.
 - **Title Generation Agent** `sessionTitleGenerationAgent` (one of codex | cursor | claude | grok | pi | antigravity | custom; default codex): Headless agent Ghostex uses for first-prompt session title generation. Option labels: codex = Codex, cursor = Cursor CLI, claude = Claude, grok = Grok Build, pi = Pi Agent, antigravity = Antigravity CLI, custom = Custom.
 - **Custom Title Command** `customSessionTitleGenerationCommand` (text, default (empty)): Custom command run with the title prompt on stdin when Title Generation Agent is custom. It should print only the title.
-### Agents
+### Session resume hooks
 
-- **Add Agent** `addAgent` (Settings UI row without a settings key; use `ghostex settings open`): Add, reorder, edit, or delete agent launchers. Expand a row to install or update its CLI, check its version, and open installation docs.
-- **Agent Hooks** `agentResumeHooks` (Settings UI row without a settings key; use `ghostex settings open`): Agent resume hooks let Ghostex capture each agent's native session id and resume the exact conversation after sleep, reload, or app restart. Install a single agent's hook from its row, or install and remove every Ghostex-owned hook with Install All and Uninstall All.
-- **Default view per agent** `preferredAgentInterfaceOverrides` (structured value; change it in Settings, not with `ghostex settings set`): Agents that support Ghostex's Chat View are marked with a chat bubble and can open in Chat or Terminal regardless of the global Default Agent View. Inherit keeps following that global setting.
+- **Session resume hooks** `agentResumeHooks` (Settings UI row without a settings key; use `ghostex settings open`): Hooks let Ghostex capture each agent's native session id and resume the exact conversation after sleep, reload, or app restart. Install one agent's hook from its row, fix every agent that is on with Fix all, or install and remove every Ghostex hook with Install all and Uninstall all.
+- **Install the hook when I turn on an agent** `agentHooksAutoInstall` (boolean, default false): Install an agent's session resume hook as soon as you turn it on, without asking.
 ## Integrations (tab `integrations`)
 
 ### Integrations

@@ -14,6 +14,7 @@ mod buttons;
 mod model;
 mod mutations;
 mod normalize;
+mod roster;
 #[cfg(test)]
 mod tests;
 
@@ -21,3 +22,4 @@ pub use buttons::*;
 pub use model::*;
 pub use mutations::*;
 pub(crate) use normalize::*;
+pub use roster::*;

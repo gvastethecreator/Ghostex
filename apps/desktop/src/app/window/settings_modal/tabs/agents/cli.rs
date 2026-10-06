@@ -420,6 +420,7 @@ impl AgentsTab {
             return;
         }
         let mut installed = false;
+        let installed_agent = agent_id.to_string();
         match result.and_then(|value| {
             CliState::parse(&value).ok_or_else(|| "The CLI request failed.".to_string())
         }) {
@@ -447,6 +448,7 @@ impl AgentsTab {
         }
         cx.notify();
         if installed {
+            self.on_cli_installed(&installed_agent, cx);
             self.cli_changed(cx);
         }
     }
@@ -783,15 +785,15 @@ impl AgentsTab {
                 None => update,
             }
         });
-        Some(cli_titled_button(
+        // CDXC:AgentLauncher 2026-10-06 DECISION: User: "ok implement the plan": an available update is not a problem, so the row offers it as a muted link instead of a button.
+        Some(cli_quiet_link(
             p,
             id("update"),
             if error.is_some() {
                 "Retry update"
             } else {
-                "Update CLI"
+                "Update available"
             },
-            icons::REFRESH,
             title,
             move |page: &mut Self, _window, cx| {
                 page.cli_start(CliSlot::Row, &agent, "update", &detected, cx)
@@ -1379,6 +1381,42 @@ fn cli_button_busy(
 ) -> AnyElement {
     let icon = spinning_icon(icons::REFRESH, 16.0, p.foreground, &id);
     cli_icon_button(p, id, label, icon, true, |_, _, _| {}, cx)
+}
+
+/// A muted text action with a leading refresh icon and a `title`, for offers that are not
+/// problems (an available CLI update).
+fn cli_quiet_link(
+    p: &SettingsPalette,
+    id: SharedString,
+    label: &'static str,
+    title: String,
+    on_click: impl Fn(&mut AgentsTab, &mut Window, &mut Context<AgentsTab>) + 'static,
+    cx: &mut Context<AgentsTab>,
+) -> AnyElement {
+    let muted = p.muted;
+    let foreground = p.foreground;
+    let hover = muted_fill(p);
+    h_flex()
+        .id(id)
+        .flex_shrink_0()
+        .h(px(28.0))
+        .px(px(8.0))
+        .gap(px(5.0))
+        .items_center()
+        .rounded(px(MODAL_RADIUS_CONTROL))
+        .cursor_pointer()
+        .text_size(px(12.5))
+        .line_height(px(16.0))
+        .text_color(hsla(muted))
+        .whitespace_nowrap()
+        .hover(move |this| this.bg(hsla(hover)).text_color(hsla(foreground)))
+        .tooltip(tooltip_text(title))
+        .on_click(cx.listener(move |page, _: &ClickEvent, window, cx| {
+            on_click(page, window, cx);
+        }))
+        .child(settings_icon(icons::REFRESH, 14.0, muted))
+        .child(label)
+        .into_any_element()
 }
 
 /// An outline `size='sm'` action with a `title` (the Kit tooltip stands in for the native one).

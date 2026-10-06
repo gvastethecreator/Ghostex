@@ -1,3 +1,4 @@
+pub mod agent_usage;
 pub mod project;
 pub mod prompts_appdata;
 mod prompts_sessions;

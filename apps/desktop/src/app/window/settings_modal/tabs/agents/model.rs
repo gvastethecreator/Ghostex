@@ -9,7 +9,8 @@ use super::super::super::catalog::{SettingOption, module, settings_catalog};
 use serde_json::Value;
 use std::sync::OnceLock;
 
-/// One launcher of the roster (`SidebarAgentButton`).
+/// One agent of the roster (`SidebarAgentButton`, or a gxserver `agentRoster` entry that also
+/// carries agents that are off).
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct AgentButton {
     pub(super) agent_id: String,
@@ -17,31 +18,94 @@ pub(super) struct AgentButton {
     pub(super) command: Option<String>,
     pub(super) icon: Option<String>,
     pub(super) accept_all_mode: Option<String>,
+    /// The agent is on: it shows in the launcher, the New Thread picker and the phone.
+    pub(super) enabled: bool,
+    /// A built-in agent (no Delete, only off).
+    pub(super) is_default: bool,
+    /// The newest session with this agent, absent when it was never used.
+    pub(super) last_used_at: Option<String>,
+    /// A built-in agent's own name and command, for Reset to defaults.
+    pub(super) default_name: Option<String>,
+    pub(super) default_command: Option<String>,
+}
+
+impl AgentButton {
+    pub(super) fn used_before(&self) -> bool {
+        self.last_used_at.is_some()
+    }
+
+    /// The row lives in the list (on, used before, or the user's own) rather than in More agents.
+    pub(super) fn listed(&self) -> bool {
+        self.enabled || self.used_before() || !self.is_default
+    }
+}
+
+fn agent_button(agent: &Value, enabled: bool) -> Option<AgentButton> {
+    Some(AgentButton {
+        agent_id: text(agent, "agentId")?,
+        name: text(agent, "name").unwrap_or_default(),
+        command: text(agent, "command"),
+        icon: text(agent, "icon").filter(|icon| !icon.is_empty()),
+        accept_all_mode: text(agent, "acceptAllMode"),
+        enabled: agent
+            .get("enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(enabled),
+        is_default: agent.get("isDefault").and_then(Value::as_bool) == Some(true),
+        last_used_at: text(agent, "lastUsedAt").filter(|at| !at.is_empty()),
+        default_name: text(agent, "defaultName"),
+        default_command: text(agent, "defaultCommand"),
+    })
 }
 
 fn text(value: &Value, key: &str) -> Option<String> {
     value.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
-/// `useSidebarStore((state) => state.hud.agents)`.
+/// `useSidebarStore((state) => state.hud.agents)`: the agents that are on.
 pub(super) fn agents_from_hud(hud: Option<&Value>) -> Vec<AgentButton> {
     hud.and_then(|hud| hud.get("agents"))
         .and_then(Value::as_array)
         .map(|agents| {
             agents
                 .iter()
-                .filter_map(|agent| {
-                    Some(AgentButton {
-                        agent_id: text(agent, "agentId")?,
-                        name: text(agent, "name").unwrap_or_default(),
-                        command: text(agent, "command"),
-                        icon: text(agent, "icon").filter(|icon| !icon.is_empty()),
-                        accept_all_mode: text(agent, "acceptAllMode"),
-                    })
-                })
+                .filter_map(|agent| agent_button(agent, true))
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// The `agentRoster` of a `readSidebarHud { includeAgentRoster }` answer: every agent, on and
+/// off, in the shared order. `None` from a gxserver that predates it.
+pub(super) fn roster_from_hud_answer(answer: &Value) -> Option<Vec<AgentButton>> {
+    answer
+        .get("agentRoster")
+        .and_then(Value::as_array)
+        .map(|agents| {
+            agents
+                .iter()
+                .filter_map(|agent| agent_button(agent, false))
+                .collect()
+        })
+}
+
+/// "3 weeks ago" for a session time (RFC 3339).
+pub(super) fn last_used_label(at: &str) -> String {
+    let Ok(time) = chrono::DateTime::parse_from_rfc3339(at) else {
+        return "Used before".to_string();
+    };
+    let days = (chrono::Utc::now() - time.with_timezone(&chrono::Utc))
+        .num_days()
+        .max(0);
+    let ago = match days {
+        0 => return "Last used today".to_string(),
+        1 => return "Last used yesterday".to_string(),
+        2..=13 => format!("{days} days"),
+        14..=59 => format!("{} weeks", days / 7),
+        60..=364 => format!("{} months", days / 30),
+        _ => return "Last used over a year ago".to_string(),
+    };
+    format!("Last used {ago} ago")
 }
 
 /// One entry of `DEFAULT_SIDEBAR_AGENTS`.
@@ -400,21 +464,6 @@ pub(super) fn any_hook_removable(status: Option<&HookStatus>) -> bool {
         status.error_message.is_none()
             && status.agents.iter().any(|item| hook_removable(Some(item)))
     })
-}
-
-/// `getAgentHookStatusText`.
-pub(super) fn hook_status_text(status: Option<&HookStatusItem>, loading: bool) -> &'static str {
-    if loading {
-        return "Checking";
-    }
-    match status.map(|status| status.status.as_str()) {
-        None => "Not checked",
-        Some("installed") => "Installed",
-        Some("updateRequired") => "Needs update",
-        Some("cliMissing") => "CLI missing",
-        Some("notRequired") => "Not required",
-        Some(_) => "Missing",
-    }
 }
 
 /// `mergeIds`: the draft order with ids that left dropped and new ones appended.

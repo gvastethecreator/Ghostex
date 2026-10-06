@@ -139,7 +139,10 @@ impl GhostexGpuiApp {
             "setPortlessEnabled" => {
                 self.handle_gpui_set_portless_enabled_message(command, cx);
             }
-            "saveSidebarAgent" | "deleteSidebarAgent" | "syncSidebarAgentOrder" => {
+            "saveSidebarAgent"
+            | "deleteSidebarAgent"
+            | "syncSidebarAgentOrder"
+            | "setSidebarAgentsEnabled" => {
                 self.handle_gpui_sidebar_agent_metadata_command(command, cx);
             }
             "saveSidebarCommand"

@@ -51,6 +51,7 @@ impl GhostexGpuiApp {
             | "saveSidebarAgent"
             | "deleteSidebarAgent"
             | "syncSidebarAgentOrder"
+            | "setSidebarAgentsEnabled"
             | "saveSidebarCommand"
             | "deleteSidebarCommand"
             | "syncSidebarCommandOrder"
