@@ -3,7 +3,7 @@
 
 /*
  CDXC:Onboarding 2026-10-01 WHY:
- The first-run intro video plays in the system WKWebView, never CEF (the user decision is on apps/desktop/src/app/window/onboarding/intro_video.rs). The web view is a plain child of the onboarding window's GPUI view at the exact frame Rust lays out for it, created hidden and shown by the first frame write, so it never draws at a stale origin. wry was not used here: its macOS child web view activates the whole app on creation, and every other AppKit piece of this crate is a small Objective-C shim. YouTube refuses embeds that arrive without an identifying referrer (player error 153), so the embed request carries one. Links the player opens (its logo, "Watch on YouTube") go to the default browser instead of replacing the video inside the small frame.
+ The first-run intro video plays in the system WKWebView, never CEF (the user decision is on apps/desktop/src/app/window/onboarding/intro_video.rs). The web view is a plain child of the onboarding window's GPUI view at the exact frame Rust lays out for it, created hidden and shown by the first frame write, so it never draws at a stale origin. wry was not used here: its macOS child web view activates the whole app on creation, and every other AppKit piece of this crate is a small Objective-C shim. YouTube refuses embeds that arrive without an identifying referrer (player error 153), so the player is an iframe in a page loaded with an https base URL, and WebKit sends that origin as the iframe's Referer (CDXC:Onboarding 2026-10-07 on intro_video.rs `embed_page_html`). Links the player opens (its logo, "Watch on YouTube") go to the default browser instead of replacing the video inside the small frame.
  SEE-ALSO: apps/desktop/src/app/window/onboarding/intro_web_view.rs (the Rust side and the Windows WebView2 twin).
 */
 @interface GhostexIntroVideoWebView : WKWebView <WKNavigationDelegate, WKUIDelegate>
@@ -43,14 +43,15 @@ static void GhostexIntroVideoOpenExternally(NSURL *url) {
 
 @end
 
-void *GhostexGpuiIntroVideoWebViewCreate(void *parentView, const char *url,
-                                         const char *referrer) {
+void *GhostexGpuiIntroVideoWebViewCreate(void *parentView, const char *html,
+                                         const char *baseURL) {
   NSView *parent = (__bridge NSView *)parentView;
-  if (parent == nil || url == NULL) {
+  if (parent == nil || html == NULL || baseURL == NULL) {
     return NULL;
   }
-  NSURL *embedURL = [NSURL URLWithString:[NSString stringWithUTF8String:url]];
-  if (embedURL == nil) {
+  NSString *page = [NSString stringWithUTF8String:html];
+  NSURL *pageBaseURL = [NSURL URLWithString:[NSString stringWithUTF8String:baseURL]];
+  if (page == nil || pageBaseURL == nil) {
     return NULL;
   }
   WKWebViewConfiguration *configuration = [[WKWebViewConfiguration alloc] init];
@@ -67,11 +68,7 @@ void *GhostexGpuiIntroVideoWebViewCreate(void *parentView, const char *url,
   [webView setValue:@NO forKey:@"drawsBackground"];
   webView.hidden = YES;
 
-  NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:embedURL];
-  if (referrer != NULL) {
-    [request setValue:[NSString stringWithUTF8String:referrer] forHTTPHeaderField:@"Referer"];
-  }
-  [webView loadRequest:request];
+  [webView loadHTMLString:page baseURL:pageBaseURL];
   [parent addSubview:webView positioned:NSWindowAbove relativeTo:nil];
   return (__bridge_retained void *)webView;
 }
