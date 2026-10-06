@@ -46,7 +46,22 @@ impl GhostexGpuiApp {
         div().id(format!("native-session-identity-{id}")).size(px(15.0 * appearance.scale)).flex_shrink_0().flex().items_center().justify_center().child(icon)
             .when_some(fold, |identity, collapsed| {
                 let id = id.clone();
+                let scale = appearance.scale;
+                let (light, glass, hover) = (appearance.light, appearance.glass, appearance.hover);
+                // CDXC:Coordinators 2026-10-06 DECISION: User: "please make the chevron button have a highlight button behind it when i hover over it (rounded bg behind it)". Same radius and colours as the card's hover action buttons (`hover_actions.rs`); the spot grows to 18px with a negative margin so the row's layout stays that of the 15px crown.
                 identity
+                    .size(px(18.0 * scale))
+                    .m(px(-1.5 * scale))
+                    .rounded(px(4.0 * scale))
+                    .hover(move |item| {
+                        item.bg(if light && glass {
+                            gpui::Hsla::from(gpui::rgb(0xffffff)).opacity(0.85)
+                        } else if light {
+                            gpui::Hsla::from(gpui::rgb(0xe4e4e7))
+                        } else {
+                            hover
+                        })
+                    })
                     .role(gpui::Role::Button)
                     .aria_label(if collapsed { "Show threads" } else { "Hide threads" })
                     .cursor_pointer()
