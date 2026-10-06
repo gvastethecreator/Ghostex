@@ -57,7 +57,7 @@ pub(crate) fn check_for_updates() -> Result<Option<LinuxUpdate>, String> {
         .take(FEED_MAX_BYTES)
         .read_to_string(&mut body)
         .map_err(|error| error.to_string())?;
-    newest_update(&body, env!("CARGO_PKG_VERSION"))
+    newest_update(&body, env!("GHOSTEX_BUILD_MARKETING_VERSION"))
 }
 
 fn newest_update(feed_text: &str, current_version: &str) -> Result<Option<LinuxUpdate>, String> {

@@ -70,6 +70,8 @@ impl GhostexGpuiApp {
             .flex_shrink_0()
             .items_center()
             .justify_center()
+            // Same corner rounding as Back/Forward next to it, so its hover background matches theirs.
+            .rounded(px(TITLEBAR_BUTTON_RADIUS))
             .text_color(if downloading {
                 titlebar_update_downloading_color()
             } else {
