@@ -211,6 +211,15 @@ fn claude_ultracode_on_lines(lines: &[String]) -> Option<bool> {
     )
 }
 
+/// Agents whose questions exist only on their screen: no hook announces them, so the prompt
+/// detectors in `detect_session_chat_terminal_state` are the only reading of them.
+pub(crate) fn session_chat_questions_only_on_screen(agent: Option<&str>) -> bool {
+    matches!(
+        agent.map(str::trim),
+        Some("cursor" | "cursor-agent" | "freebuff" | "empryo")
+    )
+}
+
 /// Full detection for one session: resolve structured transcript metadata,
 /// then let any current terminal statusline value win per option. `None` means
 /// neither agent-owned source proved a value.

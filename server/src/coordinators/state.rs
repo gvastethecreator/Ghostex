@@ -307,11 +307,18 @@ pub fn waits_on_screen(session: &Value) -> bool {
 
 /// What a waiting thread waits on: a screen that blocks input, else its stored question or
 /// approval card, else a question read off its screen.
+/// Keys keep the `prompt:` prefix the supervisor always gave stored cards, so a thread already
+/// reported as waiting is not reported again after an upgrade.
 pub fn waiting_prompt(session: &Value) -> Option<ThreadPrompt> {
     let screen = recorded_screen_wait(session);
     match screen {
         Some(wait) if wait.blocking => Some(wait.prompt),
-        _ => thread_prompt(session).or(screen.map(|wait| wait.prompt)),
+        _ => thread_prompt(session)
+            .map(|prompt| ThreadPrompt {
+                key: format!("prompt:{}", prompt.key),
+                summary: prompt.summary,
+            })
+            .or(screen.map(|wait| wait.prompt)),
     }
 }
 

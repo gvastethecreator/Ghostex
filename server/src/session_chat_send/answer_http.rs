@@ -318,22 +318,22 @@ pub(crate) async fn handle_answer_session_chat_prompt_http(
         }
         "question" => {
             let agent = session_chat_agent_for_session(&target.session);
-            let screen_prompt = if matches!(
-                agent.as_deref(),
-                Some("cursor" | "cursor-agent" | "freebuff" | "empryo")
-            ) {
-                crate::session_chat_options::SessionChatOptionDetector::new(state)
-                    .detect(
-                        &target.project_id,
-                        &target.session_id,
-                        agent.as_deref(),
-                        true,
-                    )
-                    .await
-                    .prompt
-            } else {
-                None
-            };
+            let screen_prompt =
+                if crate::session_chat_options::session_chat_questions_only_on_screen(
+                    agent.as_deref(),
+                ) {
+                    crate::session_chat_options::SessionChatOptionDetector::new(state)
+                        .detect(
+                            &target.project_id,
+                            &target.session_id,
+                            agent.as_deref(),
+                            true,
+                        )
+                        .await
+                        .prompt
+                } else {
+                    None
+                };
             let stored_prompt = crate::agents::session_chat_prompt_setting(&target.session)
                 .as_deref()
                 .and_then(crate::session_chat::parse_stored_session_chat_prompt)

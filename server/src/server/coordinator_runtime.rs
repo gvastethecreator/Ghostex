@@ -799,22 +799,41 @@ fn republish_coordinator_chat(state: &AppState, project_id: &str, session_id: &s
 }
 
 /// Records what the chat's cached screen reading of every running open thread waits on, for
-/// every surface that classifies threads (see `ThreadScreenWait`). It reads the cache only: a
-/// tick never captures a screen.
+/// every surface that classifies threads (see `ThreadScreenWait`).
+///
+/// CDXC:Coordinators 2026-10-06 WHY:
+/// The screen reading is refreshed only while something follows the session (a viewer, a send, a chat read), so an Empryo thread nobody watched showed its approval panel for over a minute while its coordinator still saw it working (live check, card agent-bo-95422941). For a working thread whose agent asks only on its screen (Empryo, Cursor, Freebuff), the tick refreshes that reading through the detector's own cache lifetime, at most one capture per thread every few seconds; every other thread is read from the cache alone, as before.
 fn refresh_thread_screen_waits(
     state: &AppState,
     repository: &DomainRepository<'_>,
     threads: &[ThreadRecord],
 ) {
+    let generated_at = crate::presentation::now_iso();
+    let detector = crate::session_chat_options::SessionChatOptionDetector::new(state);
     let waits = threads
         .iter()
         .filter(|thread| !thread.is_resolved())
         .filter(|thread| {
-            repository
+            let Some(session) = repository
                 .get_session(&thread.project_id, &thread.session_id)
                 .ok()
                 .flatten()
-                .is_some_and(|session| effective_lifecycle_state(&session) == "running")
+                .filter(|session| effective_lifecycle_state(session) == "running")
+            else {
+                return false;
+            };
+            let agent = crate::session_chat_composer::session_chat_composer_agent_id(&session);
+            if crate::session_chat_options::session_chat_questions_only_on_screen(agent.as_deref())
+                && crate::presentation::presentation_activity(&session, &generated_at) == "working"
+            {
+                detector.detect_blocking(
+                    &thread.project_id,
+                    &thread.session_id,
+                    agent.as_deref(),
+                    false,
+                );
+            }
+            true
         })
         .filter_map(|thread| {
             let screen = crate::session_chat_options::cached_session_chat_screen_state(
