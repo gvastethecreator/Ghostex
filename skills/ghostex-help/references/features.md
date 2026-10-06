@@ -1307,9 +1307,10 @@ agents you never used wait under More agents, where one click turns one on.
 Turning on an agent whose CLI is missing offers its install right in its row;
 when the CLI is already there, Ghostex asks once whether to turn on its session
 resume hook (Install the hook when I turn on an agent, in the Session resume
-hooks card, skips the question). When an agent that is on needs attention (CLI
-not installed, resume hook off), a line above the list says so, with Fix all;
-an available CLI update shows as Update available on its row. The first time
+hooks card, skips the question). An agent that is on shows on its own row when
+its CLI is not installed or its resume hook is off, with the button that fixes
+it; for the agents you have used, a line above the list sums these up, with Fix
+all. An available CLI update shows as Update available on its row. The first time
 you open the page after using Ghostex for a while, it offers once to turn off
 the built-in agents you never used; nothing turns off by itself. Add custom
 agent, at the end of the list, adds your own command or a variant of a built-in

@@ -1,6 +1,7 @@
 //! What the Agents card says about CLIs and session resume hooks: a row speaks only when
 //! something is wrong (its CLI is missing, its hook is off), an available update is a muted link,
-//! and one summary line above the list counts only agents that are on, with Fix all.
+//! and one summary line above the list counts only agents that are on and were used before, with
+//! Fix all.
 use super::super::super::super::native_modal_kit::*;
 use super::super::super::fields::{
     ButtonSize, ButtonVariant, settings_button_sized, settings_icon,
@@ -168,8 +169,11 @@ impl AgentsTab {
         items
     }
 
-    /// The agents that are on with a problem, one per CLI (a custom agent that works like a
-    /// built-in shares its CLI and hook).
+    /// The agents that are on, were used before and have a problem, one per CLI (a custom agent
+    /// that works like a built-in shares its CLI and hook).
+    ///
+    /// CDXC:AgentHooks 2026-10-06 DECISION:
+    /// User: the summary line and Fix all only count agents that are on AND were used before; unused agents' rows still show their own Install CLI. Built-in agents start on, so counting every agent that is on made Fix all install CLIs nobody uses.
     fn problems(
         &self,
         agents: &[AgentButton],
@@ -178,7 +182,7 @@ impl AgentsTab {
     ) -> Vec<(AgentButton, RowProblem)> {
         let mut seen: Vec<String> = Vec::new();
         let mut problems = Vec::new();
-        for agent in agents {
+        for agent in agents.iter().filter(|agent| agent.used_before()) {
             let Some(problem) = self.row_problem(agent, status, loading) else {
                 continue;
             };
@@ -250,7 +254,7 @@ impl AgentsTab {
         if problems.is_empty() {
             let mut hooked: Vec<String> = agents
                 .iter()
-                .filter(|agent| agent.enabled)
+                .filter(|agent| agent.enabled && agent.used_before())
                 .filter_map(hook_agent_id)
                 .collect();
             hooked.sort();

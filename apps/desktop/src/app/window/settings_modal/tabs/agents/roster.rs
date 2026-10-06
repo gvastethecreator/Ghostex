@@ -22,9 +22,9 @@ use super::model::{
 };
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement,
-    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Transformation,
-    Window, div, px, radians, rgb,
+    AnyElement, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Transformation, Window, div, px,
+    radians, rgb,
 };
 use gpui_component::{h_flex, v_flex};
 
@@ -227,6 +227,8 @@ impl AgentsTab {
         let hover = p.raised_hover;
         h_flex()
             .id("agents-add-custom")
+            .role(gpui::Role::Button)
+            .aria_label("Add custom agent")
             .w_full()
             .px(px(20.0))
             .py(px(12.0))
@@ -234,10 +236,10 @@ impl AgentsTab {
             .items_center()
             .cursor_pointer()
             .hover(move |this| this.bg(hsla(hover)))
-            .on_click(cx.listener(|page, _: &ClickEvent, window, cx| {
+            .on_press(cx, |page, window, cx| {
                 page.open_editor(None, window, cx);
                 cx.notify();
-            }))
+            })
             .child(settings_icon(icons::PLUS, 15.0, p.muted).flex_shrink_0())
             .child(
                 div()
@@ -342,6 +344,9 @@ impl AgentsTab {
         let toggle_agent = agent_id.clone();
         let main = h_flex()
             .id(SharedString::from(format!("agent-row-open-{agent_id}")))
+            .role(gpui::Role::Button)
+            .aria_label(SharedString::from(format!("{name} options")))
+            .aria_expanded(expanded)
             .flex_1()
             .min_w_0()
             .p(px(8.0))
@@ -350,9 +355,9 @@ impl AgentsTab {
             .rounded(px(MODAL_RADIUS_CONTROL))
             .cursor_pointer()
             .when(!agent.enabled, |this| this.opacity(0.55))
-            .on_click(cx.listener(move |page, _: &ClickEvent, _window, cx| {
+            .on_press(cx, move |page, _window, cx| {
                 page.toggle_expanded(&toggle_agent, cx);
-            }))
+            })
             .child(agent_icon_tile(agent.icon.as_deref(), p))
             .child(
                 v_flex()
@@ -395,7 +400,7 @@ impl AgentsTab {
         let switch = labeled_switch_control(
             p,
             SharedString::from(format!("agent-enabled-{agent_id}")),
-            Some(SharedString::from(format!("{name} on"))),
+            Some(SharedString::from(name.clone())),
             agent.enabled,
             false,
             None,
@@ -417,6 +422,7 @@ impl AgentsTab {
         let chevron = ghost_icon_button(
             p,
             SharedString::from(format!("agent-row-chevron-{agent_id}")),
+            format!("{name} options"),
             chevron_icon,
             false,
             expanded,

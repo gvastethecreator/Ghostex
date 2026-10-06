@@ -13,8 +13,8 @@ use super::model::AgentButton;
 use super::status::emerald;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, ClickEvent, Context, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Transformation, div, px, radians,
+    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Transformation, div, px, radians,
 };
 use gpui_component::{h_flex, v_flex};
 use serde_json::json;
@@ -55,6 +55,9 @@ impl AgentsTab {
         });
         let toggle = h_flex()
             .id("agents-more-toggle")
+            .role(gpui::Role::Button)
+            .aria_label(SharedString::from(format!("More agents, {}", agents.len())))
+            .aria_expanded(open)
             .w_full()
             .px(px(20.0))
             .py(px(12.0))
@@ -62,10 +65,10 @@ impl AgentsTab {
             .items_center()
             .cursor_pointer()
             .hover(move |this| this.bg(hsla(hover)))
-            .on_click(cx.listener(|page, _: &ClickEvent, _window, cx| {
+            .on_press(cx, |page, _window, cx| {
                 page.more_agents_open = !page.more_agents_open;
                 cx.notify();
-            }))
+            })
             .child(chevron)
             .child(
                 div()
@@ -126,6 +129,8 @@ impl AgentsTab {
         let target = agent.clone();
         h_flex()
             .id(SharedString::from(format!("agent-chip-{}", agent.agent_id)))
+            .role(gpui::Role::Button)
+            .aria_label(SharedString::from(format!("Turn on {}", agent.name)))
             .min_w_0()
             .h(px(36.0))
             .px(px(10.0))
@@ -141,9 +146,9 @@ impl AgentsTab {
             } else {
                 format!("Turn on {}", agent.name)
             }))
-            .on_click(cx.listener(move |page, _: &ClickEvent, _window, cx| {
+            .on_press(cx, move |page, _window, cx| {
                 page.turn_on_agent(&target, cx);
-            }))
+            })
             .child(agent_icon(agent.icon.as_deref(), p))
             .child(
                 div()

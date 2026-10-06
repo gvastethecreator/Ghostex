@@ -136,6 +136,7 @@ impl AgentsTab {
         let dismiss = ghost_icon_button(
             p,
             SharedString::from(format!("agent-turn-on-dismiss-{agent_id}")),
+            "Dismiss",
             settings_icon(icons::X, 14.0, p.muted).into_any_element(),
             false,
             false,
