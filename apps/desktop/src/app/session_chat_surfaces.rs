@@ -506,7 +506,11 @@ impl GhostexGpuiApp {
         if self.agents_chat_mode_sessions.contains(&session_id) {
             return true;
         }
-        if !self.agents_session_chat_eligible(session_id) {
+        if !self.agents_session_chat_eligible(session_id)
+            && !self
+                .agents_chat_notice_admitted_sessions
+                .contains(&session_id)
+        {
             return false;
         }
         self.agents_chat_mode_sessions.insert(session_id);
@@ -528,6 +532,102 @@ impl GhostexGpuiApp {
         self.persist_shell_layout_state();
         cx.notify();
         true
+    }
+
+    /*
+    CDXC:AgentScreenDetection 2026-10-06 WHY:
+    The Chat View gate sends the user to the hooks page when an agent has not
+    reported its conversation — the right remedy for a healthy CLI, the wrong
+    one for a CLI that died before ever reporting, which can never report and
+    whose chat has exactly one thing to show: the terminal notice that says so.
+    The projection cannot know this (notices are screen-derived and nothing
+    probes an unfollowed session), so the blocked toggle spends one bounded
+    `readSessionChat` here — the same cached detection every chat subscribe
+    runs — and admits the session when that read carries a notice. Everything
+    else keeps the hooks education path.
+    */
+    pub(crate) fn probe_agents_chat_notice_admission(
+        &mut self,
+        session_id: TerminalSessionId,
+        agent_name: String,
+        window: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        if self
+            .agents_chat_notice_probe_in_flight
+            .contains(&session_id)
+        {
+            return;
+        }
+        let detail = format!(
+            "Chat View needs the {agent_name} hooks installed, approved, and running. \
+             Check their status here. Resuming and working/done indicators also require hooks."
+        );
+        let target_info = if let Some(key) = self.agents_chat_local_key_for_session(session_id) {
+            Some((None, key.project_id, key.session_id))
+        } else {
+            self.agents_chat_remote_key_for_session(session_id)
+                .and_then(|key| {
+                    self.gpui_remote_gxserver_request_target(&key.remote_machine_id)
+                        .map(|target| (Some(target), key.project_id, key.session_id))
+                })
+        };
+        let Some((target, project_id, gxserver_session_id)) = target_info else {
+            self.open_gpui_settings_agent_hooks_page(window, cx);
+            self.dispatch_gpui_app_modal_toast(
+                "warning",
+                &format!("{agent_name} hasn't reported its session yet"),
+                &detail,
+                cx,
+            );
+            return;
+        };
+        self.agents_chat_notice_probe_in_flight.insert(session_id);
+        let background = cx.background_executor().clone();
+        cx.spawn_in(window, async move |this, cx| {
+            let params = serde_json::json!({
+                "projectId": project_id,
+                "sessionId": gxserver_session_id,
+            });
+            let read = background
+                .spawn(async move {
+                    match target.as_ref() {
+                        Some(target) => gpui_remote_gxserver_rpc_result(
+                            target,
+                            "/api/readSessionChat",
+                            &params,
+                            GPUI_SESSION_CHAT_QUEUE_COUNT_TIMEOUT,
+                        ),
+                        None => gpui_gxserver_rpc_result(
+                            "/api/readSessionChat",
+                            &params,
+                            GPUI_SESSION_CHAT_QUEUE_COUNT_TIMEOUT,
+                        ),
+                    }
+                })
+                .await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.agents_chat_notice_probe_in_flight.remove(&session_id);
+                let has_notice = read
+                    .as_ref()
+                    .ok()
+                    .and_then(|value| value.get("terminalNotice"))
+                    .is_some_and(serde_json::Value::is_object);
+                if has_notice {
+                    this.agents_chat_notice_admitted_sessions.insert(session_id);
+                    this.show_agents_session_chat_mode(session_id, cx);
+                } else {
+                    this.open_gpui_settings_agent_hooks_page(window, cx);
+                    this.dispatch_gpui_app_modal_toast(
+                        "warning",
+                        &format!("{agent_name} hasn't reported its session yet"),
+                        &detail,
+                        cx,
+                    );
+                }
+            });
+        })
+        .detach();
     }
 
     /// CDXC:SessionChat 2026-09-24 DECISION:
@@ -808,6 +908,9 @@ impl GhostexGpuiApp {
             self.forget_session_chat_presentation(&key);
         }
         self.agents_chat_mode_sessions.remove(&session_id);
+        self.agents_chat_notice_admitted_sessions
+            .remove(&session_id);
+        self.agents_chat_notice_probe_in_flight.remove(&session_id);
         self.session_chat_composer_ready_sessions
             .remove(&session_id);
         self.session_chat_composer_empty_reports.remove(&session_id);
@@ -861,6 +964,8 @@ impl GhostexGpuiApp {
         cx: &mut gpui::Context<Self>,
     ) -> ParkedAgentsChatRuntime {
         self.agents_chat_mode_sessions.clear();
+        self.agents_chat_notice_admitted_sessions.clear();
+        self.agents_chat_notice_probe_in_flight.clear();
         self.pending_agents_chat_launch_intents.clear();
         self.pending_agents_chat_launch_follow_view.clear();
         self.pending_session_terminal_composer_insert.clear();

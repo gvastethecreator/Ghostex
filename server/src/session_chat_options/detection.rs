@@ -126,6 +126,9 @@ pub fn detect_session_chat_selection(
                     unreachable!("Omp is parsed as a complete statusline")
                 }
                 SessionChatOptionAgent::Pi => unreachable!("Pi is parsed as a complete statusline"),
+                // ZCode has no segment grammar: it is an option agent only so
+                // the notice classifier accepts it (see the enum's CDXC).
+                SessionChatOptionAgent::Zcode => {}
             }
         }
         if (

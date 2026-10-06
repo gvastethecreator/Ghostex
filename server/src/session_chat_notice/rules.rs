@@ -25,6 +25,13 @@ const RESTART_CODEX: NoticeActionSpec = NoticeActionSpec {
     send: None,
 };
 
+const RESTART_ZCODE: NoticeActionSpec = NoticeActionSpec {
+    id: "restartAgent",
+    label: "Restart ZCode",
+    kind: SessionChatTerminalNoticeActionKind::RestartAgent,
+    send: None,
+};
+
 pub(super) struct NoticeRule {
     pub(super) kind: &'static str,
     pub(super) severity: SessionChatTerminalNoticeSeverity,
@@ -185,7 +192,9 @@ const CODEX_RULES: &[NoticeRule] = &[
             },
             NoticeSignature {
                 scope: NoticeScope::Exit,
-                parts: &[NoticePart::Text("internal error; agent loop died unexpectedly")],
+                parts: &[NoticePart::Text(
+                    "internal error; agent loop died unexpectedly",
+                )],
                 corroborators: &[],
             },
         ],
@@ -696,11 +705,57 @@ const CURSOR_RULES: &[NoticeRule] = &[NoticeRule {
     quote_evidence: false,
 }];
 
+// --- zcode ------------------------------------------------------------------
+
+const ZCODE_RULES: &[NoticeRule] = &[NoticeRule {
+    kind: SESSION_CHAT_NOTICE_AGENT_EXITED,
+    severity: SessionChatTerminalNoticeSeverity::Error,
+    title: "ZCode is no longer running in this terminal",
+    detail: "The ZCode process exited and can no longer receive messages. Restart it to continue this conversation.",
+    blocks_input: true,
+    signatures: &[
+        // The two shell-prompt forms, verified against a SIGTERM'd session:
+        // "Error: ZCode runtime exited with status 143. Diagnostics: …" and
+        // the resume hint Codex's exit rule also keys on.
+        NoticeSignature {
+            scope: NoticeScope::Exit,
+            parts: &[NoticePart::Text("ZCode runtime exited with status")],
+            corroborators: &[],
+        },
+        NoticeSignature {
+            scope: NoticeScope::Exit,
+            parts: &[
+                NoticePart::Text("To continue this session, run"),
+                NoticePart::Gap(3),
+                NoticePart::Text("zcode --resume"),
+            ],
+            corroborators: &[],
+        },
+        // CDXC:AgentScreenDetection 2026-10-06 WHY: the Banner arm covers the
+        // other death form, where ZCode's exit screen still owns the pane
+        // ("The session has terminated. Press Enter to exit.") and no shell
+        // prompt is on screen yet, so the Exit scope's prompt requirement can
+        // never match there.
+        NoticeSignature {
+            scope: NoticeScope::Banner,
+            parts: &[
+                NoticePart::Text("The session has terminated"),
+                NoticePart::Gap(40),
+                NoticePart::Text("Press Enter to exit"),
+            ],
+            corroborators: &[],
+        },
+    ],
+    actions: &[RESTART_ZCODE, OPEN_TERMINAL],
+    quote_evidence: true,
+}];
+
 pub(super) fn notice_rules(agent: SessionChatOptionAgent) -> &'static [NoticeRule] {
     match agent {
         SessionChatOptionAgent::Claude => CLAUDE_RULES,
         SessionChatOptionAgent::Codex => CODEX_RULES,
         SessionChatOptionAgent::Cursor => CURSOR_RULES,
+        SessionChatOptionAgent::Zcode => ZCODE_RULES,
         // Grok, Hermes, Omp and Pi have no phrase-catalog rules here. Hermes
         // and Pi have source-derived focused-component detectors after this
         // catalog; the other agents rely on measured composer readiness.
@@ -714,7 +769,7 @@ pub(super) fn notice_rules(agent: SessionChatOptionAgent) -> &'static [NoticeRul
 
 /// Every catalog, for the kind-level queries below. Adding an agent's rules
 /// here is the only step needed to teach the predicate about it.
-const ALL_NOTICE_RULES: &[&[NoticeRule]] = &[CODEX_RULES, CLAUDE_RULES, CURSOR_RULES];
+const ALL_NOTICE_RULES: &[&[NoticeRule]] = &[CODEX_RULES, CLAUDE_RULES, CURSOR_RULES, ZCODE_RULES];
 
 /*
 CDXC:SessionChat 2026-08-21:

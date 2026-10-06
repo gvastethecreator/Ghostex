@@ -573,6 +573,8 @@ fn read_session_chat_transcript_selection(
             SessionChatOptionAgent::Hermes => return None,
             SessionChatOptionAgent::Omp => return None,
             SessionChatOptionAgent::Pi => return None,
+            // ZCode's statusline names no catalog values chat needs.
+            SessionChatOptionAgent::Zcode => return None,
         })?;
     let path = crate::session_chat::resolve_session_chat_transcript_path(
         transcript_agent,
