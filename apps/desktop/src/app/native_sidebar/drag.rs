@@ -349,10 +349,21 @@ impl GhostexGpuiApp {
 }
 
 pub(super) fn drop_line(position: &str, scale: f32) -> AnyElement {
+    drop_line_spanning(position, scale, px(0.0), px(0.0))
+}
+
+/// The drop line of a row whose box is wider than its parent's block: `left` and `right` are how far
+/// the box sits inside (positive) or outside (negative) the block's edges.
+pub(super) fn drop_line_spanning(
+    position: &str,
+    scale: f32,
+    left: gpui::Pixels,
+    right: gpui::Pixels,
+) -> AnyElement {
     let mut line = div()
         .absolute()
-        .left_0()
-        .right_0()
+        .left(left)
+        .right(right)
         .h(px(2.0 * scale))
         .bg(gpui::rgb(0x60a5fa));
     line = match position {
