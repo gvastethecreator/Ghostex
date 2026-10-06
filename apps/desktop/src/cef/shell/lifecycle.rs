@@ -119,6 +119,32 @@ pub fn take_runtime_demand_receiver() -> Option<futures::channel::mpsc::Unbounde
         .take()
 }
 
+/// Adds `feature` to a comma-separated Chromium feature switch
+/// (`enable-features` / `disable-features`), keeping any features CEF or the
+/// caller already put there.
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn append_chromium_feature(
+    command_line: &mut CommandLine,
+    switch_name: &str,
+    feature: &str,
+) {
+    let switch_name = CefString::from(switch_name);
+    let existing = CefString::from(&command_line.switch_value(Some(&switch_name))).to_string();
+    let existing = existing.trim().trim_end_matches(',');
+    if existing.split(',').map(str::trim).any(|item| item == feature) {
+        return;
+    }
+    let features = if existing.is_empty() {
+        feature.to_string()
+    } else {
+        format!("{existing},{feature}")
+    };
+    command_line.append_switch_with_value(
+        Some(&switch_name),
+        Some(&CefString::from(features.as_str())),
+    );
+}
+
 wrap_app! {
     pub(crate) struct GhostexGpuiCefApp;
 

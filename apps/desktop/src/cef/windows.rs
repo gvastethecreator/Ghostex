@@ -256,9 +256,10 @@ pub(super) fn apply_platform_settings(settings: &mut cef::Settings) {
         cef::CefString::from(runtime_dir.join("locales").to_string_lossy().as_ref());
 }
 
-pub(super) fn append_platform_command_line_switches(_command_line: &mut cef::CommandLine) {
-    // Windows needs no OS-specific Chromium switches beyond the shared set
-    // in cef/shell.rs; Ozone platform selection is a Linux-only concern.
+/// CDXC:CefRuntime 2026-10-07 WHY:
+/// Without overlay scrollbars Chromium on Windows draws a scrollbar with a solid track and arrow buttons, and an element scroller on a dark page that does not declare `color-scheme: dark` (most HTML files opened in Files, most websites) gets a white track. Chromium's `OverlayScrollbar` feature (chrome://flags#overlay-scrollbars) draws the thin Fluent overlay thumb with no track instead, close to macOS, for every CEF page at once (Files, browser tabs, the Code view, extension views) without injecting CSS into anyone's page. The old `FluentScrollbar` / `FluentOverlayScrollbar` feature names are gone in Chromium 154 (Fluent is always on), so this is the only switch that does it. SEE-ALSO: cef/linux_x11.rs sets the same feature.
+pub(super) fn append_platform_command_line_switches(command_line: &mut cef::CommandLine) {
+    super::shell::append_chromium_feature(command_line, "enable-features", "OverlayScrollbar");
 }
 
 pub(super) fn child_window_info(
