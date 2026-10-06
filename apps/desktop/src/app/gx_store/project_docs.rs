@@ -26,8 +26,8 @@
 
 use ghostex_gx_core::{
     CollectionsDocument, MachineId, ProjectDropLanding, ProjectWrite, SideStateUpdate,
-    SpacesDocument, owns_project_move_command, plan_project_move, project_drop_command,
-    project_drop_landing,
+    SpacesDocument, owns_project_move_command, plan_project_move, project_body_drop_command,
+    project_drop_command, project_drop_landing,
 };
 use serde_json::{Value, json};
 
@@ -218,6 +218,25 @@ impl GhostexGpuiApp {
             self.gx_store_run_project_write(write, remote_machine_id.as_deref(), cx);
         }
         true
+    }
+
+    /// The project drop of a project or collection held over a row under project `group_id`'s
+    /// header (gx-core `project_body_drop_command`).
+    pub(crate) fn gx_store_project_body_drop_command(
+        &self,
+        moved_kind: &str,
+        moved_id: &str,
+        group_id: &str,
+    ) -> Option<Value> {
+        if !self.gx_store_sidebar_list_ready() {
+            return None;
+        }
+        project_body_drop_command(
+            self.gx_store.sidebar_list.view(),
+            moved_kind,
+            moved_id,
+            group_id,
+        )
     }
 
     /// Where the row a `moveGroup`, `moveCollection` or `moveToCollection` drag moves would land,
