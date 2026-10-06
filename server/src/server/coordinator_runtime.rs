@@ -320,18 +320,32 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
         let hook_state = classify_thread_session(Some(&session), as_run, &now_iso, false);
         // A thread stuck on a screen that blocks input (folder trust, an expired login, a usage
         // limit) never works and never asks through a hook, so it would never report. The chat's
-        // own cached notice says so without a new screen capture.
-        let blocking_notice = (hook_state != ThreadState::Working && lifecycle == "running")
-            .then(|| {
-                crate::session_chat_options::cached_session_chat_terminal_notice(
-                    state,
-                    &thread.project_id,
-                    &thread.session_id,
-                )
-            })
-            .flatten()
-            .filter(|notice| notice.blocks_input() && !notice.auto_trust);
-        let state_now = if blocking_notice.is_some() {
+        // own cached screen reading says so without a new screen capture.
+        let screen = (lifecycle == "running").then(|| {
+            crate::session_chat_options::cached_session_chat_screen_state(
+                state,
+                &thread.project_id,
+                &thread.session_id,
+            )
+        });
+        /*
+        CDXC:Coordinators 2026-10-06 WHY:
+        Empryo has no hook for a question or an approval: the PreToolUse of the tool that asks leaves its hooks at working while its choice panel waits, so its thread never reported waiting. While hooks say working, a question or a permission prompt the chat read off the screen still counts (Claude's own permission prompt moves its hooks to attention, so Claude and Codex threads report as before); any other blocking screen counts only once hooks stop saying working, as before.
+        SEE-ALSO: server/src/session_chat_empryo_question.rs (the panel reading).
+        */
+        let blocking_notice = screen
+            .as_ref()
+            .and_then(|screen| screen.notice.clone())
+            .filter(|notice| notice.blocks_input() && !notice.auto_trust)
+            .filter(|notice| {
+                hook_state != ThreadState::Working
+                    || notice.kind
+                        == crate::session_chat_notice::SESSION_CHAT_NOTICE_PERMISSION_PROMPT
+            });
+        let screen_question = screen
+            .and_then(|screen| screen.prompt)
+            .map(|prompt| coordinators::screen_thread_prompt(&prompt));
+        let state_now = if blocking_notice.is_some() || screen_question.is_some() {
             ThreadState::Waiting
         } else if hook_state != ThreadState::Working
             && hook_state != ThreadState::Sleeping
@@ -362,7 +376,10 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
             }
             ThreadState::Waiting => {
                 memory.not_working_since.remove(&key);
-                let prompt = match (&blocking_notice, thread_prompt(&session)) {
+                let prompt = match (
+                    &blocking_notice,
+                    thread_prompt(&session).or(screen_question),
+                ) {
                     (Some(notice), _) => Some((
                         format!("notice:{}:{}", notice.kind, notice.title),
                         match notice.detail.as_deref().map(str::trim).filter(|detail| !detail.is_empty()) {

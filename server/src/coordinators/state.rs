@@ -141,35 +141,7 @@ fn attention_source(session: &Value) -> Option<String> {
 pub fn thread_prompt(session: &Value) -> Option<ThreadPrompt> {
     if let Some(stored) = session_chat_prompt_setting(session) {
         if let Some(prompt) = parse_stored_session_chat_prompt(&stored) {
-            let summary = match &prompt {
-                SessionChatInteractivePrompt::Question { questions, .. } => questions
-                    .iter()
-                    .map(|question| {
-                        let options = question
-                            .options
-                            .iter()
-                            .map(|option| option.label.trim())
-                            .filter(|label| !label.is_empty())
-                            .collect::<Vec<_>>();
-                        if options.is_empty() {
-                            question.question.trim().to_string()
-                        } else {
-                            format!(
-                                "{} (options: {})",
-                                question.question.trim(),
-                                options.join(" / ")
-                            )
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-                SessionChatInteractivePrompt::Approval { tool, summary, .. } => match summary {
-                    Some(summary) if !summary.trim().is_empty() => {
-                        format!("Approval for {tool}: {}", summary.trim())
-                    }
-                    _ => format!("Approval for {tool}"),
-                },
-            };
+            let summary = prompt_summary(&prompt);
             return Some(ThreadPrompt {
                 key: stored_prompt_key(&stored),
                 summary,
@@ -192,6 +164,49 @@ pub fn thread_prompt(session: &Value) -> Option<ThreadPrompt> {
         });
     }
     None
+}
+
+/// One line per question (with its options), or the approval and what it is for.
+fn prompt_summary(prompt: &SessionChatInteractivePrompt) -> String {
+    match prompt {
+        SessionChatInteractivePrompt::Question { questions, .. } => questions
+            .iter()
+            .map(|question| {
+                let options = question
+                    .options
+                    .iter()
+                    .map(|option| option.label.trim())
+                    .filter(|label| !label.is_empty())
+                    .collect::<Vec<_>>();
+                if options.is_empty() {
+                    question.question.trim().to_string()
+                } else {
+                    format!(
+                        "{} (options: {})",
+                        question.question.trim(),
+                        options.join(" / ")
+                    )
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        SessionChatInteractivePrompt::Approval { tool, summary, .. } => match summary {
+            Some(summary) if !summary.trim().is_empty() => {
+                format!("Approval for {tool}: {}", summary.trim())
+            }
+            _ => format!("Approval for {tool}"),
+        },
+    }
+}
+
+/// A question the chat read off the thread's screen (an agent with no question hook, such as
+/// Empryo, Cursor or Freebuff), as the supervisor reports it.
+pub fn screen_thread_prompt(prompt: &SessionChatInteractivePrompt) -> ThreadPrompt {
+    let summary = prompt_summary(prompt);
+    ThreadPrompt {
+        key: format!("screen:{}", stored_prompt_key(&summary)),
+        summary,
+    }
 }
 
 fn stored_prompt_key(stored: &str) -> String {
