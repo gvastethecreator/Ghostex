@@ -810,7 +810,9 @@ pub async fn run_session_chat_follower(
                     .apply(&mut detection.options);
                 // Detection can project a fleet/compaction transition into the shared status.
                 // Read it before emitting this fleet so the same frame carries its working truth.
-                let detected_working = read_live_state().working;
+                // CDXC:SessionChat 2026-10-06 WHY: one fresh read after the capture serves both the working flag and the prompt. The prompt used to come from the read taken before the capture while working came from this one, so a question its hook retired DURING the capture went out again on the working change (observed: the answered card's question re-published for a second until its tool result landed).
+                let probe_live = read_live_state();
+                let detected_working = probe_live.working;
                 let working_changed = detected_working != published_working;
                 published_working = detected_working;
                 if !published_working
@@ -859,11 +861,21 @@ pub async fn run_session_chat_follower(
                     detection.tasks.as_ref(),
                     published_tasks.as_ref(),
                 );
-                transcript_prompt.observe_stored(live.prompt.as_ref());
-                let detected_prompt =
-                    resolve_session_chat_prompt(live.prompt.clone(), &transcript_prompt)
-                        .or_else(|| detection.prompt.clone());
-                let prompt_changed = detection.captured && detected_prompt != published_prompt;
+                transcript_prompt.observe_stored(probe_live.prompt.as_ref());
+                let resolved_prompt =
+                    resolve_session_chat_prompt(probe_live.prompt.clone(), &transcript_prompt);
+                // The hook and transcript half needs no capture; without one, only a screen
+                // prompt (which never carries a call id) is kept as published.
+                let detected_prompt = if detection.captured {
+                    resolved_prompt.or_else(|| detection.prompt.clone())
+                } else {
+                    resolved_prompt.or_else(|| {
+                        published_prompt
+                            .clone()
+                            .filter(|prompt| prompt.tool_use_id().is_none())
+                    })
+                };
+                let prompt_changed = detected_prompt != published_prompt;
                 let probed_changed = detection.attempted && !published_screen_probed;
                 if options_changed
                     || working_changed
