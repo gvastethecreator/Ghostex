@@ -74,6 +74,8 @@ pub async fn run(args: Vec<String>) -> Result<()> {
     let build_identity = read_current_build_identity(&version)?;
     match command {
         None | Some("--foreground") => {
+            #[cfg(windows)]
+            crate::platform::process::suppress_helper_error_dialogs();
             let result = run_gxserver_foreground(GxserverForegroundOptions {
                 build_identity: Some(build_identity),
                 home_dir: None,
