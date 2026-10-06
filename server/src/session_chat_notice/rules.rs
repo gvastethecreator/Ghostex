@@ -755,6 +755,7 @@ pub fn session_chat_notice_kind_blocks_input(kind: &str) -> bool {
         SESSION_CHAT_NOTICE_HERMES_INPUT_BLOCKED => true,
         SESSION_CHAT_NOTICE_OMP_INPUT_BLOCKED => true,
         SESSION_CHAT_NOTICE_PI_INPUT_BLOCKED => true,
+        SESSION_CHAT_NOTICE_EMPRYO_INPUT_BLOCKED => true,
         /*
         CDXC:SessionChat 2026-08-21: the resume-usage picker owns
         the input line, and unlike the dialogs in the catalog it does not merely

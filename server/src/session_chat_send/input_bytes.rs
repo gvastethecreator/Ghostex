@@ -133,6 +133,19 @@ pub fn build_session_chat_paste_bytes(text: &str) -> String {
     }
 }
 
+/// Empryo's Shift+Enter in the CSI-u form its input reads as a new line.
+pub const EMPRYO_NEW_LINE: &str = "\u{1b}[13;2u";
+
+/// CDXC:SessionChat 2026-10-06 WHY:
+/// The spec has multi-line text go in as a bracketed paste, but Empryo 3.9.0-beta answers every bracketed paste of text by also reading the system clipboard and attaching any image on it, so a chat message went out with a screenshot the user never sent (seen live 2026-10-06, `screenshot-192834.png`). Shift+Enter in its CSI-u form does insert a new line, so Empryo's text is typed line by line instead. A tab would switch Empryo's tabs, so it is typed as spaces. Image attachments still go in as a pasted path: a paste of image paths only is attached as those files without the clipboard read.
+pub fn build_empryo_input_bytes(text: &str) -> String {
+    normalize_terminal_paste_line_endings(&disambiguate_agent_tui_submit_text(text))
+        .split('\r')
+        .map(|line| sanitize_bracketed_paste_text(&line.replace('\t', "    ")))
+        .collect::<Vec<_>>()
+        .join(EMPRYO_NEW_LINE)
+}
+
 /// Image paths must LOOK like a real terminal image paste; a plain typed
 /// path/@mention is read as text/file-read.
 pub fn build_session_chat_image_paste_bytes(path: &str) -> String {
