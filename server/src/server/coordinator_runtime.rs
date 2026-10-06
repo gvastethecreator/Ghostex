@@ -841,6 +841,53 @@ pub(crate) fn prepare_coordinator_create_params(
     Ok(params)
 }
 
+/// Queues a message in a session's chat queue and tells its viewers.
+fn queue_session_chat_prompt(
+    state: &AppState,
+    project_id: &str,
+    session_id: &str,
+    text: &str,
+    startup_send: bool,
+) -> std::result::Result<(), DomainStateError> {
+    let mut queue_params = Map::new();
+    queue_params.insert("projectId".to_string(), json!(project_id));
+    queue_params.insert("sessionId".to_string(), json!(session_id));
+    queue_params.insert("text".to_string(), json!(text));
+    queue_params.insert("startupSend".to_string(), json!(startup_send));
+    let result = crate::session_chat_queue::handle_session_chat_queue_endpoint(
+        &state.paths,
+        state.metadata.server_id.as_str(),
+        "/api/queueSessionChatPrompt",
+        &queue_params,
+    )?;
+    if result.broadcast {
+        crate::session_chat_queue_runtime::broadcast_session_chat_queue_state(
+            state, project_id, session_id,
+        );
+    }
+    Ok(())
+}
+
+/// Hands a coordinator whose role arrives as a queued line (Empryo's `/agent`, see
+/// `coordinator_role_queued_command`) its role: writes the profile the line names, then queues
+/// it. A new coordinator's line waits for the input box like a first message; a promoted one's
+/// waits for the running turn to end.
+pub(crate) fn queue_coordinator_role_command(
+    state: &AppState,
+    project_id: &str,
+    session_id: &str,
+    command: &str,
+    startup_send: bool,
+) -> std::result::Result<(), DomainStateError> {
+    coordinators::ensure_empryo_coordinator_agent_file(&state.paths).map_err(|error| {
+        DomainStateError {
+            code: "internalError",
+            message: format!("Could not write the Empryo coordinator profile: {error}"),
+        }
+    })?;
+    queue_session_chat_prompt(state, project_id, session_id, command, startup_send)
+}
+
 /// `/api/promoteCoordinator`: makes an existing session a coordinator, then queues its playbook
 /// in the session's chat queue, which hands it over only once the agent is idle (never mid-turn).
 /// See the CDXC:Coordinators decision on `promote_session_to_coordinator`.
@@ -864,26 +911,24 @@ pub(crate) fn promote_coordinator(
     )?;
     let (project_id, session_id) = &promotion.key;
     schedule_presentation_session_delta(state, db, repository, project_id, session_id)?;
-    let mut queue_params = Map::new();
-    queue_params.insert("projectId".to_string(), json!(project_id));
-    queue_params.insert("sessionId".to_string(), json!(session_id));
-    queue_params.insert("text".to_string(), json!(promotion.playbook_message));
-    let playbook_error = match crate::session_chat_queue::handle_session_chat_queue_endpoint(
-        &state.paths,
-        state.metadata.server_id.as_str(),
-        "/api/queueSessionChatPrompt",
-        &queue_params,
-    ) {
-        Ok(result) => {
-            if result.broadcast {
-                crate::session_chat_queue_runtime::broadcast_session_chat_queue_state(
-                    state, project_id, session_id,
-                );
-            }
-            None
-        }
-        Err(error) => Some(error.message),
-    };
+    // The coordinator record is committed, so a failure from here on is reported, not raised.
+    let playbook_error = promotion
+        .role_command
+        .as_deref()
+        .map_or(Ok(()), |command| {
+            queue_coordinator_role_command(state, project_id, session_id, command, false)
+        })
+        .and_then(|()| {
+            queue_session_chat_prompt(
+                state,
+                project_id,
+                session_id,
+                &promotion.playbook_message,
+                false,
+            )
+        })
+        .err()
+        .map(|error| error.message);
     Ok(json!({
         "ok": true,
         "globalRef": crate::ids::create_global_session_ref(state.metadata.server_id.as_str(), project_id, session_id),

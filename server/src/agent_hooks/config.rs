@@ -504,6 +504,17 @@ pub(crate) fn resolve_config_directory(
     }
 }
 
+/// Empryo's own folder (`EMPRYO_HOME`, else `~/.empryo`): its hooks file and its agent profiles.
+pub(crate) fn empryo_home(hook_paths: &HookPaths) -> PathBuf {
+    resolve_config_directory(
+        &hook_paths.home_dir,
+        hook_paths.respect_config_environment,
+        "EMPRYO_HOME",
+        ".empryo",
+        None,
+    )
+}
+
 pub(crate) fn resolve_omp_agent_directory(home_dir: &Path, respect_environment: bool) -> PathBuf {
     let pi_agent_root = respect_environment
         .then(|| std::env::var("PI_CODING_AGENT_DIR").ok())

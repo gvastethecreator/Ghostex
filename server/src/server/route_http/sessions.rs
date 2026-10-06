@@ -61,9 +61,27 @@ pub(super) async fn route_sessions_http(
                 let created_session = repository.create_session(&create_params, false)?;
                 let session =
                     apply_created_session_identity(repository, &created_session, &create_params)?;
-                crate::coordinators::register_created_coordinator(db, params, &session)?;
+                let is_coordinator =
+                    crate::coordinators::register_created_coordinator(db, params, &session)?;
                 let project_id = value_text(&session, "projectId")?;
                 let session_id = value_text(&session, "sessionId")?;
+                // Queued before the response, so it goes ahead of the first request a client
+                // queues next.
+                if let Some(command) = is_coordinator
+                    .then(|| crate::agents::session_agent_family_id(&project, &session))
+                    .flatten()
+                    .and_then(|family| {
+                        crate::coordinators::coordinator_role_queued_command(&family)
+                    })
+                {
+                    coordinator_runtime::queue_coordinator_role_command(
+                        &state,
+                        &project_id,
+                        &session_id,
+                        &command,
+                        true,
+                    )?;
+                }
                 restore_parked_project_for_new_session(&state, db, repository, &project_id)?;
                 schedule_presentation_session_delta(
                     &state,

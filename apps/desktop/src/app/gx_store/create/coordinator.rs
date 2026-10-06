@@ -31,6 +31,7 @@ fn coordinator_family(agent: &Value) -> Option<&'static str> {
         "claude" => Some("claude"),
         "codex" => Some("codex"),
         "zcode" => Some("zcode"),
+        "empryo" => Some("empryo"),
         _ => None,
     }
 }
@@ -108,7 +109,7 @@ fn coordinator_params(
 }
 
 impl GhostexGpuiApp {
-    /// The Claude, Codex and ZCode launchers, Claude first, in launcher order.
+    /// The Claude, Codex, ZCode and Empryo launchers, Claude first, in launcher order.
     pub(crate) fn gx_store_coordinator_agents(&self) -> Vec<NewCoordinatorAgent> {
         let hud = self.gx_store_launch_hud();
         let rows = hud

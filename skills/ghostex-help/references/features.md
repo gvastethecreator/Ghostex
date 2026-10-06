@@ -1474,7 +1474,7 @@ version of the Projects features in Cursor and Claude Code.
   arrow beside its agent button) and choose **New Coordinator…**, the first
   item of that menu. On the phone, open the same menu from the project's agent
   button and pick **New Coordinator…** at its top. Name it, pick
-  Claude, Codex or ZCode and its model (Opus 5.5 on Claude, GLM 5.3 Flash on
+  Claude, Codex, ZCode or Empryo and its model (Opus 5.5 on Claude, GLM 5.3 Flash on
   ZCode; without a choice each agent starts on its own default) and the effort
   the model takes — medium by default, which is plenty for routing work — and
   optionally give it a one-line goal and a first request;
@@ -1483,8 +1483,8 @@ version of the Projects features in Cursor and Claude Code.
   first message (Rename in the sidebar still changes it; left blank, it is
   named once from its first conversation). A project can have several
   coordinators, one per stream of work.
-- **Turn a session into a coordinator**: right-click a Claude, Codex or ZCode
-  session in the sidebar, open **Advanced** and choose **Make Coordinator**
+- **Turn a session into a coordinator**: right-click a Claude, Codex, ZCode or
+  Empryo session in the sidebar, open **Advanced** and choose **Make Coordinator**
   (optionally with a goal); on the phone it is in the session's menu too.
   The session keeps its conversation and is never restarted or interrupted:
   it gets the crown right away, and the coordinator playbook waits in its
@@ -1556,8 +1556,11 @@ version of the Projects features in Cursor and Claude Code.
   a status of every thread", "use a cheaper model for threads", "don't merge
   anything without asking" all work in plain words.
 
-Coordinators run on Claude, Codex or ZCode; threads can be any configured
-agent. From a terminal or another agent: `ghostex coordinator create --title <name>
+Coordinators run on Claude, Codex, ZCode or Empryo; threads can be any configured
+agent. An Empryo coordinator runs as the Empryo agent `ghostex-coordinator`: Ghostex
+keeps its playbook in `~/.empryo/agents/ghostex-coordinator.md` and switches the
+session to it with `/agent ghostex-coordinator` before anything else, so leave that
+file in place. From a terminal or another agent: `ghostex coordinator create --title <name>
 [--model <m>] [--effort <e>] [--goal <text>] [--task <first request>]`, `ghostex coordinator
 promote <session> [--goal <text>]` (make an existing session a coordinator), `ghostex coordinator status`,
 `ghostex coordinator options` (the agents, models and efforts a coordinator can use),

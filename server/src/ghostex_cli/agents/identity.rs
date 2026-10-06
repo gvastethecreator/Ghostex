@@ -38,10 +38,30 @@ pub(crate) fn inventory_flags(flags: &Flags, reference: &str) -> CliResult<Flags
 
 /// CDXC:SessionIdentity 2026-09-17 DECISION:
 /// User: agents must obtain their own session and agent identifiers from the CLI for message headers. Resolve exact environment identifiers, never the focused pane or a matching title.
+///
+/// CDXC:Coordinators 2026-10-06 WHY:
+/// Empryo 3.9.0-beta's shell tool runs commands without any GHOSTEX_* or ZMX_* variable (probed 2026-10-06: `env` printed none of them), so an Empryo coordinator or thread running `ghostex coordinator status` or `ghostex agents send` had no identity. With none of the variables set, the caller is read from the process tree the way Empryo's hooks find their session: the `zmx run` daemon above the `empryo` process names it. Anything else still fails rather than guessing.
 pub(crate) fn caller() -> CliResult<Value> {
-    let (key, reference) = ["GHOSTEX_GLOBAL_SESSION_REF", "GHOSTEX_NATIVE_SESSION_ID", "GHOSTEX_SESSION_ID", "ZMX_SESSION"]
+    let from_environment = || {
+        [
+            "GHOSTEX_GLOBAL_SESSION_REF",
+            "GHOSTEX_NATIVE_SESSION_ID",
+            "GHOSTEX_SESSION_ID",
+            "ZMX_SESSION",
+        ]
         .into_iter()
-        .find_map(|key| std::env::var(key).ok().filter(|value| !value.trim().is_empty()).map(|value| (key, value.trim().to_owned())))
+        .find_map(|key| {
+            std::env::var(key)
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| (key, value.trim().to_owned()))
+        })
+    };
+    let (key, reference) = from_environment()
+        .or_else(|| {
+            crate::agent_hooks::adopt_ancestor_session_routing();
+            from_environment()
+        })
         .ok_or_else(|| CliError::Other("Cannot identify the caller. Run inside a Ghostex agent session with GHOSTEX_GLOBAL_SESSION_REF or GHOSTEX_SESSION_ID set.".into()))?;
     let flags = inventory_flags(&Flags::default(), &reference)?;
     let rows = live_session_rows(&flags)?;

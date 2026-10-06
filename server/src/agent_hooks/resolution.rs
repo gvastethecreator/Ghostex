@@ -275,14 +275,7 @@ pub(crate) fn provider_hook_paths(agent_id: &str, hook_paths: &HookPaths) -> Vec
             )
             .join("settings.json")]
         }
-        "empryo" => vec![resolve_config_directory(
-            &hook_paths.home_dir,
-            hook_paths.respect_config_environment,
-            "EMPRYO_HOME",
-            ".empryo",
-            None,
-        )
-        .join("hooks.json")],
+        "empryo" => vec![super::config::empryo_home(hook_paths).join("hooks.json")],
         /*
         Only the primary `config.toml` layout is managed. Kimi Code's legacy
         `~/.kimi` tree is deliberately left alone: writing both would install

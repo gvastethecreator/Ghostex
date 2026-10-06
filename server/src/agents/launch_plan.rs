@@ -424,7 +424,7 @@ fn apply_requested_agent_model(
 }
 
 /// CDXC:Coordinators 2026-09-30 WHY:
-/// A coordinator's role is a system prompt flag in the saved base command (see coordinators/role.rs), added here beside the per-session model flags so resume, fork and account wrapping keep it. Claude carries the whole role file this way; Codex and ZCode carry only the guide pointer (ZCode has no such flag, so its role arrives through the SessionStart hook instead), and an agent outside the supported families is refused rather than started without its role.
+/// A coordinator's role is a system prompt flag in the saved base command (see coordinators/role.rs), added here beside the per-session model flags so resume, fork and account wrapping keep it. Claude carries the whole role file this way; Codex and ZCode carry only the guide pointer (ZCode has no such flag, so its role arrives through the SessionStart hook instead); Empryo has no such flag either and gets its role from a queued `/agent` line (`coordinator_role_queued_command`). An agent outside the supported families is refused rather than started without its role.
 fn apply_coordinator_role(
     agent_id: &str,
     agent_config: &Map<String, Value>,
@@ -441,9 +441,10 @@ fn apply_coordinator_role(
     let family = resume_agent_family_id(Some(agent_id.to_string()), agent_config, launch_settings)
         .filter(|family| crate::coordinators::coordinator_agent_family_supported(family))
         .ok_or_else(|| {
-            DomainStateError::bad_request(
-                "A coordinator runs on Claude, Codex or ZCode. Pick one of those agents.",
-            )
+            DomainStateError::bad_request(format!(
+                "A coordinator runs on {}. Pick one of those agents.",
+                crate::coordinators::COORDINATOR_AGENT_FAMILIES_TEXT
+            ))
         })?;
     let base = command
         .or_else(|| default_agent_command(&family).map(str::to_string))
