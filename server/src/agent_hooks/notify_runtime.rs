@@ -68,6 +68,13 @@ pub fn run_notify_hook(args: Vec<String>) -> Result<Option<String>, DomainStateE
         .or_else(|| read_state_string(&state, "agent"))
         .unwrap_or_else(|| "codex".to_string());
     let agent_key = normalized_hook_agent_key(&agent_name);
+    /*
+    CDXC:AgentHooks 2026-10-06 DECISION:
+    "The notify hook drops any event whose environment has `EMPRYO_PROJECT_DIR` set while its agent isn't `empryo`." Empryo also runs the hooks in `~/.claude/settings.json` and `~/.codex/hooks.json`, which would report every Empryo event as Claude's and as Codex's too. Empryo's shell tool runs without EMPRYO_PROJECT_DIR, so this guard never drops an agent started from it.
+    */
+    if agent_key != "empryo" && env_string("EMPRYO_PROJECT_DIR").is_some() {
+        return Ok(None);
+    }
     let event_name = first_string([
         payload.get("hook_event_name"),
         payload.get("hookEventName"),
