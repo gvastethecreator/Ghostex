@@ -34,11 +34,13 @@ pub(crate) struct RowDragPreview {
     pub(crate) grab: gpui::Point<Pixels>,
 }
 
-/// How far below the pointer the dragged row hangs, and how far right of it a dragged session
-/// starts.
+/// How far below the pointer a dragged session hangs, and how far right of it it starts.
 ///
 /// CDXC:Sidebar 2026-10-01 WHY:
-/// GPUI paints the dragged row after everything else, and a drop line is never more than about half a row (plus the gap between projects) from the pointer, so a dragged row drawn under the pointer covered the line every time; that is how a drop into Pinned looked like it showed no line. The dragged row hangs just below the pointer instead, clear of the line next to the pointer. A session's line can also land farther away (Sessions and Parked keep their Last Activity order), so a dragged session also starts right of the pointer and the line's left end stays visible wherever it is drawn.
+/// GPUI paints the dragged row after everything else, and a drop line is never more than about half a row (plus the gap between projects) from the pointer, so a dragged row drawn under the pointer covered the line every time; that is how a drop into Pinned looked like it showed no line. The dragged session hangs just below the pointer instead, clear of the line next to the pointer. A session's line can also land farther away (Sessions and Parked keep their Last Activity order), so a dragged session also starts right of the pointer and the line's left end stays visible wherever it is drawn.
+///
+/// CDXC:Sidebar 2026-10-06 DECISION:
+/// User: "when i drag a project header it's showing below my cursor which is wrong". A dragged project or collection row sits under the pointer where it was grabbed, which supersedes the rule above for those rows; its fill is see-through, so the line beside the pointer still shows.
 const HANG_BELOW_POINTER: f32 = 26.0;
 const SESSION_RIGHT_OF_POINTER: f32 = 14.0;
 
@@ -57,10 +59,15 @@ impl RowDragPreview {
             .text_size(px(15.55 * scale))
             .text_color(appearance.foreground);
         let row = match &self.identity {
+            // The header box's own insets, so the icon and name stay where they were grabbed.
             RowDragIdentity::Project { image, show_icon } => row
                 .h(px(30.0 * scale))
-                .px(px(8.0 * scale))
+                .pl(px((5.0
+                    + super::project_header::PROJECT_HEADER_CHEVRON_GUTTER)
+                    * scale))
+                .pr(px(6.0 * scale))
                 .gap(px(10.0 * scale))
+                .rounded(px(5.0 * scale))
                 .bg(appearance.hover)
                 .when(*show_icon, |row| {
                     row.child(match image {
@@ -110,12 +117,15 @@ impl RowDragPreview {
                         .child(super::icons::session_drag_icon(session, appearance)),
                 ),
         };
+        // GPUI draws the preview with its origin at the pointer minus the grab offset, so a row with
+        // no padding above it sits exactly where it was grabbed.
         let lock_x = !matches!(self.identity, RowDragIdentity::Session { .. });
         div()
             .relative()
-            .pt(self.grab.y + px(HANG_BELOW_POINTER * scale))
             .when(!lock_x, |wrapper| {
-                wrapper.pl(self.grab.x + px(SESSION_RIGHT_OF_POINTER * scale))
+                wrapper
+                    .pt(self.grab.y + px(HANG_BELOW_POINTER * scale))
+                    .pl(self.grab.x + px(SESSION_RIGHT_OF_POINTER * scale))
             })
             .when(lock_x, |wrapper| {
                 wrapper.left(self.pointer_x - window.mouse_position().x)
