@@ -11,8 +11,7 @@ use super::*;
 use crate::coordinators::{
     self, agent_message, classify_thread_session, clear_thread_pending_message, list_threads,
     record_thread_report, report_body, set_thread_observed_working, set_thread_resolved,
-    thread_prompt, MessageSender, SessionKey, ThreadProgress, ThreadRecord, ThreadReport,
-    ThreadState,
+    MessageSender, SessionKey, ThreadProgress, ThreadRecord, ThreadReport, ThreadState,
 };
 use crate::presentation::effective_lifecycle_state;
 use crate::session_chat_queue_runtime::SessionChatTranscriptGate;
@@ -205,14 +204,15 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
         return Vec::new();
     };
     let repository = DomainRepository::new(&db, state.metadata.server_id.as_str());
+    let Ok(threads) = list_threads(&db) else {
+        return Vec::new();
+    };
+    refresh_thread_screen_waits(state, &repository, &threads);
     for (project_id, session_id) in
         crate::coordinators::refresh_coordinator_panels(&db, &repository)
     {
         republish_coordinator_chat(state, &project_id, &session_id);
     }
-    let Ok(threads) = list_threads(&db) else {
-        return Vec::new();
-    };
     let Ok(mut memory) = memory.lock() else {
         return Vec::new();
     };
@@ -318,53 +318,27 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
             has_run: true,
         };
         let hook_state = classify_thread_session(Some(&session), as_run, &now_iso, false);
-        // A thread stuck on a screen that blocks input (folder trust, an expired login, a usage
-        // limit) never works and never asks through a hook, so it would never report. The chat's
-        // own cached screen reading says so without a new screen capture.
-        let screen = (lifecycle == "running").then(|| {
-            crate::session_chat_options::cached_session_chat_screen_state(
-                state,
-                &thread.project_id,
-                &thread.session_id,
-            )
-        });
-        /*
-        CDXC:Coordinators 2026-10-06 WHY:
-        Empryo has no hook for a question or an approval: the PreToolUse of the tool that asks leaves its hooks at working while its choice panel waits, so its thread never reported waiting. While hooks say working, a question or a permission prompt the chat read off the screen still counts (Claude's own permission prompt moves its hooks to attention, so Claude and Codex threads report as before); any other blocking screen counts only once hooks stop saying working, as before.
-        SEE-ALSO: server/src/session_chat_empryo_question.rs (the panel reading).
-        */
-        let blocking_notice = screen
-            .as_ref()
-            .and_then(|screen| screen.notice.clone())
-            .filter(|notice| notice.blocks_input() && !notice.auto_trust)
-            .filter(|notice| {
-                hook_state != ThreadState::Working
-                    || notice.kind
-                        == crate::session_chat_notice::SESSION_CHAT_NOTICE_PERMISSION_PROMPT
-            });
-        let screen_question = screen
-            .and_then(|screen| screen.prompt)
-            .map(|prompt| coordinators::screen_thread_prompt(&prompt));
-        let state_now = if blocking_notice.is_some() || screen_question.is_some() {
-            ThreadState::Waiting
-        } else if hook_state != ThreadState::Working
-            && hook_state != ThreadState::Sleeping
-            && thread.observed_working
-        {
-            // Only a thread about to be reported pays for the transcript read.
-            let working = memory
-                .transcript_gates
-                .entry(key.clone())
-                .or_default()
-                .is_working(&session);
-            if working {
-                ThreadState::Working
+        let state_now =
+            if hook_state == ThreadState::Waiting && coordinators::waits_on_screen(&session) {
+                ThreadState::Waiting
+            } else if hook_state != ThreadState::Working
+                && hook_state != ThreadState::Sleeping
+                && thread.observed_working
+            {
+                // Only a thread about to be reported pays for the transcript read.
+                let working = memory
+                    .transcript_gates
+                    .entry(key.clone())
+                    .or_default()
+                    .is_working(&session);
+                if working {
+                    ThreadState::Working
+                } else {
+                    hook_state
+                }
             } else {
                 hook_state
-            }
-        } else {
-            hook_state
-        };
+            };
         let report = match state_now {
             ThreadState::Working => {
                 memory.not_working_since.remove(&key);
@@ -376,20 +350,8 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
             }
             ThreadState::Waiting => {
                 memory.not_working_since.remove(&key);
-                let prompt = match (
-                    &blocking_notice,
-                    thread_prompt(&session).or(screen_question),
-                ) {
-                    (Some(notice), _) => Some((
-                        format!("notice:{}:{}", notice.kind, notice.title),
-                        match notice.detail.as_deref().map(str::trim).filter(|detail| !detail.is_empty()) {
-                            Some(detail) => format!("Its screen shows: {}\n\n{detail}\n\nSomeone has to answer it in that thread.", notice.title.trim()),
-                            None => format!("Its screen shows: {}\n\nSomeone has to answer it in that thread.", notice.title.trim()),
-                        },
-                    )),
-                    (None, Some(prompt)) => Some((format!("prompt:{}", prompt.key), prompt.summary)),
-                    (None, None) => None,
-                };
+                let prompt = coordinators::waiting_prompt(&session)
+                    .map(|prompt| (prompt.key, prompt.summary));
                 let (prompt_key, summary) = match prompt {
                     Some(prompt) => prompt,
                     None => (
@@ -834,6 +796,40 @@ fn republish_coordinator_chat(state: &AppState, project_id: &str, session_id: &s
         options.as_ref(),
         screen.borrow(),
     );
+}
+
+/// Records what the chat's cached screen reading of every running open thread waits on, for
+/// every surface that classifies threads (see `ThreadScreenWait`). It reads the cache only: a
+/// tick never captures a screen.
+fn refresh_thread_screen_waits(
+    state: &AppState,
+    repository: &DomainRepository<'_>,
+    threads: &[ThreadRecord],
+) {
+    let waits = threads
+        .iter()
+        .filter(|thread| !thread.is_resolved())
+        .filter(|thread| {
+            repository
+                .get_session(&thread.project_id, &thread.session_id)
+                .ok()
+                .flatten()
+                .is_some_and(|session| effective_lifecycle_state(&session) == "running")
+        })
+        .filter_map(|thread| {
+            let screen = crate::session_chat_options::cached_session_chat_screen_state(
+                state,
+                &thread.project_id,
+                &thread.session_id,
+            );
+            coordinators::ThreadScreenWait::from_screen(
+                screen.notice.as_ref(),
+                screen.prompt.as_ref(),
+            )
+            .map(|wait| (thread.key(), wait))
+        })
+        .collect();
+    coordinators::replace_thread_screen_waits(waits);
 }
 
 /// `/api/createAgentSession` with a `coordinator` object: points the launch at the role file.

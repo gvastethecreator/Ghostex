@@ -1,12 +1,20 @@
 //! What a thread is doing, decided once in gxserver for the supervisor, the sidebar, the chat's
 //! Threads panel and `ghostex coordinator status`.
 
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
 use serde_json::Value;
+
+use super::records::SessionKey;
 
 use crate::agents::session_chat_prompt_setting;
 use crate::presentation::{effective_lifecycle_state, presentation_activity};
 use crate::session_chat_interactive::{
     parse_stored_session_chat_prompt, SessionChatInteractivePrompt,
+};
+use crate::session_chat_notice::{
+    SessionChatTerminalNotice, SESSION_CHAT_NOTICE_PERMISSION_PROMPT,
 };
 use crate::session_status::TURN_COMPLETE_ATTENTION_SOURCE;
 
@@ -108,7 +116,11 @@ pub fn classify_thread_session(
         _ => return ThreadState::Closed,
     }
     let activity = presentation_activity(session, now_iso);
-    if activity == "working" || transcript_working {
+    let working = activity == "working" || transcript_working;
+    if applicable_screen_wait(session, working).is_some() {
+        return ThreadState::Waiting;
+    }
+    if working {
         return ThreadState::Working;
     }
     if thread_prompt(session).is_some() {
@@ -199,13 +211,107 @@ fn prompt_summary(prompt: &SessionChatInteractivePrompt) -> String {
     }
 }
 
-/// A question the chat read off the thread's screen (an agent with no question hook, such as
-/// Empryo, Cursor or Freebuff), as the supervisor reports it.
-pub fn screen_thread_prompt(prompt: &SessionChatInteractivePrompt) -> ThreadPrompt {
-    let summary = prompt_summary(prompt);
-    ThreadPrompt {
-        key: format!("screen:{}", stored_prompt_key(&summary)),
-        summary,
+/// What the chat last read off a thread's screen that only a person can answer.
+#[derive(Clone, Debug)]
+pub struct ThreadScreenWait {
+    prompt: ThreadPrompt,
+    /// A screen that blocks input (folder trust, a login, a usage limit, an approval) rather than
+    /// a question read off it.
+    blocking: bool,
+    /// A question or an approval, which counts even while hooks say working.
+    asks: bool,
+}
+
+impl ThreadScreenWait {
+    /// What the chat's cached reading of a thread's screen waits on: a screen that blocks input
+    /// first (one Ghostex is answering on its own does not count), then a question read off it.
+    pub fn from_screen(
+        notice: Option<&SessionChatTerminalNotice>,
+        prompt: Option<&SessionChatInteractivePrompt>,
+    ) -> Option<Self> {
+        if let Some(notice) = notice.filter(|notice| notice.blocks_input() && !notice.auto_trust) {
+            let title = notice.title.trim();
+            let summary = match notice
+                .detail
+                .as_deref()
+                .map(str::trim)
+                .filter(|detail| !detail.is_empty())
+            {
+                Some(detail) => format!(
+                    "Its screen shows: {title}\n\n{detail}\n\nSomeone has to answer it in that thread."
+                ),
+                None => {
+                    format!("Its screen shows: {title}\n\nSomeone has to answer it in that thread.")
+                }
+            };
+            return Some(Self {
+                prompt: ThreadPrompt {
+                    key: format!("notice:{}:{}", notice.kind, notice.title),
+                    summary,
+                },
+                blocking: true,
+                asks: notice.kind == SESSION_CHAT_NOTICE_PERMISSION_PROMPT,
+            });
+        }
+        let summary = prompt_summary(prompt?);
+        Some(Self {
+            prompt: ThreadPrompt {
+                key: format!("screen:{}", stored_prompt_key(&summary)),
+                summary,
+            },
+            blocking: false,
+            asks: true,
+        })
+    }
+}
+
+/// CDXC:Coordinators 2026-10-06 WHY:
+/// Empryo has no hook for a question or an approval: the PreToolUse of the tool that asks leaves its hooks at working while its choice panel waits, so its thread never showed as waiting. The supervisor records what the chat's cached screen reading shows for every running thread each tick, and every surface (its reports, the Threads panel, `ghostex coordinator status`, the sidebar's crew count) classifies from that record. While hooks say working only a question or a permission prompt counts (Claude's own permission prompt moves its hooks to attention, so Claude and Codex threads read as before); any other blocking screen counts once hooks stop saying working. The record is rebuilt from the cache every tick, and the cache is re-read when the screen changes and after an answer, so an answered question leaves with the next tick.
+/// SEE-ALSO: server/src/server/coordinator_runtime.rs (`refresh_thread_screen_waits`), server/src/session_chat_empryo_question.rs (the panel reading).
+fn thread_screen_waits() -> &'static Mutex<HashMap<SessionKey, ThreadScreenWait>> {
+    static WAITS: OnceLock<Mutex<HashMap<SessionKey, ThreadScreenWait>>> = OnceLock::new();
+    WAITS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Replaces every thread's screen wait with the supervisor's latest reading.
+pub fn replace_thread_screen_waits(waits: HashMap<SessionKey, ThreadScreenWait>) {
+    if let Ok(mut current) = thread_screen_waits().lock() {
+        *current = waits;
+    }
+}
+
+fn recorded_screen_wait(session: &Value) -> Option<ThreadScreenWait> {
+    let text = |key: &str| {
+        session
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    thread_screen_waits()
+        .lock()
+        .ok()?
+        .get(&(text("projectId"), text("sessionId")))
+        .cloned()
+}
+
+fn applicable_screen_wait(session: &Value, hook_working: bool) -> Option<ThreadScreenWait> {
+    recorded_screen_wait(session).filter(|wait| wait.asks || !hook_working)
+}
+
+/// True when the thread waits on something its screen shows; the supervisor's transcript check
+/// does not overrule that, since the turn that asked is still open.
+pub fn waits_on_screen(session: &Value) -> bool {
+    recorded_screen_wait(session).is_some()
+}
+
+/// What a waiting thread waits on: a screen that blocks input, else its stored question or
+/// approval card, else a question read off its screen.
+pub fn waiting_prompt(session: &Value) -> Option<ThreadPrompt> {
+    let screen = recorded_screen_wait(session);
+    match screen {
+        Some(wait) if wait.blocking => Some(wait.prompt),
+        _ => thread_prompt(session).or(screen.map(|wait| wait.prompt)),
     }
 }
 

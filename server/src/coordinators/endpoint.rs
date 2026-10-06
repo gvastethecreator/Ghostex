@@ -438,7 +438,7 @@ pub fn thread_view(
             view["worktreePath"] = json!(marker.path);
         }
         if state == ThreadState::Waiting {
-            if let Some(prompt) = super::state::thread_prompt(session) {
+            if let Some(prompt) = super::state::waiting_prompt(session) {
                 view["waitingFor"] = json!(prompt.summary);
             }
         }
