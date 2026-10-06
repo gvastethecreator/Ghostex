@@ -579,7 +579,8 @@ input. Pi and OMP use the Title Generation Agent for first-prompt names.
 Manual Generate Name and `/rename` in chat remain available for Claude and Codex.
 In a Hermes chat, `/rename <name>` is sent as Hermes' own `/title <name>`.
 Renaming an Empryo session from Ghostex (the Rename dialog or `ghostex rename-command`)
-types Empryo's own `/tab rename <name>`, so Empryo keeps the name too.
+types Empryo's own `/tab rename <name>`, so Empryo keeps the name too, and the
+Rename dialog's Generate Name can name an Empryo session from its recent messages.
 ZCode sessions rename from the sidebar and `ghostex rename-command` too: the name
 is saved in ZCode's own session store once its session row exists (after the
 first prompt), and ZCode's automatic naming will not replace it. Before that,
@@ -669,6 +670,7 @@ when you open it.
   project and Days buttons under the search field filter and group the results,
   the star on a result stars it, pull down rebuilds the index, and tapping a
   result shows the whole prompt with Resume, Fork, Copy and Star.
+  Search by Prompt does not list Empryo prompts yet.
 - Delayed Actions opens Session Automations. Send Enter defaults to **When all
   agents finish**. It can also run after a delay, when this agent finishes, or
   **When a specific agent finishes**. Choose the specific agent from the Agent sessions

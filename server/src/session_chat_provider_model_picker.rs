@@ -807,6 +807,11 @@ pub(crate) async fn run_provider_model_picker_job(
     let Some(plan) = plan else {
         return;
     };
+    /*
+    CDXC:SessionChat 2026-10-06 WHY:
+    A picker types the agent's own model and effort commands, and their result rows (Empryo's "Model switched · …", "Effort: …") were read as output by a slash command sent from the chat earlier, so the picks showed under that command (seen live under `/checkpoint undo`). A pick closes those captures first, as a chat send does.
+    */
+    crate::session_chat_app_command::stop_local_command_output(project_id, session_id);
     let driver = PickerDriver {
         project_id,
         session_id,

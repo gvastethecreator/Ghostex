@@ -3,7 +3,7 @@ CDXC:AgentScreenDetection 2026-10-06 DECISION:
 "Blocking screens. The `/trust` gate, the login screen and the 429 rate-limit screen become chat notices." Read against Empryo 3.9.0-beta's TUI bundle and live screens:
 
   * The trust gate is not a dialog. A repository whose `.empryo/config.json` declares settings Empryo withholds until the repo is trusted (MCP servers, hooks, providers, `yolo`) gets the row "This repo's config declares {…}. Empryo does not run any of it until you trust this repo. Type /trust to trust it." and Empryo keeps taking input, so the card informs and offers `/trust` instead of holding sends. `/trust` prints "Trusted <path>. Restart to apply: …", which retires the card.
-  * Signing in happens in Empryo's `/login` panel; the screen that stops a chat is the "No model configured yet; chat is disabled until you pick one" row, or an account whose grant was revoked.
+  * Signing in happens in Empryo's `/login` panel; the screen that stops a chat is the "No model configured yet; chat is disabled until you pick one" row, the "No model selected. Press Ctrl+L or type /model …" row a prompt gets when no model is picked (seen live 2026-10-06 with `"defaultModel": "none"`: the prompt is dropped), or an account whose grant was revoked.
   * A rate limit is a retry row inside the running turn ("HTTP 429 rate limited — …", then "Retry N · …: Retrying in Ns"); Empryo keeps waiting on its own, so the card explains the silence while the turn runs.
 
 Tool approvals come from the shared choice panel (session_chat_empryo_question.rs).
@@ -22,6 +22,7 @@ const TRUST_DECLARES: &str = "This repo's config declares ";
 const TRUSTED_PREFIX: &str = "Trusted ";
 const TRUSTED_RESTART: &str = "Restart to apply";
 const NO_MODEL: &str = "No model configured yet; chat is disabled until you pick one.";
+const NO_MODEL_SELECTED: &str = "No model selected.";
 const GRANT_REVOKED: &str = "Access revoked; sign in again to use this account";
 const RATE_LIMITED: &str = "HTTP 429 rate limited";
 
@@ -107,7 +108,10 @@ fn trust_notice(screen_text: &str, lines: &[String]) -> Option<SessionChatTermin
 
 fn login_notice(screen_text: &str, lines: &[String]) -> Option<SessionChatTerminalNotice> {
     let lines = since_last_prompt(lines);
-    let (title, detail) = if lines.iter().any(|line| line.contains(NO_MODEL)) {
+    let (title, detail) = if lines
+        .iter()
+        .any(|line| line.contains(NO_MODEL) || line.contains(NO_MODEL_SELECTED))
+    {
         (
             "Empryo has no model to use",
             "Sign in with /login or add a key with /keys in the terminal, then pick a model.",

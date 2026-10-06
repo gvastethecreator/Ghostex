@@ -162,6 +162,8 @@ fn empryo_tool_result(result: &Value) -> (String, bool) {
 struct EmpryoTurn {
     /// The user record's own `ui.id`, unique per prompt in every log format.
     key: String,
+    /// The record's `turnId`, which `ui-truncate` names (shared by a tab's prompts in old logs).
+    turn_id: Option<String>,
     user: Map<String, Value>,
     /// The newest snapshot of the reply: the last checkpoint, then the final record.
     reply: Option<Map<String, Value>>,
@@ -180,11 +182,13 @@ struct EmpryoLog {
     followed_tab: Option<String>,
 }
 
-const OBSERVED_KINDS: [&str; 4] = [
+const OBSERVED_KINDS: [&str; 6] = [
     "\"k\":\"tab\"",
     "\"k\":\"user\"",
     "\"k\":\"turn-checkpoint\"",
     "\"k\":\"assistant\"",
+    "\"k\":\"ui-truncate\"",
+    "\"k\":\"ui-clear\"",
 ];
 
 pub(crate) fn pending_prompts(patch: &Value) -> Option<Vec<(String, String)>> {
@@ -240,6 +244,7 @@ impl EmpryoLog {
                 self.followed_tab = Some(tab.clone());
                 self.turns_by_tab.entry(tab).or_default().push(EmpryoTurn {
                     key,
+                    turn_id: extract_string(record.get("turnId")),
                     user: ui,
                     reply: None,
                     end_status: None,
@@ -265,6 +270,40 @@ impl EmpryoLog {
                         extract_string(record.get("status")).unwrap_or_else(|| "complete".into()),
                     );
                 }
+            }
+            // CDXC:SessionChat 2026-10-06 WHY:
+            // `/checkpoint undo` (and Empryo's other rewinds) cut the tab's history with a `ui-truncate` from a turn or a message, and `/clear` with a `ui-clear`.
+            // Empryo's own replay drops everything from that point, so the chat drops the same turns its terminal stops showing.
+            "ui-truncate" => {
+                let Some(turns) = self.turns_by_tab.get_mut(&tab) else {
+                    return;
+                };
+                if let Some(message_id) = extract_string(record.get("fromMessageId")) {
+                    if let Some(index) = turns.iter().position(|turn| turn.key == message_id) {
+                        turns.truncate(index);
+                    } else if let Some(index) = turns.iter().position(|turn| {
+                        turn.reply
+                            .as_ref()
+                            .and_then(|reply| extract_string(reply.get("id")))
+                            .as_deref()
+                            == Some(message_id.as_str())
+                    }) {
+                        turns.truncate(index + 1);
+                        // The reply is gone, so the turn waits for the one Empryo writes next.
+                        turns[index].reply = None;
+                        turns[index].end_status = None;
+                    }
+                } else if let Some(turn_id) = extract_string(record.get("fromTurnId")) {
+                    if let Some(index) = turns
+                        .iter()
+                        .position(|turn| turn.turn_id.as_deref() == Some(turn_id.as_str()))
+                    {
+                        turns.truncate(index);
+                    }
+                }
+            }
+            "ui-clear" => {
+                self.turns_by_tab.remove(&tab);
             }
             _ => {}
         }
@@ -384,9 +423,9 @@ fn turn_row(key: &str, state: &str, timestamp: Value) -> Value {
     json!({ "row": "turn", "turn": key, "state": state, "ts": timestamp })
 }
 
-/// The whole mirror for a raw log. Only complete lines are read: a torn tail would otherwise
+/// The mirror's rows for a raw log. Only complete lines are read: a torn tail would otherwise
 /// be mirrored as a parse failure and never revisited.
-fn build_mirror(raw: &[u8]) -> Vec<u8> {
+fn mirror_rows(raw: &[u8]) -> Vec<Value> {
     let complete = match raw.iter().rposition(|byte| *byte == b'\n') {
         Some(end) => &raw[..=end],
         None => &[][..],
@@ -398,7 +437,7 @@ fn build_mirror(raw: &[u8]) -> Vec<u8> {
     }
     let mut rows: Vec<Value> = Vec::new();
     let Some(tab) = log.followed_tab.clone() else {
-        return Vec::new();
+        return rows;
     };
     let turns = log.turns_by_tab.remove(&tab).unwrap_or_default();
     for turn in &turns {
@@ -454,14 +493,29 @@ fn build_mirror(raw: &[u8]) -> Vec<u8> {
         }));
         rows.push(turn_row(&key, "working", Value::Null));
     }
+    rows
+}
+
+/// The whole mirror for a raw log, one row per line.
+fn build_mirror(raw: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
-    for row in rows {
+    for row in mirror_rows(raw) {
         if let Ok(serialized) = serde_json::to_vec(&row) {
             out.extend_from_slice(&serialized);
             out.push(b'\n');
         }
     }
     out
+}
+
+/// The visible prompts of the followed tab, oldest first: Generate Name's history source
+/// (`agent_transcripts.rs`), read through the same rows the chat shows.
+pub(crate) fn empryo_user_prompts(raw: &[u8]) -> Vec<String> {
+    mirror_rows(raw)
+        .iter()
+        .filter(|row| row.get("row").and_then(Value::as_str) == Some("user"))
+        .filter_map(|row| extract_string(row.get("text")))
+        .collect()
 }
 
 /* ------------------------------------------------------------ sync */
