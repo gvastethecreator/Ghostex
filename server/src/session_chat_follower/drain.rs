@@ -144,6 +144,10 @@ pub(crate) fn follower_drain_once(
     if agent == SessionChatTranscriptAgent::Cursor {
         crate::session_chat_cursor_mirror::sync_cursor_transcript_mirror_for_path(file_path);
     }
+    // Empryo's mirror splits each turn record into rows; same contract.
+    if agent == SessionChatTranscriptAgent::Empryo {
+        crate::session_chat_empryo_mirror::sync_empryo_transcript_mirror_for_path(file_path);
+    }
     // Antigravity's mirror splits the CLI's step log into chat rows; same
     // freshen-before-read contract, same rename-on-rewrite signalling.
     if agent == SessionChatTranscriptAgent::Antigravity {

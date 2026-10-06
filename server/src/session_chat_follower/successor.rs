@@ -52,6 +52,7 @@ pub(super) async fn detect_and_adopt_successor_transcript(
         SessionChatTranscriptAgent::Codex => codex_rollout_session_id(stem)?,
         SessionChatTranscriptAgent::Antigravity
         | SessionChatTranscriptAgent::Cursor
+        | SessionChatTranscriptAgent::Empryo
         | SessionChatTranscriptAgent::Grok
         | SessionChatTranscriptAgent::Hermes
         | SessionChatTranscriptAgent::OpenCode

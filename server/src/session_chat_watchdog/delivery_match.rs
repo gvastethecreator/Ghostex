@@ -226,6 +226,7 @@ pub(super) fn classify_watchdog_record(
         SessionChatTranscriptAgent::Antigravity
         | SessionChatTranscriptAgent::Grok
         | SessionChatTranscriptAgent::Cursor
+        | SessionChatTranscriptAgent::Empryo
         | SessionChatTranscriptAgent::Hermes
         | SessionChatTranscriptAgent::OpenCode
         | SessionChatTranscriptAgent::Pi

@@ -267,6 +267,7 @@ pub(super) fn parse_transcript(
             SessionChatTranscriptAgent::Claude => parse_claude_record(&mut builder, &record),
             SessionChatTranscriptAgent::Codex => parse_codex_record(&mut builder, &record),
             SessionChatTranscriptAgent::Cursor => parse_cursor_record(&mut builder, &record),
+            SessionChatTranscriptAgent::Empryo => parse_empryo_record(&mut builder, line),
             SessionChatTranscriptAgent::Grok => parse_grok_record(&mut builder, &record),
             SessionChatTranscriptAgent::Hermes => parse_hermes_record(&mut builder, &record),
             SessionChatTranscriptAgent::Pi => parse_pi_record(&mut builder, &record),

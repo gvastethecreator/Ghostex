@@ -763,6 +763,14 @@ named after your first message. Switch to Terminal for sign-in, `/model`, and
 Freebuff's other commands and settings. For agents whose models the chat cannot
 list, such as Freebuff, the model menu offers Switch model in CLI, which opens
 the session's terminal.
+Empryo chats show your messages as you typed them (without the repository map
+Empryo adds for its model), its replies and thinking, and the tools it runs with
+their results, and they can be exported like any other chat. Empryo saves a
+reply when the turn ends, and on longer turns sometimes a progress snapshot while
+it works, so the chat fills in step by step rather than word by word, with the
+working strip shown until the turn ends. One Ghostex session follows one Empryo
+tab, the tab of your latest message; Empryo's other tabs show only in its
+terminal.
 Scrolling up collapses the composer; returning to the bottom expands it.
 Settings > Chat > Keep chat box expanded while scrolling leaves the desktop
 chat box at full size instead (`sessionChatKeepComposerExpanded`, off by default).

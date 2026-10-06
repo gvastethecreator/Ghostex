@@ -272,6 +272,7 @@ pub enum SessionChatTranscriptAgent {
     Claude,
     Codex,
     Cursor,
+    Empryo,
     Freebuff,
     Grok,
     Hermes,
@@ -291,6 +292,7 @@ pub fn resolve_session_chat_transcript_agent(
         "claude" | "openclaude" => Some(SessionChatTranscriptAgent::Claude),
         "codex" => Some(SessionChatTranscriptAgent::Codex),
         "cursor" | "cursor-agent" | "cursor cli" => Some(SessionChatTranscriptAgent::Cursor),
+        "empryo" => Some(SessionChatTranscriptAgent::Empryo),
         "grok" | "grok-build" => Some(SessionChatTranscriptAgent::Grok),
         "hermes" | "hermes agent" | "hermes-agent" => Some(SessionChatTranscriptAgent::Hermes),
         "opencode" => Some(SessionChatTranscriptAgent::OpenCode),
@@ -307,6 +309,7 @@ pub fn session_chat_transcript_agent_id(agent: Option<&str>) -> Option<&'static 
         SessionChatTranscriptAgent::Claude => Some("claude"),
         SessionChatTranscriptAgent::Codex => Some("codex"),
         SessionChatTranscriptAgent::Cursor => Some("cursor"),
+        SessionChatTranscriptAgent::Empryo => Some("empryo"),
         SessionChatTranscriptAgent::Grok => Some("grok"),
         SessionChatTranscriptAgent::Hermes => Some("hermes"),
         SessionChatTranscriptAgent::OpenCode => Some("opencode"),
@@ -325,6 +328,7 @@ pub fn session_chat_line_decoder(agent: SessionChatTranscriptAgent) -> SessionCh
         SessionChatTranscriptAgent::Claude => decode_claude_transcript_line,
         SessionChatTranscriptAgent::Codex => decode_codex_transcript_line,
         SessionChatTranscriptAgent::Cursor => decode_cursor_transcript_line,
+        SessionChatTranscriptAgent::Empryo => decode_empryo_transcript_line,
         SessionChatTranscriptAgent::Grok => decode_grok_transcript_line,
         SessionChatTranscriptAgent::Hermes => decode_hermes_transcript_line,
         SessionChatTranscriptAgent::OpenCode => crate::session_chat_opencode::decode_line,
@@ -342,6 +346,7 @@ pub fn session_chat_lifecycle_decoder(
         SessionChatTranscriptAgent::Claude => Some(decode_claude_turn_lifecycle),
         SessionChatTranscriptAgent::Codex => Some(decode_codex_turn_lifecycle),
         SessionChatTranscriptAgent::Cursor => Some(decode_cursor_turn_lifecycle),
+        SessionChatTranscriptAgent::Empryo => Some(decode_empryo_turn_lifecycle),
         SessionChatTranscriptAgent::Grok => Some(decode_grok_turn_lifecycle),
         SessionChatTranscriptAgent::Hermes => Some(decode_hermes_turn_lifecycle),
         SessionChatTranscriptAgent::OpenCode => {
@@ -426,6 +431,7 @@ pub fn session_chat_lineage_extractor(
         SessionChatTranscriptAgent::Antigravity
         | SessionChatTranscriptAgent::Codex
         | SessionChatTranscriptAgent::Cursor
+        | SessionChatTranscriptAgent::Empryo
         | SessionChatTranscriptAgent::Grok
         | SessionChatTranscriptAgent::Hermes
         | SessionChatTranscriptAgent::OpenCode
@@ -1104,6 +1110,7 @@ pub use crate::session_chat_decode_antigravity::*;
 pub use crate::session_chat_decode_claude::*;
 pub use crate::session_chat_decode_codex::*;
 pub use crate::session_chat_decode_cursor::*;
+pub use crate::session_chat_decode_empryo::*;
 pub use crate::session_chat_decode_freebuff::*;
 pub use crate::session_chat_decode_grok::*;
 pub use crate::session_chat_decode_hermes::*;

@@ -146,34 +146,7 @@ pub(super) fn accept_all_mode_options() -> Vec<SettingOption> {
 
 /// `resolveSessionChatTranscriptAgent(agentId, icon) !== null` (`agentSupportsChatView`).
 pub(super) fn supports_chat_view(agent_id: &str, icon: Option<&str>) -> bool {
-    [Some(agent_id), icon]
-        .into_iter()
-        .flatten()
-        .any(|candidate| {
-            matches!(
-                candidate.trim().to_lowercase().as_str(),
-                "antigravity"
-                    | "antigravity-cli"
-                    | "antigravity cli"
-                    | "agy"
-                    | "claude"
-                    | "openclaude"
-                    | "codex"
-                    | "cursor"
-                    | "cursor-agent"
-                    | "cursor cli"
-                    | "grok"
-                    | "grok-build"
-                    | "hermes"
-                    | "hermes-agent"
-                    | "hermes agent"
-                    | "pi"
-                    | "omp"
-                    | "zcode"
-                    | "zcode-cli"
-                    | "freebuff"
-            )
-        })
+    ghostex_gx_chat_core::extras::agents::transcript_agent([Some(agent_id), icon]).is_some()
 }
 
 /// `getPreferredAgentInterfaceOverrideOptions(global)`: Inherit (the global choice's label), then

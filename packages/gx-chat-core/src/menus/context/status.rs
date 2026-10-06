@@ -70,8 +70,8 @@ impl ContextDetailsAgent {
             Some("hermes" | "hermes-agent") => Some(Self::Hermes),
             Some("pi") => Some(Self::Pi),
             Some(
-                "antigravity" | "antigravity-cli" | "agy" | "freebuff" | "grok" | "grok-build"
-                | "omp" | "opencode" | "openclaude" | "zcode" | "zcode-cli",
+                "antigravity" | "antigravity-cli" | "agy" | "empryo" | "freebuff" | "grok"
+                | "grok-build" | "omp" | "opencode" | "openclaude" | "zcode" | "zcode-cli",
             ) => Some(Self::Basic),
             _ => None,
         }

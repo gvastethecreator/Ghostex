@@ -1,0 +1,600 @@
+/*
+CDXC:SessionChat 2026-10-06 WHY:
+Empryo (3.9.0-beta) appends `<project>/.empryo/sessions/<id>/session.jsonl`, the path its hooks
+report, and writes a whole turn as ONE record: the user's prompt, then a cumulative
+`turn-checkpoint` snapshot of the reply while it works (not on every turn), then the finished `assistant`
+record, each carrying ordered `segments` (`text`, `reasoning`, `tools`) over a `toolCalls` list
+whose entries hold their own results. The chat contract decodes one message per line, so this
+module mirrors the log into a Ghostex-owned jsonl in the gxserver state dir with one row per
+chat message plus explicit turn rows, and `session_chat_decode_empryo.rs` stays line-local. A
+turn's rows come from its newest snapshot, so a checkpoint or the final record rewrites the
+mirror's tail, which the rename-on-rewrite contract the Antigravity and Cursor mirrors share
+reports to the follower as replaced content. Older logs reuse one `turnId` for every prompt in a
+tab, so turns are keyed by the user record's own `ui.id`, which is unique in every format seen.
+*/
+
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::hash::Hasher;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+use serde_json::{json, Map, Value};
+
+use crate::resume_lookup::home_dir;
+use crate::session_chat::{extract_string, parse_json_object};
+
+const EMPRYO_SESSION_ID_MAX_LENGTH: usize = 128;
+
+fn is_safe_empryo_session_id(session_id: &str) -> bool {
+    !session_id.is_empty()
+        && session_id.len() <= EMPRYO_SESSION_ID_MAX_LENGTH
+        && session_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+}
+
+fn empryo_mirror_dir() -> PathBuf {
+    ghostex_paths::GhostexPaths::resolve()
+        .gxserver_state_dir()
+        .join("empryo-chat-mirror")
+}
+
+/// The session id a raw log path belongs to: `…/.empryo/sessions/<id>/session.jsonl`.
+fn session_id_from_raw_path(path: &Path) -> Option<String> {
+    if path.file_name().and_then(|name| name.to_str()) != Some("session.jsonl") {
+        return None;
+    }
+    let id = path.parent()?.file_name()?.to_str()?.to_string();
+    is_safe_empryo_session_id(&id).then_some(id)
+}
+
+/* ------------------------------------------------------------ tools */
+
+/// Empryo's tools under the names and argument keys the chat's tool rules already render
+/// (`Bash(…)` rows, `Read` previews, `Edit` diffs). A tool with no counterpart keeps its own.
+fn empryo_canonical_tool_call(name: &str, args: Value) -> (String, Value) {
+    let Some(record) = args.as_object() else {
+        return (name.to_string(), args);
+    };
+    let field = |key: &str| record.get(key).filter(|value| !value.is_null()).cloned();
+    let object = |entries: Vec<(&str, Option<Value>)>| {
+        Value::Object(
+            entries
+                .into_iter()
+                .filter_map(|(key, value)| value.map(|value| (key.to_string(), value)))
+                .collect(),
+        )
+    };
+    let canonical = match name {
+        "shell" => Some((
+            "Bash",
+            object(vec![
+                ("command", field("command")),
+                ("timeout", field("timeout")),
+                ("run_in_background", field("background")),
+            ]),
+        )),
+        "edit_file" if record.contains_key("oldString") => Some((
+            "Edit",
+            object(vec![
+                ("file_path", field("path")),
+                ("old_string", field("oldString")),
+                ("new_string", field("newString")),
+            ]),
+        )),
+        "read" => {
+            // One file reads like Claude's Read; a multi-file call keeps Empryo's own shape.
+            let files = record.get("files").and_then(Value::as_array);
+            match files.map(Vec::as_slice) {
+                Some([file]) => {
+                    let file = file.as_object();
+                    let range = file
+                        .and_then(|file| file.get("ranges"))
+                        .and_then(Value::as_array)
+                        .filter(|ranges| ranges.len() == 1)
+                        .and_then(|ranges| ranges[0].as_object());
+                    let start = range
+                        .and_then(|range| range.get("start"))
+                        .and_then(Value::as_u64);
+                    let end = range
+                        .and_then(|range| range.get("end"))
+                        .and_then(Value::as_u64);
+                    Some((
+                        "Read",
+                        object(vec![
+                            ("file_path", file.and_then(|file| file.get("path")).cloned()),
+                            ("offset", start.map(Value::from)),
+                            (
+                                "limit",
+                                start
+                                    .zip(end)
+                                    .filter(|(start, end)| end >= start)
+                                    .map(|(start, end)| Value::from(end - start + 1)),
+                            ),
+                        ]),
+                    ))
+                }
+                _ => None,
+            }
+        }
+        "grep" => Some((
+            "Grep",
+            object(vec![("pattern", field("pattern")), ("path", field("path"))]),
+        )),
+        "web_search" => Some(("WebSearch", object(vec![("query", field("query"))]))),
+        "fetch_page" => Some(("WebFetch", object(vec![("url", field("url"))]))),
+        _ => None,
+    };
+    match canonical {
+        Some((canonical_name, input)) => (canonical_name.to_string(), input),
+        None => (name.to_string(), args),
+    }
+}
+
+/// `final_response` only marks where Empryo's answer starts streaming; its TUI draws no row.
+fn is_hidden_empryo_tool(name: &str) -> bool {
+    name == "final_response"
+}
+
+fn empryo_tool_result(result: &Value) -> (String, bool) {
+    let Some(record) = result.as_object() else {
+        return (
+            result.as_str().map(str::to_string).unwrap_or_default(),
+            false,
+        );
+    };
+    let failed = record.get("success") == Some(&Value::Bool(false));
+    let output = extract_string(record.get("output"));
+    let error = extract_string(record.get("error"));
+    let text = match (output, error) {
+        (Some(output), Some(error)) if failed => format!("{output}\n{error}"),
+        (Some(output), _) => output,
+        (None, Some(error)) => error,
+        (None, None) => String::new(),
+    };
+    (text, failed)
+}
+
+/* ------------------------------------------------------------ turns */
+
+struct EmpryoTurn {
+    /// The user record's own `ui.id`, unique per prompt in every log format.
+    key: String,
+    user: Map<String, Value>,
+    /// The newest snapshot of the reply: the last checkpoint, then the final record.
+    reply: Option<Map<String, Value>>,
+    /// `complete` or `partial` once the final `assistant` record landed.
+    end_status: Option<String>,
+}
+
+#[derive(Default)]
+struct EmpryoLog {
+    turns_by_tab: HashMap<String, Vec<EmpryoTurn>>,
+    /// The newest `pendingPrompts` patch per tab, in the order its prompts were typed.
+    pending_by_tab: HashMap<String, Vec<(String, String)>>,
+    /// CDXC:SessionChat 2026-10-06 DECISION:
+    /// Sven: one Ghostex session follows one Empryo tab, the tab of the most recent user turn;
+    /// records from its other tabs are hidden.
+    followed_tab: Option<String>,
+}
+
+const OBSERVED_KINDS: [&str; 4] = [
+    "\"k\":\"tab\"",
+    "\"k\":\"user\"",
+    "\"k\":\"turn-checkpoint\"",
+    "\"k\":\"assistant\"",
+];
+
+fn pending_prompts(patch: &Value) -> Option<Vec<(String, String)>> {
+    let pending = patch.get("pendingPrompts")?.as_object()?;
+    Some(
+        pending
+            .iter()
+            .filter_map(|(key, entry)| {
+                let turn_id = extract_string(entry.get("turnId")).unwrap_or_else(|| key.clone());
+                let text = extract_string(entry.get("text"))?;
+                Some((turn_id, text))
+            })
+            .collect(),
+    )
+}
+
+impl EmpryoLog {
+    /// CDXC:SessionChat 2026-10-06 DECISION:
+    /// Sven: Empryo's chat reads the `ui` copy of the `user`, `assistant` and `turn-checkpoint`
+    /// records and ignores the `core` copy, which carries the repository map Empryo appends to
+    /// every prompt.
+    fn observe(&mut self, line: &str) {
+        // Every record opens with its kind; skip the large ones chat never reads (edit
+        // baselines, `core` rewrites) before parsing them.
+        let head = line.get(..32).unwrap_or(line);
+        if !OBSERVED_KINDS.iter().any(|kind| head.contains(kind)) {
+            return;
+        }
+        let Some(mut record) = parse_json_object(line) else {
+            return;
+        };
+        let Some(tab) = extract_string(record.get("tabId")) else {
+            return;
+        };
+        let kind = extract_string(record.get("k")).unwrap_or_default();
+        match kind.as_str() {
+            "tab" => {
+                let Some(pending) = record.get("patch").and_then(pending_prompts) else {
+                    return;
+                };
+                if !pending.is_empty() {
+                    self.followed_tab = Some(tab.clone());
+                }
+                self.pending_by_tab.insert(tab, pending);
+            }
+            "user" => {
+                let Some(Value::Object(ui)) = record.remove("ui") else {
+                    return;
+                };
+                let Some(key) = extract_string(ui.get("id")) else {
+                    return;
+                };
+                self.followed_tab = Some(tab.clone());
+                self.turns_by_tab.entry(tab).or_default().push(EmpryoTurn {
+                    key,
+                    user: ui,
+                    reply: None,
+                    end_status: None,
+                });
+            }
+            "turn-checkpoint" | "assistant" => {
+                let Some(Value::Object(ui)) = record.remove("ui") else {
+                    return;
+                };
+                let Some(turn) = self
+                    .turns_by_tab
+                    .get_mut(&tab)
+                    .and_then(|turns| turns.last_mut())
+                else {
+                    return;
+                };
+                if turn.end_status.is_some() {
+                    return;
+                }
+                turn.reply = Some(ui);
+                if kind == "assistant" {
+                    turn.end_status = Some(
+                        extract_string(record.get("status")).unwrap_or_else(|| "complete".into()),
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/* ------------------------------------------------------------ rows */
+
+fn push_reply_rows(rows: &mut Vec<Value>, turn: &EmpryoTurn, reply: &Map<String, Value>) {
+    let key = &turn.key;
+    let timestamp = reply
+        .get("timestamp")
+        .or_else(|| turn.user.get("timestamp"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    let tool_calls: HashMap<&str, &Map<String, Value>> = reply
+        .get("toolCalls")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .filter_map(|call| Some((call.get("id")?.as_str()?, call)))
+        .collect();
+    let mut emitted_calls: HashSet<&str> = HashSet::new();
+    let mut push_tools = |rows: &mut Vec<Value>, ids: Vec<&str>| {
+        let mut first_id = None;
+        let mut calls = Vec::new();
+        let mut results = Vec::new();
+        for id in ids {
+            let Some((&id, call)) = tool_calls.get_key_value(id) else {
+                continue;
+            };
+            if !emitted_calls.insert(id) {
+                continue;
+            }
+            let name = extract_string(call.get("name")).unwrap_or_else(|| "tool".into());
+            if is_hidden_empryo_tool(&name) {
+                continue;
+            }
+            let args = call.get("args").cloned().unwrap_or(Value::Null);
+            let (name, input) = empryo_canonical_tool_call(&name, args);
+            first_id.get_or_insert(id);
+            calls.push(json!({ "callId": id, "name": name, "input": input }));
+            if let Some(result) = call.get("result").filter(|result| !result.is_null()) {
+                let (output, is_error) = empryo_tool_result(result);
+                results.push(json!({
+                    "row": "tool", "id": format!("empryo:{key}:result:{id}"), "turn": key,
+                    "ts": timestamp, "callId": id, "output": output, "isError": is_error,
+                }));
+            }
+        }
+        if let Some(first_id) = first_id {
+            rows.push(json!({
+                "row": "assistant", "id": format!("empryo:{key}:calls:{first_id}"), "turn": key,
+                "ts": timestamp, "toolCalls": calls,
+            }));
+        }
+        rows.extend(results);
+    };
+    let segments = reply
+        .get("segments")
+        .and_then(Value::as_array)
+        .filter(|segments| !segments.is_empty());
+    let Some(segments) = segments else {
+        // Records without segments carry their answer as `content` after any tool calls.
+        let ids: Vec<&str> = tool_calls.keys().copied().collect();
+        push_tools(rows, ids);
+        if let Some(text) = extract_string(reply.get("content")) {
+            rows.push(json!({
+                "row": "assistant", "id": format!("empryo:{key}:text"), "turn": key,
+                "ts": timestamp, "text": text,
+            }));
+        }
+        return;
+    };
+    for (index, segment) in segments.iter().enumerate() {
+        let Some(segment) = segment.as_object() else {
+            continue;
+        };
+        match segment.get("type").and_then(Value::as_str) {
+            Some(kind @ ("text" | "reasoning")) => {
+                // Reasoning from providers that encrypt it is recorded with empty content.
+                let Some(text) = extract_string(segment.get("content")) else {
+                    continue;
+                };
+                let row = if kind == "text" {
+                    "assistant"
+                } else {
+                    "reasoning"
+                };
+                rows.push(json!({
+                    "row": row, "id": format!("empryo:{key}:{kind}:{index}"), "turn": key,
+                    "ts": segment.get("at").cloned().unwrap_or_else(|| timestamp.clone()),
+                    "text": text,
+                }));
+            }
+            Some("tools") => {
+                let ids: Vec<&str> = segment
+                    .get("toolCallIds")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .collect();
+                push_tools(rows, ids);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// CDXC:SessionChat 2026-10-06 DECISION:
+/// Sven: a `pendingPrompts` tab patch or a `user` record starts an Empryo turn, an `assistant`
+/// record with status `complete` or `partial` ends it, and a `turn-checkpoint` updates the turn in
+/// flight.
+fn turn_row(key: &str, state: &str, timestamp: Value) -> Value {
+    json!({ "row": "turn", "turn": key, "state": state, "ts": timestamp })
+}
+
+/// The whole mirror for a raw log. Only complete lines are read: a torn tail would otherwise
+/// be mirrored as a parse failure and never revisited.
+fn build_mirror(raw: &[u8]) -> Vec<u8> {
+    let complete = match raw.iter().rposition(|byte| *byte == b'\n') {
+        Some(end) => &raw[..=end],
+        None => &[][..],
+    };
+    let text = String::from_utf8_lossy(complete);
+    let mut log = EmpryoLog::default();
+    for line in text.lines() {
+        log.observe(line);
+    }
+    let mut rows: Vec<Value> = Vec::new();
+    let Some(tab) = log.followed_tab.clone() else {
+        return Vec::new();
+    };
+    let turns = log.turns_by_tab.remove(&tab).unwrap_or_default();
+    for turn in &turns {
+        let user = &turn.user;
+        let timestamp = user.get("timestamp").cloned().unwrap_or(Value::Null);
+        // Background-agent reports Empryo injects as hidden prompts still start a turn.
+        let hidden = user.get("hidden") == Some(&Value::Bool(true));
+        if let Some(text) = extract_string(user.get("content")).filter(|_| !hidden) {
+            let images: Vec<Value> = user
+                .get("images")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(|image| {
+                    Value::from(
+                        extract_string(image.get("label")).unwrap_or_else(|| "image".into()),
+                    )
+                })
+                .collect();
+            rows.push(json!({
+                "row": "user", "id": format!("empryo:{}", turn.key), "turn": turn.key,
+                "ts": timestamp, "text": text, "images": images,
+            }));
+        }
+        rows.push(turn_row(&turn.key, "working", timestamp.clone()));
+        if let Some(reply) = turn.reply.as_ref() {
+            push_reply_rows(&mut rows, turn, reply);
+        }
+        if let Some(status) = turn.end_status.as_deref() {
+            let state = if status == "partial" {
+                "interrupted"
+            } else {
+                "completed"
+            };
+            let ended_at = turn
+                .reply
+                .as_ref()
+                .and_then(|reply| reply.get("timestamp").cloned())
+                .unwrap_or(timestamp);
+            rows.push(turn_row(&turn.key, state, ended_at));
+        }
+    }
+    // A prompt Empryo accepted but has not recorded yet (it briefs the model first, which can
+    // take most of a minute) shows at once; its user record later takes the same id.
+    for (turn_id, text) in log.pending_by_tab.remove(&tab).unwrap_or_default() {
+        let key = format!("{turn_id}-user");
+        if turns.iter().any(|turn| turn.key == key) {
+            continue;
+        }
+        rows.push(json!({
+            "row": "user", "id": format!("empryo:{key}"), "turn": key, "ts": Value::Null,
+            "text": text, "images": [],
+        }));
+        rows.push(turn_row(&key, "working", Value::Null));
+    }
+    let mut out = Vec::new();
+    for row in rows {
+        if let Ok(serialized) = serde_json::to_vec(&row) {
+            out.extend_from_slice(&serialized);
+            out.push(b'\n');
+        }
+    }
+    out
+}
+
+/* ------------------------------------------------------------ sync */
+
+#[derive(Default)]
+struct EmpryoMirrorState {
+    raw_path: PathBuf,
+    raw_len: u64,
+    raw_modified: Option<std::time::SystemTime>,
+    output_len: usize,
+    output_hash: u64,
+}
+
+/// Keyed by mirror path, which the follower holds once resolution handed it out.
+static MIRROR_STATES: Mutex<Option<HashMap<PathBuf, EmpryoMirrorState>>> = Mutex::new(None);
+
+fn content_hash(bytes: &[u8]) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    hasher.write(bytes);
+    hasher.finish()
+}
+
+/// Append when the new output extends the old byte-for-byte; otherwise write a temp file and
+/// rename it over the mirror so the follower's inode check reports `content_replaced` instead
+/// of reading a half-written file.
+fn write_mirror(
+    mirror_path: &Path,
+    output: &[u8],
+    state: &EmpryoMirrorState,
+    mirror_exists: bool,
+) -> Option<()> {
+    fs::create_dir_all(mirror_path.parent()?).ok()?;
+    let pure_append = mirror_exists
+        && state.output_len > 0
+        && output.len() >= state.output_len
+        && content_hash(&output[..state.output_len]) == state.output_hash;
+    if pure_append {
+        if output.len() > state.output_len {
+            let mut file = fs::OpenOptions::new().append(true).open(mirror_path).ok()?;
+            file.write_all(&output[state.output_len..]).ok()?;
+        }
+        return Some(());
+    }
+    let temp_path = mirror_path.with_extension("jsonl.tmp");
+    let mut file = fs::File::create(&temp_path).ok()?;
+    file.write_all(output).ok()?;
+    file.flush().ok()?;
+    drop(file);
+    fs::rename(&temp_path, mirror_path).ok()
+}
+
+/// One sync pass. Rebuilds only when the raw log's size or mtime moved, or the mirror is gone
+/// (a wiped state dir or a fresh daemon always rebuilds).
+fn sync_mirror(mirror_path: &Path, state: &mut EmpryoMirrorState) -> Option<()> {
+    let raw_meta = fs::metadata(&state.raw_path).ok()?;
+    let raw_len = raw_meta.len();
+    let raw_modified = raw_meta.modified().ok();
+    let mirror_exists = mirror_path.is_file();
+    if !mirror_exists {
+        state.output_len = 0;
+        state.output_hash = 0;
+    }
+    let up_to_date = mirror_exists
+        && state.output_len > 0
+        && state.raw_len == raw_len
+        && state.raw_modified == raw_modified;
+    if up_to_date {
+        return Some(());
+    }
+    let raw = fs::read(&state.raw_path).ok()?;
+    let output = build_mirror(&raw);
+    write_mirror(mirror_path, &output, state, mirror_exists)?;
+    state.raw_len = raw_len;
+    state.raw_modified = raw_modified;
+    state.output_len = output.len();
+    state.output_hash = content_hash(&output);
+    Some(())
+}
+
+/// Path-resolution entry: sync, then hand back the mirror as "the transcript". The hook names
+/// the raw log (`CDXC:AgentHooks`); a session started from `$HOME` keeps it under
+/// `~/.empryo/sessions/`. Like Claude's, the log appears only once the first prompt is sent.
+pub fn resolve_empryo_chat_transcript_path(
+    session_id: Option<&str>,
+    raw_hint: Option<&Path>,
+) -> Option<PathBuf> {
+    let session_id = session_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .or_else(|| raw_hint.and_then(session_id_from_raw_path))?;
+    if !is_safe_empryo_session_id(&session_id) {
+        return None;
+    }
+    let raw_path = raw_hint
+        .filter(|path| path.is_file())
+        .map(Path::to_path_buf)
+        .or_else(|| {
+            Some(
+                home_dir()
+                    .join(".empryo")
+                    .join("sessions")
+                    .join(&session_id)
+                    .join("session.jsonl"),
+            )
+            .filter(|path| path.is_file())
+        })?;
+    // Two projects can hold the same session id, so the raw log's path names the folder.
+    let mirror_path = empryo_mirror_dir()
+        .join(format!(
+            "{:016x}",
+            content_hash(raw_path.as_os_str().as_encoded_bytes())
+        ))
+        .join(format!("{session_id}.jsonl"));
+    let mut states_guard = MIRROR_STATES.lock().ok()?;
+    let state = states_guard
+        .get_or_insert_with(HashMap::new)
+        .entry(mirror_path.clone())
+        .or_default();
+    state.raw_path = raw_path;
+    sync_mirror(&mirror_path, state)?;
+    Some(mirror_path)
+}
+
+/// Steady-state entry for the follower's drain tick, which holds only the resolved path.
+pub(crate) fn sync_empryo_transcript_mirror_for_path(mirror_path: &Path) {
+    let Ok(mut states_guard) = MIRROR_STATES.lock() else {
+        return;
+    };
+    if let Some(state) = states_guard
+        .as_mut()
+        .and_then(|states| states.get_mut(mirror_path))
+    {
+        sync_mirror(mirror_path, state);
+    }
+}
