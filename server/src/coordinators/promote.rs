@@ -1,4 +1,4 @@
-//! Making an existing Claude, Codex or ZCode session a coordinator (`/api/promoteCoordinator`, the
+//! Making an existing Claude, Codex, ZCode or Empryo session a coordinator (`/api/promoteCoordinator`, the
 //! sidebar's Advanced > Make Coordinator, `ghostex coordinator promote`).
 
 use std::path::Path;
@@ -12,7 +12,8 @@ use super::records::{
     COORDINATOR_GOAL_MAX_CHARS,
 };
 use super::role::{
-    coordinator_agent_family_supported, with_coordinator_role, COORDINATOR_ROLE_PROMPT,
+    coordinator_agent_family_supported, coordinator_role_queued_command, with_coordinator_role,
+    COORDINATOR_AGENT_FAMILIES_TEXT, COORDINATOR_ROLE_PROMPT,
 };
 use crate::domain::{DomainRepository, DomainStateError};
 
@@ -25,6 +26,9 @@ const SAVED_COMMAND_KEYS: [&str; 3] = ["agentCommand", "accountBaseCommand", "ac
 pub struct CoordinatorPromotion {
     pub key: SessionKey,
     pub title: String,
+    /// The line that hands the session its role, queued ahead of the playbook, for a family whose
+    /// role arrives that way (`coordinator_role_queued_command`).
+    pub role_command: Option<String>,
     pub playbook_message: String,
 }
 
@@ -79,9 +83,9 @@ pub fn promote_session_to_coordinator(
     let family = crate::agents::session_agent_family_id(&project, &session)
         .filter(|family| coordinator_agent_family_supported(family))
         .ok_or_else(|| {
-            DomainStateError::bad_request(
-                "A coordinator runs on Claude, Codex or ZCode, and this session runs another agent. Start a New Coordinator instead.",
-            )
+            DomainStateError::bad_request(format!(
+                "A coordinator runs on {COORDINATOR_AGENT_FAMILIES_TEXT}, and this session runs another agent. Start a New Coordinator instead."
+            ))
         })?;
 
     let mut runtime = session
@@ -134,10 +138,13 @@ pub fn promote_session_to_coordinator(
     insert_coordinator(&transaction, &project_id, &session_id, &goal, "")?;
     transaction.commit().map_err(sql_error)?;
 
+    let role_command = coordinator_role_queued_command(&family);
+    let playbook_message = playbook_message(&goal, role_command.is_some());
     Ok(CoordinatorPromotion {
         key: (project_id, session_id),
         title,
-        playbook_message: playbook_message(&goal),
+        role_command,
+        playbook_message,
     })
 }
 
@@ -196,19 +203,29 @@ fn command_has_coordinator_role(command: &str, family: &str) -> bool {
 
 /// The chat message that hands a promoted session its role. It carries the whole playbook, so it
 /// works without the CLI, and stays in the conversation until the next resume adds the role as a
-/// system prompt.
-pub fn playbook_message(goal: &str) -> String {
-    let mut message = String::from(
-        "Ghostex: this session is now a coordinator. You keep this conversation; from now on you work by the coordinator playbook below.",
-    );
+/// system prompt. A session handed its role by a queued line (Empryo's `/agent`) already runs by
+/// the playbook when it reads this, so its message leaves the playbook out.
+pub fn playbook_message(goal: &str, role_in_system_prompt: bool) -> String {
+    let mut message = String::from(if role_in_system_prompt {
+        "Ghostex: this session is now a coordinator. You keep this conversation; from now on you work by the coordinator playbook, which is now part of your instructions."
+    } else {
+        "Ghostex: this session is now a coordinator. You keep this conversation; from now on you work by the coordinator playbook below."
+    });
     if !goal.trim().is_empty() {
         message.push_str(&format!("\n\nYour goal: {}", goal.trim()));
     }
+    if !role_in_system_prompt {
+        message.push_str(
+            "\n\nGhostex adds this playbook to your system prompt the next time this session starts or resumes. Until then, re-read it with `ghostex coordinator guide` whenever your context was compacted.",
+        );
+    }
     message.push_str(
-        "\n\nGhostex adds this playbook to your system prompt the next time this session starts or resumes. Until then, re-read it with `ghostex coordinator guide` whenever your context was compacted.\
-\n\nSessions you started earlier in this conversation are not your threads yet. If there are any, list them for the user and, once they confirm, adopt each one with `ghostex coordinator link <session ref> --task \"<what it works on>\"`.\
-\n\nNow run `ghostex coordinator status`, then tell the user in a line or two that you are their coordinator.\n\n---\n\n",
+        "\n\nSessions you started earlier in this conversation are not your threads yet. If there are any, list them for the user and, once they confirm, adopt each one with `ghostex coordinator link <session ref> --task \"<what it works on>\"`.\
+\n\nNow run `ghostex coordinator status`, then tell the user in a line or two that you are their coordinator.",
     );
-    message.push_str(COORDINATOR_ROLE_PROMPT.trim());
+    if !role_in_system_prompt {
+        message.push_str("\n\n---\n\n");
+        message.push_str(COORDINATOR_ROLE_PROMPT.trim());
+    }
     message
 }

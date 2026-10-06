@@ -11,8 +11,7 @@ use super::*;
 use crate::coordinators::{
     self, agent_message, classify_thread_session, clear_thread_pending_message, list_threads,
     record_thread_report, report_body, set_thread_observed_working, set_thread_resolved,
-    thread_prompt, MessageSender, SessionKey, ThreadProgress, ThreadRecord, ThreadReport,
-    ThreadState,
+    MessageSender, SessionKey, ThreadProgress, ThreadRecord, ThreadReport, ThreadState,
 };
 use crate::presentation::effective_lifecycle_state;
 use crate::session_chat_queue_runtime::SessionChatTranscriptGate;
@@ -205,14 +204,15 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
         return Vec::new();
     };
     let repository = DomainRepository::new(&db, state.metadata.server_id.as_str());
+    let Ok(threads) = list_threads(&db) else {
+        return Vec::new();
+    };
+    refresh_thread_screen_waits(state, &repository, &threads);
     for (project_id, session_id) in
         crate::coordinators::refresh_coordinator_panels(&db, &repository)
     {
         republish_coordinator_chat(state, &project_id, &session_id);
     }
-    let Ok(threads) = list_threads(&db) else {
-        return Vec::new();
-    };
     let Ok(mut memory) = memory.lock() else {
         return Vec::new();
     };
@@ -318,39 +318,27 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
             has_run: true,
         };
         let hook_state = classify_thread_session(Some(&session), as_run, &now_iso, false);
-        // A thread stuck on a screen that blocks input (folder trust, an expired login, a usage
-        // limit) never works and never asks through a hook, so it would never report. The chat's
-        // own cached notice says so without a new screen capture.
-        let blocking_notice = (hook_state != ThreadState::Working && lifecycle == "running")
-            .then(|| {
-                crate::session_chat_options::cached_session_chat_terminal_notice(
-                    state,
-                    &thread.project_id,
-                    &thread.session_id,
-                )
-            })
-            .flatten()
-            .filter(|notice| notice.blocks_input() && !notice.auto_trust);
-        let state_now = if blocking_notice.is_some() {
-            ThreadState::Waiting
-        } else if hook_state != ThreadState::Working
-            && hook_state != ThreadState::Sleeping
-            && thread.observed_working
-        {
-            // Only a thread about to be reported pays for the transcript read.
-            let working = memory
-                .transcript_gates
-                .entry(key.clone())
-                .or_default()
-                .is_working(&session);
-            if working {
-                ThreadState::Working
+        let state_now =
+            if hook_state == ThreadState::Waiting && coordinators::waits_on_screen(&session) {
+                ThreadState::Waiting
+            } else if hook_state != ThreadState::Working
+                && hook_state != ThreadState::Sleeping
+                && thread.observed_working
+            {
+                // Only a thread about to be reported pays for the transcript read.
+                let working = memory
+                    .transcript_gates
+                    .entry(key.clone())
+                    .or_default()
+                    .is_working(&session);
+                if working {
+                    ThreadState::Working
+                } else {
+                    hook_state
+                }
             } else {
                 hook_state
-            }
-        } else {
-            hook_state
-        };
+            };
         let report = match state_now {
             ThreadState::Working => {
                 memory.not_working_since.remove(&key);
@@ -362,17 +350,8 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
             }
             ThreadState::Waiting => {
                 memory.not_working_since.remove(&key);
-                let prompt = match (&blocking_notice, thread_prompt(&session)) {
-                    (Some(notice), _) => Some((
-                        format!("notice:{}:{}", notice.kind, notice.title),
-                        match notice.detail.as_deref().map(str::trim).filter(|detail| !detail.is_empty()) {
-                            Some(detail) => format!("Its screen shows: {}\n\n{detail}\n\nSomeone has to answer it in that thread.", notice.title.trim()),
-                            None => format!("Its screen shows: {}\n\nSomeone has to answer it in that thread.", notice.title.trim()),
-                        },
-                    )),
-                    (None, Some(prompt)) => Some((format!("prompt:{}", prompt.key), prompt.summary)),
-                    (None, None) => None,
-                };
+                let prompt = coordinators::waiting_prompt(&session)
+                    .map(|prompt| (prompt.key, prompt.summary));
                 let (prompt_key, summary) = match prompt {
                     Some(prompt) => prompt,
                     None => (
@@ -819,6 +798,40 @@ fn republish_coordinator_chat(state: &AppState, project_id: &str, session_id: &s
     );
 }
 
+/// Records what the chat's cached screen reading of every running open thread waits on, for
+/// every surface that classifies threads (see `ThreadScreenWait`). It reads the cache only: a
+/// tick never captures a screen.
+fn refresh_thread_screen_waits(
+    state: &AppState,
+    repository: &DomainRepository<'_>,
+    threads: &[ThreadRecord],
+) {
+    let waits = threads
+        .iter()
+        .filter(|thread| !thread.is_resolved())
+        .filter(|thread| {
+            repository
+                .get_session(&thread.project_id, &thread.session_id)
+                .ok()
+                .flatten()
+                .is_some_and(|session| effective_lifecycle_state(&session) == "running")
+        })
+        .filter_map(|thread| {
+            let screen = crate::session_chat_options::cached_session_chat_screen_state(
+                state,
+                &thread.project_id,
+                &thread.session_id,
+            );
+            coordinators::ThreadScreenWait::from_screen(
+                screen.notice.as_ref(),
+                screen.prompt.as_ref(),
+            )
+            .map(|wait| (thread.key(), wait))
+        })
+        .collect();
+    coordinators::replace_thread_screen_waits(waits);
+}
+
 /// `/api/createAgentSession` with a `coordinator` object: points the launch at the role file.
 pub(crate) fn prepare_coordinator_create_params(
     state: &AppState,
@@ -839,6 +852,53 @@ pub(crate) fn prepare_coordinator_create_params(
         Value::String(role_file.to_string_lossy().to_string()),
     );
     Ok(params)
+}
+
+/// Queues a message in a session's chat queue and tells its viewers.
+fn queue_session_chat_prompt(
+    state: &AppState,
+    project_id: &str,
+    session_id: &str,
+    text: &str,
+    startup_send: bool,
+) -> std::result::Result<(), DomainStateError> {
+    let mut queue_params = Map::new();
+    queue_params.insert("projectId".to_string(), json!(project_id));
+    queue_params.insert("sessionId".to_string(), json!(session_id));
+    queue_params.insert("text".to_string(), json!(text));
+    queue_params.insert("startupSend".to_string(), json!(startup_send));
+    let result = crate::session_chat_queue::handle_session_chat_queue_endpoint(
+        &state.paths,
+        state.metadata.server_id.as_str(),
+        "/api/queueSessionChatPrompt",
+        &queue_params,
+    )?;
+    if result.broadcast {
+        crate::session_chat_queue_runtime::broadcast_session_chat_queue_state(
+            state, project_id, session_id,
+        );
+    }
+    Ok(())
+}
+
+/// Hands a coordinator whose role arrives as a queued line (Empryo's `/agent`, see
+/// `coordinator_role_queued_command`) its role: writes the profile the line names, then queues
+/// it. A new coordinator's line waits for the input box like a first message; a promoted one's
+/// waits for the running turn to end.
+pub(crate) fn queue_coordinator_role_command(
+    state: &AppState,
+    project_id: &str,
+    session_id: &str,
+    command: &str,
+    startup_send: bool,
+) -> std::result::Result<(), DomainStateError> {
+    coordinators::ensure_empryo_coordinator_agent_file(&state.paths).map_err(|error| {
+        DomainStateError {
+            code: "internalError",
+            message: format!("Could not write the Empryo coordinator profile: {error}"),
+        }
+    })?;
+    queue_session_chat_prompt(state, project_id, session_id, command, startup_send)
 }
 
 /// `/api/promoteCoordinator`: makes an existing session a coordinator, then queues its playbook
@@ -864,26 +924,24 @@ pub(crate) fn promote_coordinator(
     )?;
     let (project_id, session_id) = &promotion.key;
     schedule_presentation_session_delta(state, db, repository, project_id, session_id)?;
-    let mut queue_params = Map::new();
-    queue_params.insert("projectId".to_string(), json!(project_id));
-    queue_params.insert("sessionId".to_string(), json!(session_id));
-    queue_params.insert("text".to_string(), json!(promotion.playbook_message));
-    let playbook_error = match crate::session_chat_queue::handle_session_chat_queue_endpoint(
-        &state.paths,
-        state.metadata.server_id.as_str(),
-        "/api/queueSessionChatPrompt",
-        &queue_params,
-    ) {
-        Ok(result) => {
-            if result.broadcast {
-                crate::session_chat_queue_runtime::broadcast_session_chat_queue_state(
-                    state, project_id, session_id,
-                );
-            }
-            None
-        }
-        Err(error) => Some(error.message),
-    };
+    // The coordinator record is committed, so a failure from here on is reported, not raised.
+    let playbook_error = promotion
+        .role_command
+        .as_deref()
+        .map_or(Ok(()), |command| {
+            queue_coordinator_role_command(state, project_id, session_id, command, false)
+        })
+        .and_then(|()| {
+            queue_session_chat_prompt(
+                state,
+                project_id,
+                session_id,
+                &promotion.playbook_message,
+                false,
+            )
+        })
+        .err()
+        .map(|error| error.message);
     Ok(json!({
         "ok": true,
         "globalRef": crate::ids::create_global_session_ref(state.metadata.server_id.as_str(), project_id, session_id),

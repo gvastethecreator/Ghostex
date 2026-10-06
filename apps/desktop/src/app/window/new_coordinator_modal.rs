@@ -2,7 +2,7 @@
 //! a goal and a first request.
 //!
 //! CDXC:Coordinators 2026-09-30 WHY:
-//! Claude's New project dialog asks for a name and an optional goal and then opens the conversation; Ghostex does the same inside a project, plus the agent (a coordinator runs on Claude, Codex or ZCode, the agents Ghostex can hand its role) and an optional first request, so the coordinator can start planning the moment it opens instead of waiting for a second step.
+//! Claude's New project dialog asks for a name and an optional goal and then opens the conversation; Ghostex does the same inside a project, plus the agent (a coordinator runs on Claude, Codex, ZCode or Empryo, the agents Ghostex can hand its role) and an optional first request, so the coordinator can start planning the moment it opens instead of waiting for a second step.
 //! SEE-ALSO: apps/desktop/src/app/new_coordinator_modal_lifecycle.rs (open, create), apps/desktop/src/app/gx_store/create/coordinator.rs (the gxserver calls), server/src/coordinators/ (what a coordinator is).
 use super::native_modal_kit::*;
 use gpui::{
@@ -40,7 +40,7 @@ const REQUEST_PLACEHOLDER: &str =
 const CANCEL: &str = "Cancel";
 const CREATE: &str = "Create";
 
-/// An agent a coordinator can run on (a Claude, Codex or ZCode launcher), with its model lineup.
+/// An agent a coordinator can run on (a Claude, Codex, ZCode or Empryo launcher), with its model lineup.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct NewCoordinatorAgent {
     pub(crate) agent_id: String,
@@ -378,7 +378,7 @@ impl GpuiNewCoordinatorModalWindow {
         if self.agents.is_empty() {
             body = body.child(modal_error(
                 &p,
-                "A coordinator runs on Claude, Codex or ZCode. Add one of them in Settings > Agents first.",
+                "A coordinator runs on Claude, Codex, ZCode or Empryo. Add one of them in Settings > Agents first.",
             ));
         } else if self.agents.len() > 1 {
             let items = self

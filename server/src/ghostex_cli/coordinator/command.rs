@@ -134,17 +134,22 @@ fn create(parsed: &ParsedArgs) -> CliResult<()> {
     let agent_rows = hud["agents"].as_array().cloned().unwrap_or_default();
     let agent_id = match flag_text(&parsed.flags, "agent") {
         Some(agent) => {
-            if !agent_rows.iter().any(|row| agents::text(row, "agentId") == agent) {
+            if !agent_rows
+                .iter()
+                .any(|row| agents::text(row, "agentId") == agent)
+            {
                 return Err(CliError::Other(format!(
-                    "Unknown or hidden agent type: {agent}. Run ghostex agents types and use a Claude, Codex or ZCode agentId."
+                    "Unknown or hidden agent type: {agent}. Run ghostex agents types and use a {} agentId.",
+                    crate::coordinators::COORDINATOR_AGENT_FAMILIES_TEXT
                 )));
             }
             agent
         }
         None => default_coordinator_agent(&agent_rows).ok_or_else(|| {
-            CliError::Other(
-                "No Claude, Codex or ZCode agent is configured. Pass --agent <agent-id> from ghostex agents types.".into(),
-            )
+            CliError::Other(format!(
+                "No {} agent is configured. Pass --agent <agent-id> from ghostex agents types.",
+                crate::coordinators::COORDINATOR_AGENT_FAMILIES_TEXT
+            ))
         })?,
     };
     let named = flag_text(&parsed.flags, "title");
@@ -179,13 +184,16 @@ fn create(parsed: &ParsedArgs) -> CliResult<()> {
         .map(|object| {
             let mut object = object.clone();
             // CDXC:Coordinators 2026-09-30 SEE-ALSO: DEFAULT_COORDINATOR_EFFORT in apps/desktop/src/app/window/new_coordinator_modal.rs (the user's medium-effort decision); the CLI keeps the same default. ZCode takes no effort choice, so it is sent no default; its --model rides agentModel and reaches the session as a queued `/model` line.
-            if family != Some("zcode") {
-                object.insert(
-                    "agentEffort".to_string(),
-                    json!(
-                        flag_text(&parsed.flags, "effort").unwrap_or_else(|| "medium".to_string())
-                    ),
-                );
+            // Empryo rejects an effort its model does not support, so it gets only one asked for.
+            let effort = match family {
+                Some("zcode") => None,
+                Some("empryo") => flag_text(&parsed.flags, "effort"),
+                _ => {
+                    Some(flag_text(&parsed.flags, "effort").unwrap_or_else(|| "medium".to_string()))
+                }
+            };
+            if let Some(effort) = effort {
+                object.insert("agentEffort".to_string(), json!(effort));
             }
             let model = flag_text(&parsed.flags, "model").or_else(|| {
                 (family == Some("claude")).then(|| DEFAULT_CLAUDE_COORDINATOR_MODEL.to_string())
@@ -254,7 +262,7 @@ fn create(parsed: &ParsedArgs) -> CliResult<()> {
     Ok(())
 }
 
-/// `promote [<session-ref>]`: makes an existing Claude, Codex or ZCode session (the calling session when
+/// `promote [<session-ref>]`: makes an existing Claude, Codex, ZCode or Empryo session (the calling session when
 /// no ref is given) a coordinator without restarting or interrupting it; see
 /// `promote_session_to_coordinator` in server/src/coordinators/promote.rs.
 fn promote(parsed: &ParsedArgs) -> CliResult<()> {
@@ -300,7 +308,7 @@ fn promote(parsed: &ParsedArgs) -> CliResult<()> {
     Ok(())
 }
 
-/// What a New Coordinator form offers: the Claude, Codex and ZCode launchers (Claude first, in launcher
+/// What a New Coordinator form offers: the Claude, Codex, ZCode and Empryo launchers (Claude first, in launcher
 /// order), each with its model lineup from the catalog gxserver serves, the model it starts on, and
 /// the efforts each model accepts.
 ///
@@ -424,11 +432,12 @@ pub(super) fn launch_settings_for(rows: &[Value], agent_id: &str) -> Value {
     Value::Object(settings)
 }
 
-/// The first configured agent: Claude, else Codex, else ZCode.
+/// The first configured agent, in `COORDINATOR_AGENT_FAMILIES` order.
 /// CDXC:Coordinators 2026-10-01 SEE-ALSO: DEFAULT_CLAUDE_COORDINATOR_MODEL in apps/desktop/src/app/window/new_coordinator_modal.rs (the user's Opus 5.5 decision); `create` on a Claude agent without `--model` uses the same, a Codex agent keeps its configured model.
 const DEFAULT_CLAUDE_COORDINATOR_MODEL: &str = "opus[1m]";
 
-/// `claude`, `codex` or `zcode` when a launcher row runs that executable or has that agent id.
+/// `claude`, `codex`, `zcode` or `empryo` when a launcher row runs that executable or has that
+/// agent id.
 fn agent_family(row: &Value) -> Option<&'static str> {
     let executable = agents::text(row, "command")
         .split_whitespace()
@@ -441,17 +450,19 @@ fn agent_family(row: &Value) -> Option<&'static str> {
                 .to_string()
         })
         .unwrap_or_default();
-    ["claude", "codex", "zcode"]
+    crate::coordinators::COORDINATOR_AGENT_FAMILIES
         .into_iter()
         .find(|family| executable == *family || agents::text(row, "agentId") == *family)
 }
 
 fn default_coordinator_agent(rows: &[Value]) -> Option<String> {
-    ["claude", "codex", "zcode"].iter().find_map(|family| {
-        rows.iter()
-            .find(|row| agent_family(row) == Some(*family))
-            .map(|row| agents::text(row, "agentId").to_string())
-    })
+    crate::coordinators::COORDINATOR_AGENT_FAMILIES
+        .iter()
+        .find_map(|family| {
+            rows.iter()
+                .find(|row| agent_family(row) == Some(*family))
+                .map(|row| agents::text(row, "agentId").to_string())
+        })
 }
 
 fn list(parsed: &ParsedArgs) -> CliResult<()> {

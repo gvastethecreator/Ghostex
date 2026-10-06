@@ -14,7 +14,7 @@ use serde_json::{json, Map, Value};
 use super::brief::report_headline;
 use super::endpoint::session_title_of;
 use super::records::{list_coordinators, list_threads, SessionKey};
-use super::state::{classify_thread_session, thread_prompt, ThreadProgress, ThreadState};
+use super::state::{classify_thread_session, waiting_prompt, ThreadProgress, ThreadState};
 use crate::domain::DomainRepository;
 use crate::ids::create_global_session_ref;
 use crate::presentation::now_iso;
@@ -83,7 +83,7 @@ pub fn refresh_coordinator_panels(
             let detail = match state {
                 ThreadState::Waiting => session
                     .as_ref()
-                    .and_then(thread_prompt)
+                    .and_then(waiting_prompt)
                     .map(|prompt| report_headline(&prompt.summary, 140))
                     .unwrap_or_else(|| "Waiting for an answer".to_string()),
                 ThreadState::Working => report_headline(&thread.task, 140),
