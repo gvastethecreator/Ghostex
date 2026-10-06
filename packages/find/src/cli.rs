@@ -13,13 +13,14 @@ pub const HELP: &str = concat!(
     "\n",
     "Sources: claude (~/.claude), codex (~/.codex), pi (~/.pi),\n",
     "         opencode (~/.local/share/opencode/opencode.db),\n",
-    "         cursor (~/.cursor/projects), grok (~/.grok/sessions)\n",
+    "         cursor (~/.cursor/projects), grok (~/.grok/sessions),\n",
+    "         empryo (each repo's .empryo/sessions, found through ~/.empryo/threads.db)\n",
     "\n",
     "Usage:\n",
     "  zehn            find a prompt, then RESUME that session in its agent\n",
     "  zehn --print    just print the selected prompt text (no resume)\n",
     "  zehn --project  print agent<TAB>project<TAB>text (implies --print)\n",
-    "  zehn --agent claude   show only one agent (claude/codex/pi/opencode/cursor/grok)\n",
+    "  zehn --agent claude   show only one agent (claude/codex/pi/opencode/cursor/grok/empryo)\n",
     "  zehn --claude         shorthand for --agent claude\n",
     "  zehn --accept-all     add permission-bypass flags for supported agents\n",
     "  zehn --list     dump all records\n",
@@ -30,6 +31,7 @@ pub const HELP: &str = concat!(
     "         opencode [--dangerously-skip-permissions] --session <id>\n",
     "         cursor-agent [--yolo] --resume <id>\n",
     "         grok [--permission-mode bypassPermissions] --resume <id>\n",
+    "         empryo --session <id>\n",
     "(run from the session's project directory)\n",
     "\n",
     "Keys: type to filter · ↑/↓ or ^p/^n move · Enter resume\n",
@@ -41,7 +43,7 @@ pub const HELP: &str = concat!(
     "Favorites are stored in $XDG_CONFIG_HOME/zehn/favorites (or ~/.config/zehn).\n",
 );
 
-const USAGE_LINE: &str = "usage: zehn [--agent claude|codex|pi|opencode|cursor|grok] [--accept-all|--no-accept-all] [--print|--project|--list]";
+const USAGE_LINE: &str = "usage: zehn [--agent claude|codex|pi|opencode|cursor|grok|empryo] [--accept-all|--no-accept-all] [--print|--project|--list]";
 
 #[derive(Default)]
 struct Options {

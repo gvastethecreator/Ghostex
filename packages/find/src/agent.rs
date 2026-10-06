@@ -10,15 +10,17 @@ pub enum Agent {
     Opencode,
     Cursor,
     Grok,
+    Empryo,
 }
 
-pub const ALL_AGENTS: [Agent; 6] = [
+pub const ALL_AGENTS: [Agent; 7] = [
     Agent::Claude,
     Agent::Codex,
     Agent::Pi,
     Agent::Opencode,
     Agent::Cursor,
     Agent::Grok,
+    Agent::Empryo,
 ];
 
 impl Agent {
@@ -30,6 +32,7 @@ impl Agent {
             Agent::Opencode => "opencode",
             Agent::Cursor => "cursor",
             Agent::Grok => "grok",
+            Agent::Empryo => "empryo",
         }
     }
 
@@ -45,6 +48,7 @@ impl Agent {
             Agent::Opencode => 1 << 3,
             Agent::Cursor => 1 << 4,
             Agent::Grok => 1 << 5,
+            Agent::Empryo => 1 << 6,
         }
     }
 
@@ -57,6 +61,7 @@ impl Agent {
             Agent::Pi => "\x1b[38;2;136;192;208m",    // #88C0D0 pi Nord frost
             Agent::Cursor => "\x1b[38;2;74;144;226m", // Cursor blue
             Agent::Grok => "\x1b[38;2;180;160;255m",  // xAI/Grok purple accent
+            Agent::Empryo => "\x1b[38;2;31;163;29m",  // #1FA31D Empryo logo green
         }
     }
 
@@ -69,11 +74,12 @@ impl Agent {
             Agent::Pi => "#88C0D0",
             Agent::Cursor => "#4A90E2",
             Agent::Grok => "#B4A0FF",
+            Agent::Empryo => "#1FA31D",
         }
     }
 
     /// Argv that resumes an existing session in this agent. `accept_all` adds
-    /// the supported permission-bypass mode; Pi has no bypass flag.
+    /// the supported permission-bypass mode; Pi and Empryo have no bypass flag.
     pub fn resume_argv(self, session: &str, accept_all: bool) -> Vec<String> {
         let parts: Vec<&str> = if accept_all {
             match self {
@@ -101,6 +107,7 @@ impl Agent {
                     "--resume",
                     session,
                 ],
+                Agent::Empryo => vec!["empryo", "--session", session],
             }
         } else {
             match self {
@@ -110,14 +117,16 @@ impl Agent {
                 Agent::Opencode => vec!["opencode", "--session", session],
                 Agent::Cursor => vec!["cursor-agent", "--resume", session],
                 Agent::Grok => vec!["grok", "--resume", session],
+                Agent::Empryo => vec!["empryo", "--session", session],
             }
         };
         parts.into_iter().map(str::to_string).collect()
     }
 
     /// Argv that starts a brand-new session seeded with `prompt`. Unlike resume
-    /// this needs no session id, so a prompt can be branched into any agent.
-    pub fn fresh_session_argv(self, prompt: &str, accept_all: bool) -> Vec<String> {
+    /// this needs no session id, so a prompt can be branched into any agent;
+    /// `None` for Empryo, whose terminal app takes no starting prompt.
+    pub fn fresh_session_argv(self, prompt: &str, accept_all: bool) -> Option<Vec<String>> {
         let executable = match self {
             Agent::Claude => "claude",
             Agent::Codex => "codex",
@@ -125,6 +134,7 @@ impl Agent {
             Agent::Opencode => "opencode",
             Agent::Cursor => "cursor-agent",
             Agent::Grok => "grok",
+            Agent::Empryo => return None,
         };
         let mut argv = vec![executable.to_string()];
         if accept_all {
@@ -137,11 +147,11 @@ impl Agent {
                     argv.push("--permission-mode".to_string());
                     argv.push("bypassPermissions".to_string());
                 }
-                Agent::Pi => {}
+                Agent::Pi | Agent::Empryo => {}
             }
         }
         argv.push(prompt.to_string());
-        argv
+        Some(argv)
     }
 }
 
@@ -187,7 +197,10 @@ mod tests {
     fn fresh_session_argv_carries_the_prompt_as_one_arg() {
         assert_eq!(
             Agent::Cursor.fresh_session_argv("make it faster", false),
-            vec!["cursor-agent", "make it faster"]
+            Some(vec![
+                "cursor-agent".to_string(),
+                "make it faster".to_string()
+            ])
         );
     }
 }

@@ -670,7 +670,10 @@ when you open it.
   project and Days buttons under the search field filter and group the results,
   the star on a result stars it, pull down rebuilds the index, and tapping a
   result shows the whole prompt with Resume, Fork, Copy and Star.
-  Search by Prompt does not list Empryo prompts yet.
+  Empryo prompts are listed too, from every repository Empryo has run in, and
+  resuming one reopens that Empryo session. A prompt can be forked into Claude,
+  Codex, Pi, OpenCode, Cursor or Grok, never into Empryo, which cannot start a
+  session from a prompt.
 - Delayed Actions opens Session Automations. Send Enter defaults to **When all
   agents finish**. It can also run after a delay, when this agent finishes, or
   **When a specific agent finishes**. Choose the specific agent from the Agent sessions

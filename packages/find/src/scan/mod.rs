@@ -8,6 +8,7 @@
 //! | opencode | `~/.local/share/opencode/opencode.db` (SQLite)                        |
 //! | cursor   | `~/.cursor/projects/*/agent-transcripts/*/*.jsonl`                    |
 //! | grok     | `~/.grok/sessions/*/*/chat_history.jsonl` plus sibling `summary.json` |
+//! | empryo   | `<repo>/.empryo/sessions/*/session.jsonl` for each repo in `~/.empryo/threads.db` |
 //!
 //! CDXC:PromptSearch 2026-08-20:
 //! opencode history used to be read by shelling out to the `sqlite3` CLI, so a
@@ -19,6 +20,7 @@ mod claude;
 mod codex;
 mod cursor;
 mod dates;
+mod empryo;
 mod files;
 mod grok;
 mod json;
@@ -31,6 +33,7 @@ mod scanner;
 mod tests;
 
 pub use dates::*;
+pub use empryo::*;
 use files::*;
 pub use grok::*;
 pub use json::*;

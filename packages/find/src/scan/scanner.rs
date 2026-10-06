@@ -37,6 +37,7 @@ impl Scanner {
         self.scan_opencode();
         self.scan_cursor();
         self.scan_grok();
+        self.scan_empryo();
         self.dedup();
     }
 
