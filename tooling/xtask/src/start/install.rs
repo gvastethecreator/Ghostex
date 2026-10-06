@@ -323,13 +323,14 @@ impl Start {
         let endpoints = if self.is_windows {
             self.windows_gxserver_endpoints()?
         } else {
-            vec![(self.gxserver_base_url.clone(), None)]
+            vec![(self.gxserver_base_url.clone(), None, true)]
         };
         if endpoints.is_empty() {
             self.log.detail("No running gxserver control plane found.");
         }
-        for (base_url, pid) in endpoints {
-            self.stop_gxserver_endpoint(&base_url, pid, &token, expected.as_deref())?;
+        for (base_url, pid, keep_same_build) in endpoints {
+            let expected = expected.as_deref().filter(|_| keep_same_build);
+            self.stop_gxserver_endpoint(&base_url, pid, &token, expected)?;
         }
         Ok(())
     }
@@ -377,7 +378,9 @@ impl Start {
             );
         } else {
             let reason = match expected {
-                None => "bundled build identity is unavailable, so local start resets the daemon",
+                None => {
+                    "it runs from another install, or the bundled build identity is unavailable"
+                }
                 Some(_) if actual.is_empty() => "running daemon did not report a build identity",
                 Some(_) => "bundled daemon changed",
             };

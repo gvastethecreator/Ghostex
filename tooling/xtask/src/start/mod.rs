@@ -25,6 +25,8 @@ pub struct Options {
     pub prepare_only: bool,
     pub build_only: bool,
     pub install_only: bool,
+    /// Windows: install to Program Files instead of the per-user release layout.
+    pub machine: bool,
 }
 
 /// Everything one start resolves up front: the app identity, where it is staged and installed, and the build environment.
@@ -44,13 +46,14 @@ pub struct Start {
     pub installed_app_path: PathBuf,
     pub linux_user_installed_app_path: PathBuf,
     pub windows_installed_app_path: Option<String>,
+    pub windows_install_scope: Option<windows::InstallScope>,
     pub gxserver_base_url: String,
     pub build_env: Vec<(String, String)>,
     /// Where build-macos-app.sh keeps local-start code-server builds outside the bundle (CDXC:CodeEditor 2026-09-23).
     pub code_server_store_root: PathBuf,
 }
 
-const USAGE: &str = "cargo xtask start [--verbose|-v] [--profile] [--optimized] [--build-only] [--install-only (Linux, Windows)] [--isolated[=<variant>]] [--prepare-only (Windows)]";
+const USAGE: &str = "cargo xtask start [--verbose|-v] [--profile] [--optimized] [--build-only] [--install-only (Linux, Windows)] [--isolated[=<variant>]] [--prepare-only (Windows)] [--machine (Windows)]";
 
 pub fn run(args: &[String]) -> Res<i32> {
     if !(cfg!(target_os = "macos") || cfg!(target_os = "linux") || cfg!(windows)) {
@@ -111,17 +114,24 @@ pub fn run(args: &[String]) -> Res<i32> {
         });
     let gpui_dir = root().join("apps").join("desktop");
     let windows_install = if targets_windows {
-        Some(windows::resolve_install_paths(is_wsl)?)
+        Some(windows::resolve_install_paths(
+            is_wsl,
+            opts.machine,
+            &app_name,
+        )?)
     } else {
         None
     };
     let install_dir = match (&isolated, &windows_install) {
-        (Some(config), _) => config.install_dir.clone(),
-        (None, Some(paths)) => PathBuf::from(&paths.host_path),
+        (_, Some(paths)) => PathBuf::from(&paths.host_path)
+            .parent()
+            .map(PathBuf::from)
+            .unwrap_or_default(),
+        (Some(config), None) => config.install_dir.clone(),
         (None, None) => resolve_gpui_install_dir(is_darwin),
     };
     // CDXC:Build 2026-07-08-04:55:
-    // The start builds the staged GPUI package and installs it to a stable, platform-appropriate location before launch. macOS refreshes shared resources, then installs to /Applications and opens through LaunchServices. Windows installs the staged CEF package to Program Files (or GHOSTEX_INSTALL_DIR), creates a Start Menu shortcut, and launches that installed copy. Linux installs the flat CEF package under XDG data (or INSTALL_DIR), preserves gxserver/zmx sessions across the relaunch, and runs the installed executable.
+    // The start builds the staged GPUI package and installs it to a stable, platform-appropriate location before launch. macOS refreshes shared resources, then installs to /Applications and opens through LaunchServices. Windows installs the staged CEF package to the per-user release layout (Program Files with --machine, or GHOSTEX_INSTALL_DIR; CDXC:Build 2026-10-07), creates a Start Menu shortcut, and launches that installed copy. Linux installs the flat CEF package under XDG data (or INSTALL_DIR), preserves gxserver/zmx sessions across the relaunch, and runs the installed executable.
     let app_path = if is_darwin {
         gpui_dir
             .join("build")
@@ -141,7 +151,11 @@ pub fn run(args: &[String]) -> Res<i32> {
     } else {
         None
     };
-    let installed_app_path = linux_packaged_app_path.clone().unwrap_or_else(|| {
+    let installed_app_path = match &windows_install {
+        Some(paths) => Some(PathBuf::from(&paths.host_path)),
+        None => linux_packaged_app_path.clone(),
+    }
+    .unwrap_or_else(|| {
         install_dir.join(if is_darwin {
             format!("{app_name}.app")
         } else {
@@ -171,7 +185,8 @@ pub fn run(args: &[String]) -> Res<i32> {
         linux_user_installed_app_path: install_dir.join(&app_name),
         windows_installed_app_path: windows_install
             .as_ref()
-            .map(|paths| format!("{}\\{app_name}", paths.windows_path.trim_end_matches('\\'))),
+            .map(|paths| paths.windows_path.clone()),
+        windows_install_scope: windows_install.as_ref().map(|paths| paths.scope),
         install_dir,
         app_path,
         linux_packaged_app_path,
@@ -690,6 +705,7 @@ fn parse_options(args: &[String], targets_windows: bool) -> Res<Options> {
         prepare_only: false,
         build_only: false,
         install_only: false,
+        machine: false,
     };
     for arg in args {
         match arg.as_str() {
@@ -700,6 +716,7 @@ fn parse_options(args: &[String], targets_windows: bool) -> Res<Options> {
             "--optimized" => opts.optimized = true,
             "--build-only" => opts.build_only = true,
             "--install-only" => opts.install_only = true,
+            "--machine" if targets_windows => opts.machine = true,
             "--verbose" | "-v" => opts.verbose = true,
             other if isolated::parse_argument(other)?.is_some() => {}
             other => bail!("Unknown start argument: {other}. Usage: {USAGE}"),
