@@ -1108,8 +1108,8 @@ medium, high, xhigh and max; if the model takes fewer, the picker shows the
 levels Empryo offers for it. To start an Empryo session on a chosen model, pick
 it on Empryo's tab in a new chat, or run
 `ghostex create-agent empryo --project-id <id> --model <provider/model> --effort <level>`:
-Ghostex selects it as soon as Empryo is up, and your first message waits until
-it has.
+that session starts on the model without changing Empryo's default, the level is
+set as soon as Empryo is up, and your first message waits until it is.
 
 On the phone, tapping the model pill opens the same picker as a sheet, without
 keyboard shortcuts. Tap a model to highlight it; its reasoning levels appear under

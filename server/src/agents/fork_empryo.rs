@@ -348,17 +348,17 @@ fn fork_session_meta(mut meta: Value, source_id: &str, fork_id: &str, names: &Fo
 }
 
 #[cfg(unix)]
-fn create_private_dir(dir: &Path) -> std::io::Result<()> {
+pub(crate) fn create_private_dir(dir: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::DirBuilderExt;
     fs::DirBuilder::new().mode(0o700).create(dir)
 }
 
 #[cfg(not(unix))]
-fn create_private_dir(dir: &Path) -> std::io::Result<()> {
+pub(crate) fn create_private_dir(dir: &Path) -> std::io::Result<()> {
     fs::create_dir(dir)
 }
 
-fn write_private_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(crate) fn write_private_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut options = fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]

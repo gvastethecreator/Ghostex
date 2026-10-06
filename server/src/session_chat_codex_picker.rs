@@ -354,6 +354,8 @@ struct CodexPickerPlan {
     claude_statusline: Option<(std::path::PathBuf, String)>,
     /// Hermes only: the `--provider` a model from another provider needs.
     hermes_provider: Option<String>,
+    /// Empryo only: the session's `session.jsonl`, whose `meta.json` names the tab's model.
+    empryo_session_log: Option<std::path::PathBuf>,
 }
 
 struct CodexPickerJob {
@@ -1262,7 +1264,14 @@ pub(crate) async fn select_session_chat_model(
     if !matches!(
         agent.as_deref(),
         Some(
-            "codex" | "claude" | "cursor" | "grok" | "antigravity" | "hermes" | "pi" | "omp"
+            "codex"
+                | "claude"
+                | "cursor"
+                | "grok"
+                | "antigravity"
+                | "hermes"
+                | "pi"
+                | "omp"
                 | "empryo"
         )
     ) {
@@ -1327,6 +1336,14 @@ pub(crate) async fn select_session_chat_model(
         claude_statusline: crate::server::read_runtime_text(&target.session, "agentSessionId")
             .map(|id| (state.paths.app_state_dir.join("agent-hooks"), id)),
         hermes_provider,
+        empryo_session_log: (agent.as_deref() == Some("empryo"))
+            .then(|| crate::storage::open_gxserver_database(&state.paths).ok())
+            .flatten()
+            .and_then(|db| {
+                let repository =
+                    crate::domain::DomainRepository::new(&db, &state.metadata.server_id);
+                crate::session_chat_pi_models::empryo_session_log(&repository, &target.session)
+            }),
     });
     let send = execute_session_chat_send(
         &target.project_id,

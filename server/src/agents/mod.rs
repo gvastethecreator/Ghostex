@@ -6,7 +6,7 @@ mod draft_switch;
 pub mod drafts;
 pub mod endpoint;
 pub mod fork;
-mod fork_empryo;
+pub(crate) mod fork_empryo;
 pub mod helpers;
 pub mod identity;
 pub mod launch_plan;

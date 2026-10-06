@@ -58,7 +58,8 @@ pub(crate) fn create_agent_session_params_for_project(
         .or_else(|| read_text_from_map(&launch_settings, "icon"));
     let configured_command = read_text_from_map(&agent_config, "command")
         .or_else(|| read_text_from_map(&launch_settings, "agentCommand"));
-    let configured_command = apply_requested_agent_model(
+    let (configured_command, empryo_session_id) = apply_requested_agent_model(
+        project,
         &agent_id,
         &agent_config,
         &launch_settings,
@@ -174,13 +175,19 @@ pub(crate) fn create_agent_session_params_for_project(
                 icon: agent_icon.clone(),
             });
             // Only the command this launch runs names the id; `agentCommand` stays the base that
-            // resume, fork and account wrapping rebuild from.
-            if let (Some(id), Some(plan)) = (pi_session_id.as_deref(), plan.as_object_mut()) {
+            // resume, fork and account wrapping rebuild from. Pi's id is minted here; Empryo's names
+            // the session folder seeded for a launch model (session_chat_empryo_launch_selection.rs).
+            let session_command = |command: &str| match (&pi_session_id, &empryo_session_id) {
+                (Some(id), _) => Some(super::pi_session_id::with_pi_session_id(command, id)),
+                (None, Some(id)) => Some(format!("{} --session {id}", command.trim_end())),
+                (None, None) => None,
+            };
+            if let Some(plan) = plan.as_object_mut() {
                 if let Some(command) = plan
                     .get("command")
                     .and_then(Value::as_str)
                     .filter(|command| !command.trim().is_empty())
-                    .map(|command| super::pi_session_id::with_pi_session_id(command, id))
+                    .and_then(session_command)
                 {
                     plan.insert(
                         "startupText".to_string(),
@@ -371,20 +378,21 @@ pub(crate) fn project_agent_session_default_title(project: &Value, session: &Val
 /// User: "yes, Ghostex chooses Pi's model and thinking level at launch, like Claude and Codex." This extends the 2026-09-17 decision (an agent spawning another agent sets that worker's model and effort for the session only, and a resumed worker keeps them) from Claude and Codex to Pi, whose model is `provider/id` (`--model`) and whose effort is its thinking level (`--thinking`).
 /// Typing `/model` or `/effort` into Claude Code saves the choice as the default for every new session, so the choice travels as launch flags instead.
 /// The flags live in the session's saved base command, which resume, fork and account wrapping all rebuild from.
-/// Sven extended it to Empryo on 2026-10-06 (Empryo harness spec). Empryo's terminal app ignores launch flags, so its pick rides the session row and is typed through its own `/models` and `/effort` once it is up, which also saves the model as Empryo's default (session_chat_empryo_launch_selection.rs).
+/// Sven extended it to Empryo on 2026-10-06 (Empryo harness spec). Empryo's terminal app ignores launch flags, so the model goes into a session folder Ghostex seeds and launches with `--session`, and the effort is typed with `/effort` once Empryo is up; neither changes Empryo's default. A resume keeps the model (it reopens that tab), but Empryo 3.9.0-beta drops a tab's effort when it resumes it (seen 2026-10-06), so the effort lasts until the session restarts (session_chat_empryo_launch_selection.rs).
 /// SEE-ALSO: server/src/ghostex_cli/actions/create.rs (create-agent), server/src/ghostex_cli/board.rs and server/src/board_start_work.rs (board start-work).
 fn apply_requested_agent_model(
+    project: &Value,
     agent_id: &str,
     agent_config: &Map<String, Value>,
     launch_settings: &Map<String, Value>,
     params: &Map<String, Value>,
     command: Option<String>,
     runtime_settings: &mut Map<String, Value>,
-) -> Result<Option<String>, DomainStateError> {
+) -> Result<(Option<String>, Option<String>), DomainStateError> {
     let model = requested_agent_model_option(params, "agentModel")?;
     let effort = requested_agent_model_option(params, "agentEffort")?;
     if model.is_none() && effort.is_none() {
-        return Ok(command);
+        return Ok((command, None));
     }
     let family = resume_agent_family_id(Some(agent_id.to_string()), agent_config, launch_settings)
         .filter(|family| {
@@ -399,15 +407,21 @@ fn apply_requested_agent_model(
             )
         })?;
     if family == "empryo" {
-        let selection = crate::session_chat_empryo_launch_selection::empryo_launch_selection(
-            model.as_deref(),
-            effort.as_deref(),
-        )?;
-        crate::session_chat_empryo_launch_selection::record_empryo_launch_selection(
-            runtime_settings,
-            selection,
-        );
-        return Ok(command);
+        use crate::session_chat_empryo_launch_selection as launch;
+        let model = launch::empryo_launch_model(model.as_deref())?;
+        let cwd = read_text(params, "cwd")
+            .or_else(|| read_text_value(project, "path"))
+            .ok_or_else(|| {
+                DomainStateError::bad_request("The project has no folder to start Empryo in.")
+            })?;
+        let session_id = launch::seed_empryo_launch_session(std::path::Path::new(&cwd), model)?;
+        runtime_settings.insert("agentSessionId".to_string(), json!(session_id));
+        if let Some(effort) = effort.as_deref() {
+            launch::record_empryo_launch_effort(runtime_settings, model, effort);
+        }
+        // Only the launch plan's command names the seeded session (as Pi's `--session-id`), so
+        // the saved base command that resume and fork rebuild from stays plain.
+        return Ok((command, Some(session_id)));
     }
     if family == "zcode" {
         // CDXC:Coordinators 2026-10-04 WHY:
@@ -425,7 +439,7 @@ fn apply_requested_agent_model(
                 "A ZCode thread keeps its configured model; only a coordinator's own model can be set.",
             ));
         }
-        return Ok(command);
+        return Ok((command, None));
     }
     if family == "pi"
         && effort
@@ -439,7 +453,8 @@ fn apply_requested_agent_model(
     let base = command
         .or_else(|| default_agent_command(&family).map(str::to_string))
         .unwrap_or_else(|| family.clone());
-    with_agent_model_options(&base, &family, model.as_deref(), effort.as_deref()).map(Some)
+    with_agent_model_options(&base, &family, model.as_deref(), effort.as_deref())
+        .map(|command| (Some(command), None))
 }
 
 /// CDXC:Coordinators 2026-09-30 WHY:

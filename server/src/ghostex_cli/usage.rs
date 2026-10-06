@@ -206,7 +206,7 @@ pub fn usage() -> String {
         ),
         format_help_command(
             "create-agent <agentId> --project-id id [--group-id id] [--model m] [--effort e] [--first-input-draft text] [--run-on location] [--defer-start] [--replace-empty-sessions]",
-            "Create and start a configured agent session; --model/--effort (Claude, Codex; Pi takes provider/model and a thinking level) apply to this session only; --first-input-draft stages text in its input without sending; --run-on local|docker|hetzner|vercel|daytona|e2b|digitalocean|docker:<host> runs Claude, Codex, OpenCode or Pi in an agentbox box",
+            "Create and start a configured agent session; --model/--effort (Claude, Codex; Pi takes provider/model and a thinking level) apply to this session only; Empryo takes provider/model and starts on it without changing Empryo's default; --first-input-draft stages text in its input without sending; --run-on local|docker|hetzner|vercel|daytona|e2b|digitalocean|docker:<host> runs Claude, Codex, OpenCode or Pi in an agentbox box",
         ),
         format_help_command(
             "board start-work <bead-id> [--agent id] [--model m] [--effort e] [--project-path path|--project-id id] [--json]",

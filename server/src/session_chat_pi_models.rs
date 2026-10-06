@@ -732,8 +732,48 @@ fn empryo_tab_model(
     session_id: &str,
 ) -> Option<String> {
     let session = repository.get_session(project_id, session_id).ok()??;
-    let path = read_runtime_text(&session, "agentSessionPath")?;
-    let meta = std::fs::read(Path::new(&path).with_file_name("meta.json")).ok()?;
+    empryo_tab_model_at(&empryo_session_log(repository, &session)?)
+}
+
+/// An Empryo session row's `session.jsonl`: the path its hooks reported, else the folder
+/// `empryo --session` opens, `<cwd>/.empryo/sessions/<agentSessionId>/` under the session's working
+/// folder (its project's path when it has none), which is where a launch model's seeded session
+/// lives before any hook has named it.
+pub(crate) fn empryo_session_log(
+    repository: &DomainRepository<'_>,
+    session: &Value,
+) -> Option<std::path::PathBuf> {
+    if let Some(path) = read_runtime_text(session, "agentSessionPath") {
+        return Some(path.into());
+    }
+    let id = read_runtime_text(session, "agentSessionId")
+        .filter(|id| crate::session_chat_empryo_mirror::is_safe_empryo_session_id(id))?;
+    let text = |value: &Value, key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_string)
+    };
+    let cwd = text(session, "cwd").or_else(|| {
+        let project = repository
+            .get_project(&text(session, "projectId")?)
+            .ok()??;
+        text(&project, "path")
+    })?;
+    Some(
+        Path::new(&cwd)
+            .join(".empryo")
+            .join("sessions")
+            .join(id)
+            .join("session.jsonl"),
+    )
+}
+
+/// [`empryo_tab_model`] for the `session.jsonl` at `log`.
+pub(crate) fn empryo_tab_model_at(log: &Path) -> Option<String> {
+    let meta = std::fs::read(log.with_file_name("meta.json")).ok()?;
     let meta = serde_json::from_slice::<Value>(&meta).ok()?;
     let active = meta.get("activeTabId").and_then(Value::as_str);
     let tabs = meta.get("tabs")?.as_array()?;

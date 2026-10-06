@@ -54,7 +54,9 @@ fn empryo_model_search(screen: &str) -> Option<(String, Vec<EmpryoResultRow>)> {
         .lines()
         .map(crate::session_chat_options::strip_ansi_sgr)
         .collect();
-    let title = lines.iter().rposition(|line| line.contains("Select Model"))?;
+    let title = lines
+        .iter()
+        .rposition(|line| line.contains("Select Model"))?;
     let search = title
         + lines[title..]
             .iter()
@@ -73,7 +75,9 @@ fn empryo_model_search(screen: &str) -> Option<(String, Vec<EmpryoResultRow>)> {
             .position(|line| line.contains(" Results "))?;
     let mut rows = Vec::new();
     for line in &lines[header + 1..] {
-        let Some(at) = line.rfind("\u{251c}\u{2500}").or_else(|| line.rfind("\u{2570}\u{2500}"))
+        let Some(at) = line
+            .rfind("\u{251c}\u{2500}")
+            .or_else(|| line.rfind("\u{2570}\u{2500}"))
         else {
             break;
         };
@@ -146,7 +150,10 @@ fn empryo_shows_model(shown: &str, model: &str, labels: &[String]) -> bool {
 }
 
 impl PickerDriver<'_> {
-    pub(super) async fn drive_empryo(&self, plan: &CodexPickerPlan) -> Result<(), DomainStateError> {
+    pub(super) async fn drive_empryo(
+        &self,
+        plan: &CodexPickerPlan,
+    ) -> Result<(), DomainStateError> {
         let id = plan
             .model
             .split_once('/')
@@ -155,11 +162,26 @@ impl PickerDriver<'_> {
             .ok_or_else(|| invalid_params("An Empryo model is picked as provider/id."))?;
         let labels = pi_family_terminal_labels(PiFamilyAgent::Empryo, &plan.model);
         self.composer_ready("empryo").await?;
-        let shown = self.capture().await.and_then(|screen| empryo_footer(&screen));
-        if !shown
-            .as_ref()
-            .is_some_and(|(model, _)| empryo_shows_model(model, &plan.model, &labels))
-        {
+        let shown = self
+            .capture()
+            .await
+            .and_then(|screen| empryo_footer(&screen));
+        // CDXC:AgentProviders 2026-10-06 WHY:
+        // Empryo paints its config's default model for a moment while it restores a `--session`
+        // tab, so a pick read off that first frame typed `/models` for a model the tab already had
+        // and saved it as the default (seen live on a seeded launch). The tab's own `meta.json` is
+        // exact, so it decides first and the statusline only when there is none.
+        let recorded = plan
+            .empryo_session_log
+            .as_deref()
+            .and_then(crate::session_chat_pi_models::empryo_tab_model_at);
+        let switched = match recorded {
+            Some(recorded) => recorded != plan.model,
+            None => !shown
+                .as_ref()
+                .is_some_and(|(model, _)| empryo_shows_model(model, &plan.model, &labels)),
+        };
+        if switched {
             let result = self.empryo_switch_model(plan, id, &labels).await;
             if result.is_err() {
                 self.empryo_close_panel().await;
@@ -188,7 +210,7 @@ impl PickerDriver<'_> {
             .await
         {
             Ok(()) => Ok(()),
-            Err(_) => Err(self.empryo_effort_refusal(plan).await),
+            Err(_) => Err(self.empryo_effort_refusal(plan, switched).await),
         }
     }
 
@@ -204,10 +226,13 @@ impl PickerDriver<'_> {
         })
         .await?;
         self.write(&plan.model).await?;
+        // The results draw a frame before their focus marker, so wait for both.
         let mut rows = self
             .wait_for("Empryo model search", |screen| {
                 empryo_model_search(screen)
-                    .filter(|(query, _)| query == &plan.model)
+                    .filter(|(query, rows)| {
+                        query == &plan.model && rows.iter().any(|row| row.focused)
+                    })
                     .map(|(_, rows)| rows)
             })
             .await?;
@@ -236,7 +261,7 @@ impl PickerDriver<'_> {
             let focused = rows
                 .iter()
                 .position(|row| row.focused)
-                .ok_or_else(|| dialog_mismatch("Empryo model panel", "no focused row"))?;
+                .ok_or_else(|| agent_busy("Empryo's model panel lost its highlighted row."))?;
             if focused == target {
                 self.write(CODEX_SUBMIT).await?;
                 return self
@@ -258,7 +283,8 @@ impl PickerDriver<'_> {
             rows = self
                 .wait_for("Empryo model focus", |screen| {
                     let (_, rows) = empryo_model_search(screen)?;
-                    (rows.iter().position(|row| row.focused) != Some(focused)).then_some(rows)
+                    matches!(rows.iter().position(|row| row.focused), Some(now) if now != focused)
+                        .then_some(rows)
                 })
                 .await?;
         }
@@ -266,8 +292,13 @@ impl PickerDriver<'_> {
     }
 
     /// Why Empryo kept its effort: the levels its `/effort` panel offers for the current model,
-    /// read and closed again, or that the model takes none.
-    async fn empryo_effort_refusal(&self, plan: &CodexPickerPlan) -> DomainStateError {
+    /// read and closed again, or that the model takes none. Says so when this pick did switch the
+    /// model, which Empryo keeps.
+    async fn empryo_effort_refusal(
+        &self,
+        plan: &CodexPickerPlan,
+        switched: bool,
+    ) -> DomainStateError {
         if (self.cancelled)() || self.composer_ready("empryo").await.is_err() {
             return picker_timeout("applied effort");
         }
@@ -285,15 +316,20 @@ impl PickerDriver<'_> {
             let _ = self.write(PI_SELECTOR_CANCEL).await;
             tokio::time::sleep(Duration::from_millis(PICKER_CANCEL_SETTLE_MS)).await;
         }
+        let lead = if switched {
+            format!("Empryo switched to {}, but kept its effort: ", plan.model)
+        } else {
+            String::new()
+        };
         match ladder {
             Ok(ladder) => unsupported_selection(format!(
-                "Empryo offers {} for {}, not {}.",
+                "{lead}Empryo offers {} for {}, not {}.",
                 ladder.join(", "),
                 plan.model,
                 plan.effort
             )),
             Err(_) => unsupported_selection(format!(
-                "Empryo has no effort control for {}.",
+                "{lead}Empryo has no effort control for {}.",
                 plan.model
             )),
         }
