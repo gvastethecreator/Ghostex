@@ -831,9 +831,12 @@ impl ZmxQueuedSessionMessage {
     */
     fn steps(&self) -> Vec<crate::session_chat_send::SessionChatSendStep> {
         let agent = crate::session_chat_composer::session_chat_composer_agent_id(&self.session);
-        if agent.as_deref() == Some("grok") {
+        // Empryo opens its command palette on the Ctrl+K below and steers a running turn on a
+        // bare Return, so it takes the chat send's own clear and submit (CDXC:SessionChat
+        // 2026-10-06 in session_chat_send/steps.rs).
+        if let Some(agent @ ("grok" | "empryo")) = agent.as_deref() {
             let mut steps = crate::session_chat_send::build_session_chat_message_steps(
-                Some("grok"),
+                Some(agent),
                 &self.text,
                 &[],
                 false,

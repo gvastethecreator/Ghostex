@@ -62,6 +62,15 @@ pub enum SessionChatSendStep {
     AlignQuestionRow(crate::session_chat_question_row_align::QuestionRowTarget),
     /// See CDXC:SessionChat in session_chat_claude_question_prep.rs.
     PrepareClaudeQuestion(crate::session_chat_claude_question_prep::ClaudeQuestionPrep),
+    /// Submit Empryo's input: Return while it is idle, Alt+Q while a turn runs, read off its
+    /// input box when the key is due.
+    SubmitEmpryo,
+    /// Read the text in Empryo's input box, without touching it, into the job's draft sink.
+    ReadEmpryoDraft,
+    /// Stop the job when Empryo's input box holds text other than `replacement`.
+    GuardEmpryoDraft {
+        replacement: String,
+    },
     /// Read Codex's or Claude Code's input box after the Return; see session_chat_send_submit.rs.
     VerifySubmitted {
         agent: String,
@@ -239,6 +248,7 @@ pub fn build_session_chat_message_steps(
     image_paths: &[String],
     dismiss_claude_panel: bool,
 ) -> Vec<SessionChatSendStep> {
+    let empryo = crate::agents::identity::normalize_agent_id(agent).as_deref() == Some("empryo");
     let mut steps = Vec::new();
     if dismiss_claude_panel {
         steps.push(SessionChatSendStep::DismissClaudePanel {
@@ -263,9 +273,11 @@ pub fn build_session_chat_message_steps(
                 SESSION_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
             ));
         }
-        steps.push(SessionChatSendStep::Write(build_session_chat_paste_bytes(
-            text,
-        )));
+        steps.push(SessionChatSendStep::Write(if empryo {
+            build_empryo_input_bytes(text)
+        } else {
+            build_session_chat_paste_bytes(text)
+        }));
     }
     let mut verify = session_chat_verify_step(text);
     if crate::session_chat_options::is_session_chat_option_command_text(agent, text) {
@@ -282,7 +294,15 @@ pub fn build_session_chat_message_steps(
             // message.
             .unwrap_or(SessionChatSendStep::SleepMs(SESSION_CHAT_SUBMIT_DELAY_MS)),
     );
-    steps.push(SessionChatSendStep::Write(SESSION_CHAT_SUBMIT.to_string()));
+    /*
+    CDXC:SessionChat 2026-10-06 DECISION:
+    "Send. Text plus Enter when idle, and Alt+Q when busy, so a send queues by default." Enter in a working Empryo steers the running turn; Alt+Q queues the message as its own turn. Multi-line text is typed with Shift+Enter between lines rather than pasted (CDXC:SessionChat 2026-10-06 in input_bytes.rs).
+    */
+    steps.push(if empryo {
+        SessionChatSendStep::SubmitEmpryo
+    } else {
+        SessionChatSendStep::Write(SESSION_CHAT_SUBMIT.to_string())
+    });
     if let Some(agent) = crate::agents::identity::normalize_agent_id(agent)
         .filter(|agent| crate::session_chat_send_submit::verifies_submission(agent))
         .filter(|_| !text.trim().is_empty())

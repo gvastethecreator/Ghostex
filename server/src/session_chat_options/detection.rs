@@ -403,12 +403,19 @@ pub fn detect_session_chat_terminal_state(
         (None, true)
     };
     let prompt = screen.and_then(|capture| {
-        crate::session_chat::detect_cursor_question_prompt(agent_id, &capture.text).or_else(|| {
-            crate::session_chat_freebuff_question::detect_freebuff_question_prompt(
-                agent_id,
-                &capture.text,
-            )
-        })
+        crate::session_chat::detect_cursor_question_prompt(agent_id, &capture.text)
+            .or_else(|| {
+                crate::session_chat_freebuff_question::detect_freebuff_question_prompt(
+                    agent_id,
+                    &capture.text,
+                )
+            })
+            .or_else(|| {
+                crate::session_chat_empryo_question::detect_empryo_question_prompt(
+                    agent_id,
+                    &capture.text,
+                )
+            })
     });
     /*
     CDXC:AgentScreenDetection (settled 2026-08-30): probed only counts once

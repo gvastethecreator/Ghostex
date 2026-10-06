@@ -16,6 +16,9 @@ delayed Enter.
 */
 pub const SESSION_CHAT_CLEAR_INPUT_SETTLE_MS: u64 = 150;
 pub const SESSION_CHAT_SUBMIT: &str = "\r";
+/// Empryo's Alt+Q, which queues its input as a turn of its own after the running one; Enter
+/// there would steer the running turn instead.
+pub const SESSION_CHAT_EMPRYO_QUEUE_SUBMIT: &str = "\u{1b}q";
 /*
 CDXC:Clipboard 2026-08-24:
 Why the Enter is closed-loop. The old sequence wrote the paste body, slept
