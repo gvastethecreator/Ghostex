@@ -280,23 +280,37 @@ pub(crate) async fn run_manual_session_title_generation_job(
         write owns the composer and discards residue, and terminal→chat view
         switching stays the loss-safe path for text the user wants to keep.
         */
-        let mut manual_title_steps = crate::session_chat_send::build_agent_tui_clear_input_steps(
-            Some("manual-title-draft-kill"),
-            &command_text,
-        );
-        manual_title_steps.extend([
-            crate::session_chat_send::SessionChatSendStep::WriteFrom {
-                source: "manual-title-command".to_string(),
-                payload: command_text.clone(),
-            },
-            crate::session_chat_send::SessionChatSendStep::SleepMs(
-                GXSERVER_FIRST_PROMPT_STAGED_COMMAND_SUBMIT_DELAY_MS,
-            ),
-            crate::session_chat_send::SessionChatSendStep::WriteFrom {
-                source: "manual-title-submit".to_string(),
-                payload: crate::session_chat_send::SESSION_CHAT_SUBMIT.to_string(),
-            },
-        ]);
+        let agent_name = first_prompt_agent_name(&latest_session);
+        // Empryo opens its command palette on the burst's Ctrl+K, so it takes the chat send's own
+        // Ctrl+U clear and submit, as `/api/sendSessionMessage` does (zmx/endpoint.rs).
+        let manual_title_steps =
+            if normalize_agent_name(agent_name.as_deref()).as_deref() == Some("empryo") {
+                crate::session_chat_send::build_session_chat_message_steps(
+                    agent_name.as_deref(),
+                    &command_text,
+                    &[],
+                    false,
+                )
+            } else {
+                let mut steps = crate::session_chat_send::build_agent_tui_clear_input_steps(
+                    Some("manual-title-draft-kill"),
+                    &command_text,
+                );
+                steps.extend([
+                    crate::session_chat_send::SessionChatSendStep::WriteFrom {
+                        source: "manual-title-command".to_string(),
+                        payload: command_text.clone(),
+                    },
+                    crate::session_chat_send::SessionChatSendStep::SleepMs(
+                        GXSERVER_FIRST_PROMPT_STAGED_COMMAND_SUBMIT_DELAY_MS,
+                    ),
+                    crate::session_chat_send::SessionChatSendStep::WriteFrom {
+                        source: "manual-title-submit".to_string(),
+                        payload: crate::session_chat_send::SESSION_CHAT_SUBMIT.to_string(),
+                    },
+                ]);
+                steps
+            };
         crate::session_chat_send::enqueue_session_write_sequence(
             &latest_session,
             &project_id,

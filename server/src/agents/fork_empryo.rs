@@ -1,5 +1,6 @@
 //! Empryo fork: a copy of the session folder under a new id, resumed with `empryo --session`.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -9,17 +10,20 @@ use serde_json::{json, Map, Value};
 use super::*;
 use crate::domain::DomainStateError;
 use crate::session_chat_empryo_mirror::{is_safe_empryo_session_id, pending_prompts};
+use crate::session_git_status::run_git_probe_command;
 
 /// CDXC:SessionFork 2026-10-06 DECISION:
 /// "Fork. Gated on a spike that copies the session folder under a new id, cuts `session.jsonl` at the chosen turn, drops `writer.lock` and resumes with `--session`. If it fails, fork stays off for Empryo, with no fallback." The spike passed on Empryo 3.9.0-beta (card agent-bo-95422942): the resumed copy answered from the kept turns only and the original's files stayed byte-identical. Ghostex's Fork has no turn picker, so the copy keeps every finished turn and drops a turn still in flight.
 ///
 /// CDXC:SessionFork 2026-10-06 WHY:
-/// Empryo replays history from `session.jsonl` and recomputes `messageRange`, but `--session` reports "Session not found" without a `meta.json`, so both files are written: the log first, then the index whose `id` names the folder. `~/.empryo/threads.db` registers the copy on its first resume and is never written here. `.lock/` and `prompt-prefix-*.json` stay behind; Empryo recreates them. The fork's name goes into Empryo's own record as a custom title, the same name the `/rename` path persists for Claude and Codex.
+/// Empryo replays history from `session.jsonl` and recomputes `messageRange`, but `--session` reports "Session not found" without a `meta.json`, so both files are written: the log first, then the index whose `id` names the folder. `~/.empryo/threads.db` registers the copy on its first resume and is never written here. `.lock/` and `prompt-prefix-*.json` stay behind; Empryo recreates them. The fork's name goes into Empryo's own records, the way the `/rename` path persists `Fork: <name>` for Claude and Codex: `Fork: ` before Empryo's own session title, kept as a custom title, and before the active tab's label, which Empryo puts in its terminal title and Ghostex shows as the session name (CDXC:SessionFork 2026-09-11).
+///
+/// CDXC:SessionFork 2026-10-06 WHY:
+/// Empryo deletes checkpoint tags in two places: deleting a session runs `git tag -d` on every tag its `meta.json` lists, and closing a tab deletes every `empryo/cp-<first 8 of tab id>` tag. A copy that kept the original's tab ids and tag names would delete the original's checkpoints either way. So the fork gets fresh tab ids and its own copy of each inherited tag (`git tag <new> <old>`, renamed to the new tab's prefix), and every reference in the copied log and index is rewritten; undo in the fork still restores files, and nothing the fork does can name the original's tags.
 pub(crate) fn fork_empryo_session_folder(
     project: &Value,
     source_session: &Value,
     fork_id: &str,
-    fork_title: &str,
 ) -> Result<(), DomainStateError> {
     let runtime = object_field(source_session, "runtimeSettings");
     let source_id = read_text_from_map(&runtime, "agentSessionId")
@@ -43,21 +47,34 @@ pub(crate) fn fork_empryo_session_folder(
         .ok_or_else(|| {
             DomainStateError::bad_request("Empryo's session index (meta.json) is unreadable.")
         })?;
-    let fork_log = fork_session_log(&log, fork_id, fork_title).ok_or_else(|| {
+    let names = ForkNames::of(&meta);
+    let (fork_log, mut references) = fork_session_log(&log, fork_id, &names).ok_or_else(|| {
         DomainStateError::bad_request(
             "Fork is only available after an Empryo turn has finished. Wait for its reply, then fork it.",
         )
     })?;
-    let fork_meta = fork_session_meta(meta, &source_id, fork_id, fork_title);
+    references.add_meta(&meta);
+    let renames = references.renames();
+    let fork_meta = fork_session_meta(meta, &source_id, fork_id, &names);
     let meta_text = serde_json::to_string_pretty(&fork_meta)
         .map_err(|error| DomainStateError::corrupt_state(error.to_string()))?;
+    let (fork_log, meta_text) = (renames.apply(&fork_log), renames.apply(&meta_text));
+    let repo =
+        read_text_value(&fork_meta, "cwd").or_else(|| read_text_value(source_session, "cwd"));
     create_private_dir(&fork_dir).map_err(io_error)?;
+    let copied_tags = repo
+        .as_deref()
+        .map(|repo| copy_checkpoint_tags(repo, &renames.tag_copies))
+        .unwrap_or_default();
     let written = write_private_file(&fork_dir.join("session.jsonl"), fork_log.as_bytes())
         .and_then(|()| write_private_file(&fork_dir.join("meta.json"), meta_text.as_bytes()));
     if let Err(error) = written {
-        // The folder was created by this call (`create` refuses an existing one), so it holds only
-        // this fork's half-written files.
+        // The folder was created by this call (`create` refuses an existing one) and the tags carry
+        // the fork's fresh tab prefix, so both hold only this fork's half-made state.
         let _ = fs::remove_dir_all(&fork_dir);
+        if let Some(repo) = repo.as_deref() {
+            delete_checkpoint_tags(repo, &copied_tags);
+        }
         return Err(io_error(error));
     }
     Ok(())
@@ -91,7 +108,11 @@ fn empryo_session_dir(
 /// chat mirror's rule (`CDXC:SessionChat` in `session_chat_empryo_mirror.rs`), so the fork keeps the
 /// turns the chat shows as finished; anything after the last one that starts another turn is cut,
 /// as is a torn last line. `None` when no turn has finished.
-fn fork_session_log(log: &str, fork_id: &str, fork_title: &str) -> Option<String> {
+fn fork_session_log(
+    log: &str,
+    fork_id: &str,
+    names: &ForkNames,
+) -> Option<(String, ForkReferences)> {
     let lines: Vec<(&str, RecordHead)> = log
         .split_inclusive('\n')
         .take_while(|line| line.ends_with('\n'))
@@ -111,19 +132,35 @@ fn fork_session_log(log: &str, fork_id: &str, fork_title: &str) -> Option<String
         .max()
         .unwrap_or(0)
         + 1;
-    let title = json!({
+    let mut appended = vec![json!({
         "k": "title",
-        "title": fork_title,
+        "title": names.title,
         "custom": true,
         "seq": next_seq,
         "ts": now_ms(),
-    });
+    })];
+    if let Some((tab_id, label)) = &names.active_tab {
+        appended.push(json!({
+            "k": "tab",
+            "tabId": tab_id,
+            "patch": { "label": label },
+            "seq": next_seq + 1,
+            "ts": now_ms(),
+        }));
+    }
     let mut fork_log = format!("{header}\n");
-    lines[1..end]
-        .iter()
-        .for_each(|(line, _)| fork_log.push_str(line));
-    fork_log.push_str(&format!("{title}\n"));
-    Some(fork_log)
+    let mut references = ForkReferences::default();
+    for (line, record) in &lines[1..end] {
+        fork_log.push_str(line);
+        references.tab_ids.extend(record.tab_id.iter().cloned());
+        if let Some(patch) = &record.patch {
+            references.add_tags(patch);
+        }
+    }
+    for record in appended {
+        fork_log.push_str(&format!("{record}\n"));
+    }
+    Some((fork_log, references))
 }
 
 /// The fields of one `session.jsonl` record the cut reads; the large `ui`/`core` copies are skipped.
@@ -134,6 +171,8 @@ struct RecordHead {
     seq: Option<u64>,
     status: Option<String>,
     patch: Option<Value>,
+    #[serde(rename = "tabId")]
+    tab_id: Option<String>,
 }
 
 impl RecordHead {
@@ -152,14 +191,156 @@ impl RecordHead {
     }
 }
 
-fn fork_session_meta(mut meta: Value, source_id: &str, fork_id: &str, fork_title: &str) -> Value {
+const CHECKPOINT_TAG_PREFIX: &str = "empryo/cp-";
+
+/// The tab ids and checkpoint tags a fork copies from its source.
+#[derive(Default)]
+struct ForkReferences {
+    tab_ids: BTreeSet<String>,
+    tags: BTreeSet<String>,
+}
+
+impl ForkReferences {
+    fn add_meta(&mut self, meta: &Value) {
+        for tab in meta
+            .get("tabs")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            self.tab_ids.extend(read_text_value(tab, "id"));
+            self.add_tags(tab);
+        }
+    }
+
+    /// A tab's `checkpointTags[].gitTag` and `retiredCheckpointTags[]`, in a meta tab or a tab patch.
+    fn add_tags(&mut self, tab: &Value) {
+        let live = tab.get("checkpointTags").and_then(Value::as_array);
+        let retired = tab.get("retiredCheckpointTags").and_then(Value::as_array);
+        let names = live
+            .into_iter()
+            .flatten()
+            .filter_map(|checkpoint| checkpoint.get("gitTag"))
+            .chain(retired.into_iter().flatten())
+            .filter_map(Value::as_str)
+            .filter(|name| name.starts_with(CHECKPOINT_TAG_PREFIX));
+        self.tags.extend(names.map(str::to_string));
+    }
+
+    /// A fresh id per tab, its tag prefix moved with it, and the tag copies that rename implies.
+    fn renames(&self) -> ForkRenames {
+        let tabs: Vec<(String, String)> = self
+            .tab_ids
+            .iter()
+            .map(|id| (id.clone(), uuid::Uuid::new_v4().to_string()))
+            .collect();
+        let tag_prefixes = tabs
+            .iter()
+            .flat_map(|(old, new)| {
+                let (old, new) = (checkpoint_tag_prefix(old), checkpoint_tag_prefix(new));
+                [".", "-"]
+                    .map(|separator| (format!("{old}{separator}"), format!("{new}{separator}")))
+            })
+            .collect();
+        let mut renames = ForkRenames {
+            tabs,
+            tag_prefixes,
+            tag_copies: Vec::new(),
+        };
+        renames.tag_copies = self
+            .tags
+            .iter()
+            .map(|tag| (tag.clone(), renames.apply(tag)))
+            .filter(|(old, new)| old != new)
+            .collect();
+        renames
+    }
+}
+
+struct ForkRenames {
+    tabs: Vec<(String, String)>,
+    tag_prefixes: Vec<(String, String)>,
+    tag_copies: Vec<(String, String)>,
+}
+
+impl ForkRenames {
+    /// One pass per tab id and per tab's tag prefix. Tab ids are UUIDs and a tag prefix carries only
+    /// an id's first 8 characters before a `.` or `-`, so neither replacement touches the other's text.
+    fn apply(&self, text: &str) -> String {
+        self.tabs
+            .iter()
+            .chain(&self.tag_prefixes)
+            .fold(text.to_string(), |text, (old, new)| {
+                text.replace(old.as_str(), new)
+            })
+    }
+}
+
+/// `empryo/cp-` and Empryo's tag segment for a tab: its id's word characters, at most 8.
+fn checkpoint_tag_prefix(tab_id: &str) -> String {
+    let segment: String = tab_id
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+        .take(8)
+        .collect();
+    format!("{CHECKPOINT_TAG_PREFIX}{segment}")
+}
+
+/// `git tag <new> <old>` for each inherited checkpoint; a tag the source no longer has is skipped,
+/// and undo in the fork then behaves as it would have in the source. Returns the tags created.
+fn copy_checkpoint_tags(repo: &str, copies: &[(String, String)]) -> Vec<String> {
+    copies
+        .iter()
+        .filter(|(old, new)| run_git_probe_command(repo, &["tag", "--", new, old]).is_some())
+        .map(|(_, new)| new.clone())
+        .collect()
+}
+
+fn delete_checkpoint_tags(repo: &str, tags: &[String]) {
+    if !tags.is_empty() {
+        let mut args = vec!["tag", "-d", "--"];
+        args.extend(tags.iter().map(String::as_str));
+        run_git_probe_command(repo, &args);
+    }
+}
+
+/// `Fork: ` before Empryo's own session title and before the active tab's label.
+struct ForkNames {
+    title: String,
+    active_tab: Option<(String, String)>,
+}
+
+impl ForkNames {
+    fn of(meta: &Value) -> Self {
+        let title = read_text_value(meta, "title").unwrap_or_else(|| "Empryo session".to_string());
+        let active_tab = read_text_value(meta, "activeTabId").and_then(|active| {
+            let tabs = meta.get("tabs").and_then(Value::as_array)?;
+            let tab = tabs
+                .iter()
+                .find(|tab| tab.get("id").and_then(Value::as_str) == Some(active.as_str()))?;
+            let label = read_text_value(tab, "label")?;
+            Some((active, fork_title(&label)))
+        });
+        Self {
+            title: fork_title(&title),
+            active_tab,
+        }
+    }
+}
+
+fn fork_session_meta(mut meta: Value, source_id: &str, fork_id: &str, names: &ForkNames) -> Value {
     meta["id"] = json!(fork_id);
-    meta["title"] = json!(fork_title);
-    meta["customTitle"] = json!(fork_title);
+    meta["title"] = json!(names.title);
+    meta["customTitle"] = json!(names.title);
     if let Some(tabs) = meta.get_mut("tabs").and_then(Value::as_array_mut) {
         for tab in tabs {
             if tab.get("sessionId").and_then(Value::as_str) == Some(source_id) {
                 tab["sessionId"] = json!(fork_id);
+            }
+            if let Some((active, label)) = &names.active_tab {
+                if tab.get("id").and_then(Value::as_str) == Some(active.as_str()) {
+                    tab["label"] = json!(label);
+                }
             }
         }
     }

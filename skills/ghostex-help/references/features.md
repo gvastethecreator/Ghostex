@@ -578,6 +578,8 @@ syncs those names without running a first-prompt title job or blocking terminal
 input. Pi and OMP use the Title Generation Agent for first-prompt names.
 Manual Generate Name and `/rename` in chat remain available for Claude and Codex.
 In a Hermes chat, `/rename <name>` is sent as Hermes' own `/title <name>`.
+Renaming an Empryo session from Ghostex (the Rename dialog or `ghostex rename-command`)
+types Empryo's own `/tab rename <name>`, so Empryo keeps the name too.
 ZCode sessions rename from the sidebar and `ghostex rename-command` too: the name
 is saved in ZCode's own session store once its session row exists (after the
 first prompt), and ZCode's automatic naming will not replace it. Before that,
@@ -587,10 +589,12 @@ Fork (a session's right-click menu, or More actions in its chat) opens the new
 session beside the original and switches to it. It starts as
 `Fork: <original name>` and saves that name through the agent's own rename
 command so it survives reopening the conversation.
-Fork works for Claude, Codex, Pi and Empryo sessions. Empryo has no fork command
-of its own, so Ghostex copies the Empryo conversation up to its last finished
+Fork works for Claude, Codex, Pi and Empryo sessions. Empryo has no command-line
+fork, so Ghostex copies the Empryo conversation up to its last finished
 reply under a new id and opens that copy; fork an Empryo session once a turn has
-finished.
+finished. The copy gets its own copies of Empryo's checkpoints, so undo works in
+the fork, and deleting or closing either session leaves the other's checkpoints
+alone.
 Once a conversation has forks, a small branch button in the chat's top right
 lists every session that shares the earlier history, including the thread you
 forked away from, and switches to the one you pick; a stopped branch is resumed

@@ -61,12 +61,7 @@ pub(crate) fn fork_session(
         .into());
     }
     if let Some(fork_id) = plan.get("empryoForkSessionId").and_then(Value::as_str) {
-        super::fork_empryo::fork_empryo_session_folder(
-            &project,
-            &source_session,
-            fork_id,
-            &fork_session_title(&source_session),
-        )?;
+        super::fork_empryo::fork_empryo_session_folder(&project, &source_session, fork_id)?;
     }
     let fork_params = create_agent_fork_session_params(&project, &source_session, &plan);
     let created_session = repository.create_session(
@@ -199,14 +194,9 @@ pub(crate) fn provisional_fork_title(session: &Value) -> Option<String> {
     read_text_value(session, "title").filter(|title| title.starts_with("Fork: "))
 }
 
-fn fork_session_title(source_session: &Value) -> String {
-    let source_title = source_session
-        .get("title")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("Terminal Session");
-    format!("Fork: {source_title}")
+/// `Fork: <name>`, the name a fork starts with (CDXC:SessionFork 2026-09-11 above).
+pub(crate) fn fork_title(name: &str) -> String {
+    format!("Fork: {name}")
 }
 
 pub(crate) fn create_agent_fork_session_params(
@@ -228,7 +218,13 @@ pub(crate) fn create_agent_fork_session_params(
         .and_then(Value::as_str)
         .map(str::to_string)
         .filter(|value| !value.trim().is_empty());
-    let title = fork_session_title(source_session);
+    let source_title = source_session
+        .get("title")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("Terminal Session");
+    let title = fork_title(source_title);
     let cwd = read_text_value(source_session, "cwd").or_else(|| read_text_value(project, "path"));
     let mut launch_plan = Map::new();
     insert_optional_string(

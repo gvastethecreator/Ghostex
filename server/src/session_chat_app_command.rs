@@ -226,6 +226,11 @@ fn record_session_chat_app_command_inner(
 }
 
 fn app_command_title(command: &str) -> Option<String> {
+    // Empryo's rename is the two-word `/tab rename <name>`.
+    if let Some(title) = command.trim().strip_prefix("/tab rename ") {
+        let title = title.trim();
+        return (!title.is_empty()).then(|| title.to_string());
+    }
     let mut parts = command.trim().splitn(2, char::is_whitespace);
     let command_name = parts.next()?.to_ascii_lowercase();
     if !matches!(command_name.as_str(), "/rename" | "/name" | "/title") {
