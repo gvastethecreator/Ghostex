@@ -58,6 +58,7 @@ use crate::storage::open_gxserver_database;
 #[path = "session_chat_composer_input.rs"]
 mod input;
 pub use input::{claude_composer_draft, session_chat_composer_input, SessionChatComposerInput};
+pub(crate) use input::{empryo_composer_busy, empryo_input_unfocused};
 
 /// The row Hermes's live composer starts on, the one readiness reads, or `None` when it is not on screen.
 pub(crate) fn hermes_composer_row(screen_text: &str) -> Option<usize> {
@@ -133,12 +134,12 @@ pub struct SessionChatComposerReadiness {
 impl SessionChatComposerReadiness {
     /// CDXC:SessionChat 2026-09-08 DECISION:
     /// User: do not send while Grok is not ready. Missing capture evidence must hold its message just like a missing input box.
+    /// CDXC:AgentScreenDetection 2026-10-06 DECISION:
+    /// "Composer readiness. A send waits for a readable Empryo input box under the existing AgentScreenDetection decisions. A send into an unrecognised screen is refused." Ctrl+C on Empryo's empty input quits it, so nothing is typed until its input box is proven.
     pub fn blocks_message_for(&self, agent_id: Option<&str>) -> bool {
         self.is_not_ready()
-            || (matches!(
-                normalize_agent_id(agent_id).as_deref(),
-                Some("grok" | "codex" | "zcode")
-            ) && self.state != SessionChatComposerState::Ready)
+            || (requires_ready_composer(normalize_agent_id(agent_id).as_deref())
+                && self.state != SessionChatComposerState::Ready)
     }
 
     pub fn is_not_ready(&self) -> bool {
@@ -184,6 +185,11 @@ impl SessionChatComposerReadiness {
             dismissible: true,
         }
     }
+}
+
+/// The agents whose sends wait for positive evidence of the input box, never failing open.
+fn requires_ready_composer(agent: Option<&str>) -> bool {
+    matches!(agent, Some("grok" | "codex" | "zcode" | "empryo"))
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +252,9 @@ enum ComposerSignature {
     ShortRoundedBoxMarker { marker: char },
     /// The last rounded box above a fixed footer, holding no nested box (Freebuff).
     FooteredRoundedBox,
+    /// The lowest rounded box on screen, its first row opening with Empryo's prompt glyph or
+    /// spinner, with only the statusline below it.
+    EmpryoInputBox,
 }
 
 /// Tallest rounded box `TrailingRoundedFoot` will accept as a composer. Two
@@ -308,6 +317,8 @@ fn composer_signature(agent: &str) -> Option<ComposerSignature> {
         // Rounded box over `<model> · <folder> · /model to change` and `← for history · ? for
         // help`. Measured 2026-10-04, Freebuff 0.2.12.
         "freebuff" => ComposerSignature::FooteredRoundedBox,
+        // `╭─╮ / │ ◈ … │ / ╰─╯` with the statusline below. Measured 2026-10-06, Empryo 3.9.0-beta.
+        "empryo" => ComposerSignature::EmpryoInputBox,
         _ => return None,
     })
 }
@@ -717,6 +728,7 @@ fn signature_matches(signature: ComposerSignature, lines: &[String]) -> bool {
             })
         }
         ComposerSignature::FooteredRoundedBox => input::freebuff_input_region(lines).is_some(),
+        ComposerSignature::EmpryoInputBox => input::empryo_input_region(lines).is_some(),
     }
 }
 
@@ -768,6 +780,23 @@ pub fn detect_session_chat_composer_ready(
             });
         if let Some(reason) = blocked {
             return SessionChatComposerReadiness::not_ready(reason, screen_tail);
+        }
+    }
+    if agent == "empryo" {
+        if crate::session_chat_empryo_question::detect_empryo_choice_panel(screen_text).is_some() {
+            return SessionChatComposerReadiness::not_ready(
+                "Empryo is waiting for an answer to its question. Answer it in chat before sending."
+                    .to_string(),
+                screen_tail,
+            );
+        }
+        // Escape closes every Empryo panel without applying anything (verified live 2026-10-06
+        // on `/router`, `/models`, `/settings`, `/effort`, `/git status` and the Ctrl+K palette).
+        if empryo_input_unfocused(screen_text) {
+            return SessionChatComposerReadiness::not_ready_dismissible(
+                "An Empryo panel has the keyboard instead of the input box.".to_string(),
+                screen_tail,
+            );
         }
     }
     if is_claude_code_settings_screen(agent_id, screen_text) {
@@ -936,7 +965,7 @@ pub async fn wait_for_session_chat_composer(
     // User: cover Codex's input-owning states so we know when we can type. Require a readable, enabled composer before releasing a write, including when the terminal capture is unavailable.
     let agent = normalize_agent_id(agent_id);
     let codex = agent.as_deref() == Some("codex");
-    let require_ready = matches!(agent.as_deref(), Some("grok" | "codex" | "zcode"));
+    let require_ready = requires_ready_composer(agent.as_deref());
     let mut last_not_ready = require_ready.then(|| {
         SessionChatComposerReadiness::not_ready(
             format!(

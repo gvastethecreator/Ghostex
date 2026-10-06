@@ -444,7 +444,9 @@ pub(crate) async fn send_session_chat_message_with_draft(
     */
     let local_command = crate::session_chat_local_command::parse_session_chat_local_command(text)
         .filter(|(command, _)| {
-            !crate::session_chat_local_command::transcript_records_command_result(command)
+            // Empryo records no command in its session log, `/effort` included.
+            terminal_agent.as_deref() == Some("empryo")
+                || !crate::session_chat_local_command::transcript_records_command_result(command)
         });
     let capture_local_output = if terminal_agent.as_deref() == Some("codex") {
         crate::session_chat_codex_dialog::command_has_local_output(text)

@@ -320,7 +320,7 @@ pub(crate) async fn handle_answer_session_chat_prompt_http(
             let agent = session_chat_agent_for_session(&target.session);
             let screen_prompt = if matches!(
                 agent.as_deref(),
-                Some("cursor" | "cursor-agent" | "freebuff")
+                Some("cursor" | "cursor-agent" | "freebuff" | "empryo")
             ) {
                 crate::session_chat_options::SessionChatOptionDetector::new(state)
                     .detect(
@@ -525,6 +525,33 @@ pub(crate) async fn handle_answer_session_chat_prompt_http(
                         ),
                     )
                 }
+                Some("empryo") if !crate::session_chat_send::has_ask_answer(&selections) => {
+                    Vec::new()
+                }
+                Some("empryo") => {
+                    let keys =
+                        crate::session_chat_send::capture_session_terminal_text(&target.zmx_name)
+                            .await
+                            .and_then(|screen_text| {
+                                crate::session_chat_empryo_question::build_empryo_ask_answer_keys(
+                                    &screen_text,
+                                    &questions,
+                                    &selections,
+                                )
+                            });
+                    let Some(keys) = keys else {
+                        return domain_error_response(
+                            endpoint_path,
+                            request_id,
+                            DomainStateError {
+                                code: "invalidState",
+                                message: "Empryo's question is not on screen, so the answer was not sent. Answer it in the terminal."
+                                    .to_string(),
+                            },
+                        );
+                    };
+                    crate::session_chat_send::build_ask_answer_steps(&keys)
+                }
                 Some("cursor") => crate::session_chat_send::build_ask_answer_steps(
                     &crate::session_chat_send::build_cursor_ask_answer_keys(
                         &questions,
@@ -618,8 +645,14 @@ pub(crate) async fn handle_answer_session_chat_prompt_http(
                     .await
                     .as_deref()
                     .and_then(|text| {
-                        if crate::session_chat_options::session_chat_option_agent(agent.as_deref())
-                            == Some(crate::session_chat_options::SessionChatOptionAgent::Pi)
+                        if agent.as_deref() == Some("empryo") {
+                            crate::session_chat_empryo_question::empryo_approval_answer_key(
+                                text,
+                                choice_index,
+                            )
+                        } else if crate::session_chat_options::session_chat_option_agent(
+                            agent.as_deref(),
+                        ) == Some(crate::session_chat_options::SessionChatOptionAgent::Pi)
                         {
                             crate::session_chat_pi_blocking::pi_trust_answer_key(text, choice_index)
                         } else {

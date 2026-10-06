@@ -131,6 +131,156 @@ fn freebuff_composer_input(lines: &[String]) -> Option<SessionChatComposerInput>
         rows: region.len(),
         shell_mode: false,
         placeholder,
+        attachments: 0,
+    })
+}
+
+/// Empryo's prompt glyph while no turn runs: `◈` focused, `◇` unfocused.
+const EMPRYO_IDLE_MARKERS: &[char] = &['◈', '◇'];
+/// The spinner frames Empryo draws in place of the prompt glyph while a turn runs.
+const EMPRYO_BUSY_MARKERS: &[char] = &['◍', '◉', '◎'];
+/// Rows Empryo paints below its input box: the statusline, with slack for a wrapped one.
+const EMPRYO_FOOTER_MAX_LINES: usize = 3;
+
+/// CDXC:AgentScreenDetection 2026-10-06 WHY:
+/// Empryo 3.9.0-beta draws its input as the lowest rounded box on screen with only its statusline below, the first row opening with its prompt glyph (`◈`/`◇`, or a `◍◉◎` spinner frame while a turn runs; `$_n` and the input-box marker in its TUI bundle). Its question, approval, slash-command and queued-message panels are rounded boxes too, but they sit above the input box, and a question squeezes the input box to its top border, so the input exists only while that box is whole and last. Attached images are small boxes drawn inside it above the glyph row, so the input starts at that row.
+pub(super) fn empryo_input_region(lines: &[String]) -> Option<Range<usize>> {
+    let foot = lines.iter().rposition(|line| {
+        let line = line.trim();
+        line.starts_with('╰') && line.ends_with('╯')
+    })?;
+    let mut footer = lines[foot + 1..]
+        .iter()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty());
+    if footer
+        .by_ref()
+        .take(EMPRYO_FOOTER_MAX_LINES)
+        .any(|line| line.starts_with(['╭', '│', '╰']))
+        || footer.next().is_some()
+    {
+        return None;
+    }
+    let head = lines[..foot].iter().rposition(|line| {
+        let line = line.trim();
+        line.starts_with('╭') && line.ends_with('╮')
+    })?;
+    if head + 1 == foot
+        || !lines[head + 1..foot].iter().all(|line| {
+            let line = line.trim();
+            line.starts_with('│') && line.ends_with('│')
+        })
+    {
+        return None;
+    }
+    let start = (head + 1..foot).find(|&row| empryo_marker(&lines[row]).is_some())?;
+    lines[head + 1..start]
+        .iter()
+        .all(|line| empryo_attachment_row(line).is_some())
+        .then_some(start..foot)
+}
+
+/// The attachment boxes a row inside Empryo's input box draws (`│ ╭──╮ ╭──╮   │`), or `None`
+/// for a row that is not part of them.
+fn empryo_attachment_row(line: &str) -> Option<usize> {
+    let inner = line.trim().strip_prefix('│')?.trim_start();
+    inner
+        .starts_with(['╭', '│', '╰'])
+        .then(|| inner.matches('╭').count())
+}
+
+fn is_empryo_marker(ch: &char) -> bool {
+    EMPRYO_IDLE_MARKERS.contains(ch) || EMPRYO_BUSY_MARKERS.contains(ch)
+}
+
+/// The prompt glyph opening `row`, the text right after an input-box border `│`.
+fn empryo_marker_after_border(row: &str) -> Option<char> {
+    let mut chars = row.strip_prefix(' ')?.chars();
+    let marker = chars.next().filter(is_empryo_marker)?;
+    matches!(chars.next(), None | Some(' ')).then_some(marker)
+}
+
+fn empryo_marker(line: &str) -> Option<char> {
+    empryo_marker_after_border(line.trim().strip_prefix('│')?)
+}
+
+/// Whether Empryo's input box shows a running turn, or `None` when the box is not on screen.
+pub(crate) fn empryo_composer_busy(screen_text: &str) -> Option<bool> {
+    let lines: Vec<String> = screen_text.lines().map(strip_ansi_sgr).collect();
+    let region = empryo_input_region(&lines)?;
+    empryo_marker(&lines[region.start]).map(|marker| EMPRYO_BUSY_MARKERS.contains(&marker))
+}
+
+/// Whether an Empryo panel has the keyboard: every panel (`/router`, `/models`, `/settings`,
+/// `/effort`, `/git`, the Ctrl+K palette) leaves the input box drawn with its unfocused glyph `◇`,
+/// sometimes beside a side panel that cuts its right border off.
+pub(crate) fn empryo_input_unfocused(screen_text: &str) -> bool {
+    screen_text
+        .lines()
+        .rev()
+        .map(strip_ansi_sgr)
+        .find_map(|line| {
+            let (_, row) = line.split_once('│')?;
+            empryo_marker_after_border(row)
+        })
+        == Some('◇')
+}
+
+/// The cursor a VT capture ends on (`ESC[row;colH`), as a 0-based line of `screen.lines()` and a
+/// 0-based column. The row counts from the top of the live screen, which follows the last clear
+/// when the capture carries scrollback before it.
+fn vt_capture_cursor(screen: &str) -> Option<(usize, usize)> {
+    let (row, col) = screen.rmatch_indices("\u{1b}[").find_map(|(at, _)| {
+        let rest = &screen[at + 2..];
+        let end = rest.find(|ch: char| !ch.is_ascii_digit() && ch != ';')?;
+        let (row, col) = rest[..end].split_once(';')?;
+        rest[end..].starts_with('H').then_some(())?;
+        Some((row.parse::<usize>().ok()?, col.parse::<usize>().ok()?))
+    })?;
+    let top = screen
+        .rfind("\u{1b}[2J")
+        .map_or(0, |clear| screen[..clear].matches('\n').count());
+    Some((top + row.checked_sub(1)?, col.checked_sub(1)?))
+}
+
+/// CDXC:AgentScreenDetection 2026-10-06 WHY:
+/// Empryo's empty input shows a rotating tip in its theme's muted color, and typed text differs from it only by color, which every theme sets differently. The cursor is the theme-free witness: it rests on the first input cell exactly when the input is empty. A capture without a cursor (wmx) reads as empty, and the send's Ctrl+U burst still runs first, so a draft there is cleared as far as the burst reaches.
+fn empryo_composer_input(screen: &str, lines: &[StyledLine]) -> Option<SessionChatComposerInput> {
+    let plain: Vec<String> = lines.iter().map(|line| line.text.clone()).collect();
+    let region = empryo_input_region(&plain)?;
+    let marker = lines[region.start]
+        .chars
+        .iter()
+        .position(|(ch, _)| is_empryo_marker(ch))?;
+    let input_column = marker + 2;
+    let rows: Vec<String> = lines[region.clone()]
+        .iter()
+        .map(|line| {
+            let end = line
+                .chars
+                .iter()
+                .rposition(|(ch, _)| *ch == '│')
+                .unwrap_or(line.chars.len());
+            line.chars[input_column.min(end)..end]
+                .iter()
+                .map(|(ch, _)| *ch)
+                .collect::<String>()
+                .trim_end()
+                .to_string()
+        })
+        .collect();
+    let attachments = plain[..region.start]
+        .iter()
+        .rev()
+        .map_while(|line| empryo_attachment_row(line))
+        .sum();
+    Some(SessionChatComposerInput {
+        text: rows.join("\n").trim().to_string(),
+        rows: region.len(),
+        shell_mode: false,
+        placeholder: vt_capture_cursor(screen)
+            .is_none_or(|cursor| cursor == (region.start, input_column)),
+        attachments,
     })
 }
 
@@ -256,13 +406,24 @@ pub struct SessionChatComposerInput {
     /// An empty shell editor still needs to return to normal mode before replacement.
     pub shell_mode: bool,
     placeholder: bool,
+    /// Images attached in the input box (Empryo draws each as a box above its text).
+    attachments: usize,
 }
 
 impl SessionChatComposerInput {
     pub fn is_empty(&self) -> bool {
+        self.attachments == 0 && self.text_is_empty()
+    }
+
+    /// No typed text, whatever images are attached.
+    pub(crate) fn text_is_empty(&self) -> bool {
         self.text.trim().is_empty()
             || self.placeholder
             || (self.shell_mode && self.text.trim() == "!")
+    }
+
+    pub(crate) fn attachments(&self) -> usize {
+        self.attachments
     }
 }
 
@@ -574,6 +735,7 @@ pub fn session_chat_composer_input(agent: &str, screen: &str) -> Option<SessionC
                 rows: 1,
                 shell_mode: false,
                 placeholder,
+                attachments: 0,
             }
         });
     }
@@ -582,6 +744,9 @@ pub fn session_chat_composer_input(agent: &str, screen: &str) -> Option<SessionC
         return freebuff_composer_input(&lines);
     }
     let mut lines = styled_lines(screen);
+    if agent == "empryo" {
+        return empryo_composer_input(screen, &lines);
+    }
     if agent == "codex" {
         clear_codex_composer_particles(&mut lines);
     }
@@ -622,6 +787,7 @@ pub fn session_chat_composer_input(agent: &str, screen: &str) -> Option<SessionC
             rows: region.len(),
             shell_mode: false,
             placeholder: agent == "omp" && region.len() == 1 && omp_hint_only(&lines[region.start]),
+            attachments: 0,
         });
     }
     let region = match agent {
@@ -683,6 +849,7 @@ pub fn session_chat_composer_input(agent: &str, screen: &str) -> Option<SessionC
         rows: region.len(),
         shell_mode,
         placeholder,
+        attachments: 0,
     };
     if agent == "codex" {
         let mut images = codex_remote_images(&lines, region.start);

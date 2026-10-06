@@ -775,6 +775,22 @@ it works, so the chat fills in step by step rather than word by word, with the
 working strip shown until the turn ends. One Ghostex session follows one Empryo
 tab, the tab of your latest message; Empryo's other tabs show only in its
 terminal.
+Messages sent from the chat (or with `ghostex send-message`) go into Empryo's
+input box. While Empryo is working, a message is queued as its own turn after
+the current one, the way Alt+Q queues in Empryo, instead of steering the
+running turn. Multi-line messages arrive whole, typed line by line, so Empryo
+never picks up an image from your clipboard with them. When Empryo asks a
+question, it appears as a card in the chat; pick an option or type your own
+answer for its Other row. When Empryo asks for
+permission (a web page, files outside the project, a risky command), the card
+offers its Allow and Deny choices. A repository whose `.empryo/config.json`
+Empryo ignores until you trust it shows a card with a Trust button, which runs
+`/trust`; Empryo applies that config after a restart. Cards also explain when
+Empryo has no model to use and when its provider rate-limits a turn. Slash
+commands sent from the chat show in it with what they printed. Commands that
+open an Empryo panel (`/router`, `/models`, `/settings` and the like) show a card
+while the panel is open, with Close panel and Terminal View; a message sent from
+the chat closes the panel first.
 Scrolling up collapses the composer; returning to the bottom expands it.
 Settings > Chat > Keep chat box expanded while scrolling leaves the desktop
 chat box at full size instead (`sessionChatKeepComposerExpanded`, off by default).

@@ -142,6 +142,17 @@ pub(crate) async fn handle_handoff_session_chat_draft_http(
         );
     }
     let agent = session_chat_agent_for_session(&target.session);
+    if agent.as_deref() == Some("empryo") {
+        let recovered = empryo_draft_to_chat(state, &target).await;
+        return match recovered {
+            Ok(result) => routed_json(
+                Some(endpoint_path),
+                StatusCode::OK,
+                rpc_success(request_id, result),
+            ),
+            Err(error) => domain_error_response(endpoint_path, request_id, error),
+        };
+    }
     let captured = crate::session_chat_send::capture_session_chat_terminal_draft(
         &state.paths.app_state_dir,
         &target.project_id,
@@ -194,6 +205,70 @@ pub(crate) async fn handle_handoff_session_chat_draft_http(
         Some(endpoint_path),
         StatusCode::OK,
         rpc_success(request_id, recovered),
+    )
+}
+
+/// CDXC:Drafts 2026-10-06 WHY:
+/// Every other agent hands its terminal draft over through its prompt editor (Ctrl+G), and Ctrl+G opens Empryo's Git menu, so each switch to Chat left that menu open and failed after 16 seconds (seen live 2026-10-06). Empryo's draft is read off its input box instead, saved to Saved Prompts like the editor route saves it, and only then cleared with Empryo's own Ctrl+U clear.
+async fn empryo_draft_to_chat(
+    state: &AppState,
+    target: &SessionChatSendTarget,
+) -> std::result::Result<Value, DomainStateError> {
+    let internal = |message: String| DomainStateError {
+        code: "internalError",
+        message,
+    };
+    let Some(content) = crate::session_chat_send::read_empryo_terminal_draft(
+        &target.project_id,
+        &target.session_id,
+        &target.zmx_name,
+    )
+    .await
+    .map_err(internal)?
+    else {
+        return Ok(json!({ "content": "", "transferred": false }));
+    };
+    let saved = {
+        let db =
+            open_gxserver_database(&state.paths).map_err(|error| internal(error.to_string()))?;
+        let mut params = Map::new();
+        params.insert("content".to_string(), json!(content));
+        params.insert("draftHandoff".to_string(), json!(true));
+        params.insert("projectId".to_string(), json!(target.project_id));
+        params.insert("sessionId".to_string(), json!(target.session_id));
+        DomainRepository::new(&db, state.metadata.server_id.as_str())
+            .save_stashed_prompt(&params)?
+    };
+    let prompt_id = saved
+        .pointer("/prompt/promptId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| internal("The terminal draft could not be saved.".to_string()))?
+        .to_string();
+    crate::session_chat_send::execute_session_chat_send(
+        &target.project_id,
+        &target.session_id,
+        &target.zmx_name,
+        "session-chat-draft-handoff",
+        vec![SessionChatSendStep::ClearComposer {
+            agent: "empryo".to_string(),
+        }],
+    )
+    .await
+    .map_err(|error| internal(error.message))?;
+    read_and_release_stashed_prompt(
+        state,
+        &target.project_id,
+        &target.session_id,
+        &prompt_id,
+        saved
+            .get("created")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        saved
+            .get("draftVersion")
+            .filter(|version| !version.is_null())
+            .cloned()
+            .and_then(|version| serde_json::from_value(version).ok()),
     )
 }
 

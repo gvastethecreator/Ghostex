@@ -62,6 +62,12 @@ pub const SESSION_CHAT_NOTICE_OMP_INPUT_BLOCKED: &str = "ompInputBlocked";
 /// A Pi focused selector, prompt, authentication flow, or modal has replaced
 /// its ordinary prompt editor.
 pub const SESSION_CHAT_NOTICE_PI_INPUT_BLOCKED: &str = "piInputBlocked";
+/// An Empryo panel (`/router`, `/models`, `/settings`, the Ctrl+K palette, …) has the
+/// keyboard instead of its input box.
+pub const SESSION_CHAT_NOTICE_EMPRYO_INPUT_BLOCKED: &str = "empryoInputBlocked";
+/// Empryo has no model it can use or lost an account's sign-in; informational, since the row
+/// that says so stays on screen after it is fixed.
+pub const SESSION_CHAT_NOTICE_EMPRYO_SIGN_IN: &str = "empryoSignIn";
 /// Claude Code's tool permission prompt ("Do you want to proceed?" over
 /// Yes/No rows), read off the screen: answerable the same way the resume
 /// picker is, and the only card for it when the hook-derived approval card
