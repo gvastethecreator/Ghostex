@@ -126,9 +126,19 @@ mod backend {
     /// accepts as the embedding site (NavigateToString pages are `about:blank`, which it refuses).
     const PAGE_PROTOCOL: &str = "ghostex";
 
+    /// CDXC:Onboarding 2026-10-07 WHY:
+    /// Without its own user data folder WebView2 keeps its profile next to the executable (`Ghostex.exe.WebView2`), which a machine-wide install under `C:\Program Files\Ghostex` cannot write: creation fails with E_ACCESSDENIED and the intro falls back to the "Watch the intro on YouTube" still. The profile is a cache, so it lives in Ghostex's per-user cache folder beside CEF's (the GhostexEditor helper has the same rule for its own WebView2).
+    fn data_directory() -> std::path::PathBuf {
+        ghostex_paths::GhostexPaths::resolve()
+            .cache_dir
+            .join("intro-webview2")
+    }
+
     pub(super) struct Backend {
         web_view: wry::WebView,
         opened_links: Rc<RefCell<Vec<String>>>,
+        /// Kept for the web view's lifetime; WebView2 reads it while it creates its environment.
+        _web_context: wry::WebContext,
     }
 
     impl Backend {
@@ -136,7 +146,8 @@ mod backend {
             let page: Cow<'static, [u8]> = Cow::Owned(html.as_bytes().to_vec());
             let opened_links = Rc::new(RefCell::new(Vec::new()));
             let queue = opened_links.clone();
-            let web_view = wry::WebViewBuilder::new()
+            let mut web_context = wry::WebContext::new(Some(data_directory()));
+            let web_view = wry::WebViewBuilder::new_with_web_context(&mut web_context)
                 .with_https_scheme(true)
                 .with_custom_protocol(PAGE_PROTOCOL.to_string(), move |_, _| {
                     let mut response = Response::new(page.clone());
@@ -159,6 +170,7 @@ mod backend {
             Ok(Self {
                 web_view,
                 opened_links,
+                _web_context: web_context,
             })
         }
 
