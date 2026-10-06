@@ -1,4 +1,5 @@
 pub mod api;
+mod ancestor_session;
 pub(crate) mod claude_retention;
 pub(crate) mod codex_status_line;
 pub(crate) mod codex_trust;

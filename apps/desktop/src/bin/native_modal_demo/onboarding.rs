@@ -23,7 +23,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::time::Duration;
 
-const CATALOG: [(&str, &str, &str); 23] = [
+const CATALOG: [(&str, &str, &str); 24] = [
     ("codex", "Codex", "codex"),
     ("claude", "Claude", "claude"),
     ("cursor", "Cursor CLI", "cursor-cli"),
@@ -47,6 +47,7 @@ const CATALOG: [(&str, &str, &str); 23] = [
     ("devin", "Devin", "devin"),
     ("mastra", "Mastra Code", "mastra"),
     ("zcode", "ZCode", "zcode"),
+    ("empryo", "Empryo", "empryo"),
 ];
 
 const STORY_OUTPUT: [&str; 5] = [

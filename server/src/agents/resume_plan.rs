@@ -448,7 +448,8 @@ pub(crate) fn build_agent_resume_command(
                 quote_shell_double_arg(&reference)
             )
         }),
-        "omp" => exact_reference.map(|reference| {
+        // CDXC:AgentProviders 2026-10-06 DECISION: "Resume. `empryo --session <id>`. The process-identity scan reads `--session` from argv." SEE-ALSO: extract_agent_process_session_id in server/src/zmx/process_identity.rs.
+        "omp" | "empryo" => exact_reference.map(|reference| {
             format!(
                 "{agent_command} --session {}",
                 quote_shell_double_arg(&reference)
@@ -596,7 +597,7 @@ pub(crate) fn build_agent_resume_copy_command(input: &AgentResumeInput) -> Optio
                 quote_shell_double_arg(&reference)
             )
         }),
-        "omp" => exact_reference.map(|reference| {
+        "omp" | "empryo" => exact_reference.map(|reference| {
             format!(
                 "{agent_command} --session {}",
                 quote_shell_double_arg(&reference)
@@ -701,9 +702,9 @@ pub(crate) fn restorable_agent_id(value: Option<&str>) -> Option<&str> {
     let value = value?.trim();
     match value {
         "amp" | "antigravity" | "claude" | "codebuddy" | "codex" | "command-code" | "copilot"
-        | "cursor" | "devin" | "droid" | "freebuff" | "gemini" | "grok" | "hermes-agent"
-        | "kimi" | "kiro" | "omp" | "openclaude" | "opencode" | "pi" | "qoder" | "rovodev"
-        | "zcode" => Some(value),
+        | "cursor" | "devin" | "droid" | "empryo" | "freebuff" | "gemini" | "grok"
+        | "hermes-agent" | "kimi" | "kiro" | "omp" | "openclaude" | "opencode" | "pi" | "qoder"
+        | "rovodev" | "zcode" => Some(value),
         _ => None,
     }
 }

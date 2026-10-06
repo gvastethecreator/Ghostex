@@ -375,6 +375,7 @@ const DEFAULT_AGENT_NAMES: &[(&str, &str)] = &[
     ("mastra", "Mastra Code"),
     ("zcode", "ZCode"),
     ("freebuff", "Freebuff"),
+    ("empryo", "Empryo"),
 ];
 
 fn default_agent_name(agent_id: &str) -> Option<&'static str> {

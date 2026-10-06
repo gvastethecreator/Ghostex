@@ -8385,6 +8385,10 @@
         {
           "label": "Freebuff",
           "value": "Freebuff"
+        },
+        {
+          "label": "Empryo",
+          "value": "Empryo"
         }
       ],
       "agentWritable": false
@@ -8490,6 +8494,10 @@
         {
           "label": "ZCode",
           "value": "ZCode"
+        },
+        {
+          "label": "Empryo",
+          "value": "Empryo"
         }
       ],
       "agentWritable": false

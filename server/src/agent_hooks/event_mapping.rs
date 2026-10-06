@@ -70,6 +70,7 @@ pub(crate) fn normalized_hook_agent_key(value: &str) -> String {
         "droid" | "factory" | "factory droid" => "droid",
         "kiro" | "kiro-cli" | "kiro cli" => "kiro",
         "qoder" | "qodercli" => "qoder",
+        "empryo" | "em" => "empryo",
         "rovo" | "rovo dev" | "rovodev" => "rovodev",
         "hermes" | "hermes agent" | "hermes-agent" => "hermes-agent",
         other => other,
@@ -165,10 +166,11 @@ pub(crate) fn activity_for_hook_event(
     if matches!(agent_key, "pi" | "omp" | "amp") && lower == "stop" {
         return Some("attention".to_string());
     }
-    // OpenClaude emits Claude's hook contract verbatim, so it shares every
-    // Claude-specific rule below instead of falling through to the generic
-    // tables (which have no PostCompact trigger check and no StopFailure arm).
-    if matches!(agent_key, "claude" | "openclaude") {
+    // OpenClaude emits Claude's hook contract verbatim, and Empryo runs Claude-format hooks
+    // (CDXC:AgentHooks 2026-10-06 in config.rs), so both share every Claude-specific rule below
+    // instead of falling through to the generic tables (which have no PostCompact trigger check
+    // and no StopFailure arm).
+    if matches!(agent_key, "claude" | "openclaude" | "empryo") {
         /*
         CDXC:Notifications 2026-09-15 DECISION:
         User: suppress completion attention while Claude reports background work remaining; notify when Claude finishes after that work completes, and preserve question/permission alerts.

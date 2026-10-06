@@ -503,6 +503,7 @@ pub(crate) fn is_agent_command_executable_name(value: &str) -> bool {
             | "cursor-agent"
             | "devin"
             | "droid"
+            | "empryo"
             | "freebuff"
             | "gemini"
             | "grok"

@@ -73,6 +73,7 @@ const DEFAULT_SESSION_AGENT_TITLE_NAMES: &[&str] = &[
     "Mastra Code",
     "Devin",
     "Factory Droid",
+    "Empryo",
     "Freebuff",
     "Gemini",
     "Grok Build",

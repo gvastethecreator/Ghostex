@@ -93,6 +93,8 @@ pub const AGENT_ACCEPT_ALL_SPECS: J = J::Obj(&[
     ),
     ("devin", J::Null),
     ("droid", J::Null),
+    // CDXC:AgentProviders 2026-10-06 DECISION: "The approvals toggle maps to an Empryo launch flag only if one exists. Otherwise the toggle is hidden for Empryo, and Empryo's own `yolo` setting stays the user's business." Empryo 3.9.0-beta has no such flag (only `/yolo` and the `yolo` config key).
+    ("empryo", J::Null),
     (
         "gemini",
         J::Obj(&[

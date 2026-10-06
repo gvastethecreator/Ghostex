@@ -1043,7 +1043,7 @@ pub(crate) fn normalize_agent_hook_event_activity(params: &Map<String, Value>) -
     let event = params
         .get("eventName")
         .or_else(|| params.get("rawEventName"));
-    let mut hook_activity = if matches!(agent.as_deref(), Some("claude" | "openclaude"))
+    let mut hook_activity = if matches!(agent.as_deref(), Some("claude" | "openclaude" | "empryo"))
         && event
             .and_then(Value::as_str)
             .is_some_and(|event| event.trim().eq_ignore_ascii_case("stop"))
@@ -1141,9 +1141,12 @@ pub(crate) fn normalize_agent_hook_activity(
             _ => {}
         }
     }
-    // OpenClaude ships Claude's hook contract verbatim, so it shares every
-    // Claude rule here exactly as it does in the notify hook's mapping.
-    if matches!(normalized_agent.as_deref(), Some("claude" | "openclaude")) {
+    // OpenClaude ships Claude's hook contract verbatim and Empryo runs Claude-format hooks, so
+    // both share every Claude rule here exactly as they do in the notify hook's mapping.
+    if matches!(
+        normalized_agent.as_deref(),
+        Some("claude" | "openclaude" | "empryo")
+    ) {
         /*
         CDXC:Notifications 2026-09-15 SEE-ALSO:
         The background-aware completion decision lives in server/src/agent_hooks/event_mapping.rs.

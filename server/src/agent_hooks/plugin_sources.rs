@@ -37,7 +37,8 @@ if [ "${{GHOSTEX_INTERNAL_PROMPT_GENERATION:-}}" = "1" ] || [ "${{GHOSTEX_INTERN
   printf '%s' "$HOOK_RESPONSE"
   exit 0
 fi
-if [ -z "$SESSION_STATE_FILE" ] && {{ [ -z "${{GHOSTEX_GLOBAL_SESSION_REF:-}}" ] || [ -z "${{GHOSTEX_GXSERVER_BASE_URL:-}}" ] || [ -z "${{GHOSTEX_GXSERVER_AUTH_TOKEN_FILE:-}}" ]; }}; then
+# Empryo hooks run without GHOSTEX_* variables; the helper finds their session from the process tree.
+if [ -z "$SESSION_STATE_FILE" ] && [ "${{GHOSTEX_AGENT:-}}" != "empryo" ] && {{ [ -z "${{GHOSTEX_GLOBAL_SESSION_REF:-}}" ] || [ -z "${{GHOSTEX_GXSERVER_BASE_URL:-}}" ] || [ -z "${{GHOSTEX_GXSERVER_AUTH_TOKEN_FILE:-}}" ]; }}; then
   printf '%s' "$HOOK_RESPONSE"
   exit 0
 fi

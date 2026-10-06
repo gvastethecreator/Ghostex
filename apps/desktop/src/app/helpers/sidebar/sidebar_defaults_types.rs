@@ -350,6 +350,13 @@ pub(crate) const GPUI_DEFAULT_SIDEBAR_AGENTS: &[GpuiDefaultSidebarAgent] = &[
         icon: "freebuff",
         name: "Freebuff",
     },
+    GpuiDefaultSidebarAgent {
+        agent_id: "empryo",
+        command: "empryo",
+        hidden_by_default: false,
+        icon: "empryo",
+        name: "Empryo",
+    },
 ];
 
 pub(crate) const GPUI_DEFAULT_SIDEBAR_COMMANDS: &[GpuiDefaultSidebarCommand] = &[

@@ -570,6 +570,7 @@ fn infer_agent_id_from_process_executable(
             "mastracode" => "mastra",
             "devin" => "devin",
             "droid" => "droid",
+            "empryo" | "em" => "empryo",
             "freebuff" => "freebuff",
             "gemini" => "gemini",
             "grok" => "grok",
@@ -644,6 +645,11 @@ fn extract_agent_process_session_id(
     }
     if agent_id == "freebuff" {
         return read_agent_process_flag_value(agent_id, args, "--continue");
+    }
+    if agent_id == "empryo" {
+        return ["--session", "--resume", "-s"]
+            .into_iter()
+            .find_map(|flag| read_agent_process_flag_value(agent_id, args, flag));
     }
     if agent_id == "opencode" {
         return read_agent_process_flag_value(agent_id, args, "--session")

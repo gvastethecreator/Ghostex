@@ -274,6 +274,13 @@ pub(super) const DEFAULT_SIDEBAR_AGENTS: &[DefaultSidebarAgent] = &[
         icon: "freebuff",
         name: "Freebuff",
     },
+    DefaultSidebarAgent {
+        agent_id: "empryo",
+        command: "empryo",
+        hidden_by_default: false,
+        icon: "empryo",
+        name: "Empryo",
+    },
 ];
 
 pub(super) const DEFAULT_SIDEBAR_COMMANDS: &[DefaultSidebarCommand] = &[

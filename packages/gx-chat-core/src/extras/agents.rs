@@ -34,6 +34,7 @@ const AGENTS: &[(&str, &str, &str)] = &[
     ("mastra", "mastra", "Mastra Code"),
     ("zcode", "zcode", "ZCode"),
     ("freebuff", "freebuff", "Freebuff"),
+    ("empryo", "empryo", "Empryo"),
 ];
 
 /// The icon of the browser rows; not an agent, but part of the same icon vocabulary.

@@ -22,6 +22,7 @@ pub(crate) fn normalize_agent_id(value: Option<&str>) -> Option<String> {
         "hermes" | "hermes agent" | "hermes-agent" => "hermes-agent",
         "codebuddy" | "code buddy" => "codebuddy",
         "qoder" | "qodercli" => "qoder",
+        "empryo" | "em" => "empryo",
         "rovo" | "rovo dev" | "rovodev" => "rovodev",
         // Keep these folds identical to the agent-hooks resolver's alias set so
         // a hook payload and a sidebar launch resolve to the same agent id.
@@ -60,6 +61,9 @@ pub(crate) fn infer_agent_id_from_path(path: Option<&str>) -> Option<String> {
     let lower = path?.replace('\\', "/").to_ascii_lowercase();
     if lower.ends_with("/.zcode/cli/db/db.sqlite") {
         return Some("zcode".to_string());
+    }
+    if lower.ends_with("/session.jsonl") && lower.contains("/.empryo/sessions/") {
+        return Some("empryo".to_string());
     }
     if lower.ends_with("/chat-messages.json") && lower.contains("/manicode/projects/") {
         return Some("freebuff".to_string());
@@ -201,6 +205,7 @@ pub(crate) fn infer_agent_id_from_command(command: &str) -> Option<String> {
             "omp" => "omp",
             "rovodev" => "rovodev",
             "qodercli" => "qoder",
+            "empryo" | "em" => "empryo",
             "commandcode" => "command-code",
             "openclaude" => "openclaude",
             "mastracode" => "mastra",

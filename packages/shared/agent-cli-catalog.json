@@ -289,5 +289,16 @@
     "docsUrl": "https://github.com/CodebuffAI/codebuff/tree/main/freebuff",
     "npmPackage": "freebuff",
     "packageManagers": ["npm"]
+  },
+  {
+    "agentId": "empryo",
+    "binary": "empryo",
+    "docsUrl": "https://empryo.com/docs/installation",
+    "native": {
+      "install": "curl -fsSL https://empryo.com/install.sh | bash"
+    },
+    "installDirs": {
+      "unix": ["~/.empryo/bin"]
+    }
   }
 ]
