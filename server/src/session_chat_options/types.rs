@@ -423,6 +423,7 @@ pub enum SessionChatOptionAgent {
     Claude,
     Codex,
     Cursor,
+    Empryo,
     Grok,
     Hermes,
     Omp,
@@ -435,6 +436,7 @@ pub fn session_chat_option_agent(agent: Option<&str>) -> Option<SessionChatOptio
         "claude" | "openclaude" => Some(SessionChatOptionAgent::Claude),
         "codex" => Some(SessionChatOptionAgent::Codex),
         "cursor" => Some(SessionChatOptionAgent::Cursor),
+        "empryo" => Some(SessionChatOptionAgent::Empryo),
         "grok" => Some(SessionChatOptionAgent::Grok),
         "hermes" | "hermes-agent" => Some(SessionChatOptionAgent::Hermes),
         "omp" => Some(SessionChatOptionAgent::Omp),
@@ -453,6 +455,9 @@ pub fn is_session_chat_option_command_text(agent: Option<&str>, text: &str) -> b
         return false;
     };
     matches!(first, "/model" | "/effort" | "/fast" | "/plan")
+        // Empryo opens its model panel with `/models`.
+        || (first == "/models"
+            && session_chat_option_agent(agent) == Some(SessionChatOptionAgent::Empryo))
 }
 
 /*

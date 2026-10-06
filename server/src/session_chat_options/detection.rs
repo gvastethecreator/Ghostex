@@ -51,6 +51,14 @@ pub fn detect_session_chat_selection(
                 }
                 continue;
             }
+            SessionChatOptionAgent::Empryo => {
+                if let Some(selection) = match_empryo_statusline(scanned) {
+                    found = selection;
+                    topmost_match = Some(index);
+                    break;
+                }
+                continue;
+            }
             SessionChatOptionAgent::Hermes => {
                 if let Some(selection) = match_hermes_statusline(scanned) {
                     found = selection;
@@ -124,6 +132,9 @@ pub fn detect_session_chat_selection(
                 }
                 SessionChatOptionAgent::Omp => {
                     unreachable!("Omp is parsed as a complete statusline")
+                }
+                SessionChatOptionAgent::Empryo => {
+                    unreachable!("Empryo is parsed as a complete statusline")
                 }
                 SessionChatOptionAgent::Pi => unreachable!("Pi is parsed as a complete statusline"),
             }

@@ -64,6 +64,7 @@ pub(crate) fn create_agent_session_params_for_project(
         &launch_settings,
         params,
         configured_command,
+        &mut runtime_settings,
     )?;
     let agentbox_provider = crate::agentbox::requested_agentbox_provider(params)?;
     // Only a box create writes a box record; a client cannot make a session a box session.
@@ -370,6 +371,7 @@ pub(crate) fn project_agent_session_default_title(project: &Value, session: &Val
 /// User: "yes, Ghostex chooses Pi's model and thinking level at launch, like Claude and Codex." This extends the 2026-09-17 decision (an agent spawning another agent sets that worker's model and effort for the session only, and a resumed worker keeps them) from Claude and Codex to Pi, whose model is `provider/id` (`--model`) and whose effort is its thinking level (`--thinking`).
 /// Typing `/model` or `/effort` into Claude Code saves the choice as the default for every new session, so the choice travels as launch flags instead.
 /// The flags live in the session's saved base command, which resume, fork and account wrapping all rebuild from.
+/// Sven extended it to Empryo on 2026-10-06 (Empryo harness spec). Empryo's terminal app ignores launch flags, so its pick rides the session row and is typed through its own `/models` and `/effort` once it is up, which also saves the model as Empryo's default (session_chat_empryo_launch_selection.rs).
 /// SEE-ALSO: server/src/ghostex_cli/actions/create.rs (create-agent), server/src/ghostex_cli/board.rs and server/src/board_start_work.rs (board start-work).
 fn apply_requested_agent_model(
     agent_id: &str,
@@ -377,6 +379,7 @@ fn apply_requested_agent_model(
     launch_settings: &Map<String, Value>,
     params: &Map<String, Value>,
     command: Option<String>,
+    runtime_settings: &mut Map<String, Value>,
 ) -> Result<Option<String>, DomainStateError> {
     let model = requested_agent_model_option(params, "agentModel")?;
     let effort = requested_agent_model_option(params, "agentEffort")?;
@@ -384,12 +387,28 @@ fn apply_requested_agent_model(
         return Ok(command);
     }
     let family = resume_agent_family_id(Some(agent_id.to_string()), agent_config, launch_settings)
-        .filter(|family| matches!(family.as_str(), "claude" | "codex" | "pi" | "zcode"))
+        .filter(|family| {
+            matches!(
+                family.as_str(),
+                "claude" | "codex" | "pi" | "zcode" | "empryo"
+            )
+        })
         .ok_or_else(|| {
             DomainStateError::bad_request(
-                "A launch model or effort can only be set for Claude, Codex, Pi and ZCode agents.",
+                "A launch model or effort can only be set for Claude, Codex, Pi, ZCode and Empryo agents.",
             )
         })?;
+    if family == "empryo" {
+        let selection = crate::session_chat_empryo_launch_selection::empryo_launch_selection(
+            model.as_deref(),
+            effort.as_deref(),
+        )?;
+        crate::session_chat_empryo_launch_selection::record_empryo_launch_selection(
+            runtime_settings,
+            selection,
+        );
+        return Ok(command);
+    }
     if family == "zcode" {
         // CDXC:Coordinators 2026-10-04 WHY:
         // ZCode has no launch model flag, so a coordinator create's chosen model reaches the

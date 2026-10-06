@@ -163,14 +163,15 @@ fn model_menu_pick_action(
                         })
                         .map(|agent| agent.agent_id.clone())
                 });
-                // The launch line carries a model only for Claude, Codex and Pi (whose lineup
-                // values are its own `provider/id` and thinking levels); the other CLIs start on
-                // their own default.
+                // The launch carries a model only for Claude, Codex and Pi (whose lineup values are
+                // its own `provider/id` and thinking levels), and Empryo, which gxserver types into
+                // it once it is up; the other CLIs start on their own default.
                 let launchable = matches!(
                     provider,
                     crate::menus::picker::model_picker::ModelPickerProvider::Claude
                         | crate::menus::picker::model_picker::ModelPickerProvider::Codex
                         | crate::menus::picker::model_picker::ModelPickerProvider::Pi
+                        | crate::menus::picker::model_picker::ModelPickerProvider::Empryo
                 );
                 let carry =
                     |value: &str| (launchable && !value.is_empty()).then(|| value.to_string());

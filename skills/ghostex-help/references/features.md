@@ -1097,12 +1097,26 @@ agent's default alone. If the agent refuses a level, the picker shows its reason
 Until Ghostex has read the agent's model list, the pill shows the model with
 Change it in the CLI.
 
+In an Empryo chat the picker lists the models `empryo --list-models` shows for
+every provider Empryo has ready, grouped by provider and keyed `provider/model`
+(for example `subscriptions/gpt-6-luna`). Picking a model opens Empryo's own
+`/models` panel in the session and selects that model there, which also makes it
+Empryo's default model, as picking it in Empryo would. Picking a level types
+`/effort <level>`, which applies to that Empryo tab. Every model offers off, low,
+medium, high, xhigh and max; if the model takes fewer, the picker shows the
+levels Empryo offers for it. To start an Empryo session on a chosen model, pick
+it on Empryo's tab in a new chat, or run
+`ghostex create-agent empryo --project-id <id> --model <provider/model> --effort <level>`:
+Ghostex selects it as soon as Empryo is up, and your first message waits until
+it has.
+
 On the phone, tapping the model pill opens the same picker as a sheet, without
 keyboard shortcuts. Tap a model to highlight it; its reasoning levels appear under
 it, and tapping one sets the level. Then tap Use in this session, or Save as
 default to also make it the agent's default for new sessions (agents other than
 Claude show a single Apply button, which saves the default; in a Hermes, Pi, or
-OMP chat it applies to this session only).
+OMP chat it applies to this session only; in an Empryo chat it saves the model as
+Empryo's default and sets the level for that tab).
 Tap the info icon on the highlighted model to read what it is for. The bottom
 buttons work as on the computer; long-press one (Claude only) to apply the change
 to this session alone. In a session that has started, the phone's picker shows

@@ -7,6 +7,10 @@
 //! All three run inside the serialized send worker and confirm the footer before releasing the durable selection.
 
 use super::*;
+
+#[path = "session_chat_empryo_picker.rs"]
+mod empryo_picker;
+
 use crate::session_chat_composer::{
     detect_session_chat_composer_readiness, session_chat_composer_input, SessionChatComposerState,
 };
@@ -814,6 +818,7 @@ pub(crate) async fn run_provider_model_picker_job(
         "hermes" => driver.drive_hermes(&plan).await,
         "pi" => driver.drive_pi(&plan).await,
         "omp" => driver.drive_omp(&plan).await,
+        "empryo" => driver.drive_empryo(&plan).await,
         _ => driver.drive_provider(&plan).await,
     };
     if let Err(error) = &outcome {
