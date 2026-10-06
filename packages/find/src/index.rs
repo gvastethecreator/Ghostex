@@ -91,6 +91,7 @@ pub struct SearchIndex {
     pub favorites: FavoriteSet,
     pub favorites_path: PathBuf,
     pub opencode_error: Option<String>,
+    pub empryo_error: Option<String>,
     pub built_at: SystemTime,
     /*
     CDXC:PromptSearch 2026-08-20:
@@ -118,6 +119,7 @@ impl SearchIndex {
             favorites,
             favorites_path,
             opencode_error: scanner.opencode_error.take(),
+            empryo_error: scanner.empryo_error.take(),
             built_at: SystemTime::now(),
             by_key,
             matcher: Matcher::new(),
@@ -445,6 +447,7 @@ mod tests {
             favorites: FavoriteSet::new(),
             favorites_path: PathBuf::from("/nonexistent/favorites"),
             opencode_error: None,
+            empryo_error: None,
             built_at: SystemTime::now(),
             matcher: Matcher::new(),
         }

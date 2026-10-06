@@ -22,11 +22,16 @@ impl Scanner {
         if !db.exists() {
             return;
         }
-        for checkout in read_empryo_checkouts(&db) {
-            let sessions = Path::new(&checkout).join(".empryo").join("sessions");
-            for dir in read_dir_sorted(&sessions) {
-                self.scan_empryo_session(&dir, &checkout);
+        match read_empryo_checkouts(&db) {
+            Ok(checkouts) => {
+                for checkout in checkouts {
+                    let sessions = Path::new(&checkout).join(".empryo").join("sessions");
+                    for dir in read_dir_sorted(&sessions) {
+                        self.scan_empryo_session(&dir, &checkout);
+                    }
+                }
             }
+            Err(err) => self.empryo_error = Some(err),
         }
     }
 
@@ -134,7 +139,7 @@ pub fn parse_empryo_meta(data: &[u8]) -> EmpryoInfo {
 }
 
 /// Every repository Empryo has run in, from its thread index, opened read-only.
-fn read_empryo_checkouts(db_path: &Path) -> Vec<String> {
+fn read_empryo_checkouts(db_path: &Path) -> Result<Vec<String>, String> {
     use rusqlite::{Connection, OpenFlags};
     let read = || -> rusqlite::Result<Vec<String>> {
         let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
@@ -143,5 +148,5 @@ fn read_empryo_checkouts(db_path: &Path) -> Vec<String> {
         let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
         Ok(rows.flatten().collect())
     };
-    read().unwrap_or_default()
+    read().map_err(|e| format!("read {}: {e}", db_path.display()))
 }

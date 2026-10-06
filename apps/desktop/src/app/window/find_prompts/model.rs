@@ -87,6 +87,7 @@ struct WireSearchResult {
     matched: usize,
     offset: usize,
     opencode_error: Option<String>,
+    empryo_error: Option<String>,
     projects: Option<Vec<ProjectFacet>>,
     rows: Vec<WireRow>,
     total: usize,
@@ -124,6 +125,7 @@ pub(crate) struct SearchPage {
     /// Facet colors in `FIND_PROMPT_AGENTS` order; `None` where the server sent none.
     pub(crate) agent_colors: Option<[Option<Rgba>; FIND_PROMPT_AGENTS.len()]>,
     pub(crate) opencode_error: Option<String>,
+    pub(crate) empryo_error: Option<String>,
 }
 
 /// Parses `/api/searchAgentPrompts` and prepares every row (flattened line, match ranges, footer).
@@ -197,6 +199,7 @@ pub(crate) fn parse_search_page(value: serde_json::Value) -> Result<SearchPage, 
         projects: wire.projects,
         agent_colors,
         opencode_error: wire.opencode_error.filter(|error| !error.is_empty()),
+        empryo_error: wire.empryo_error.filter(|error| !error.is_empty()),
     })
 }
 

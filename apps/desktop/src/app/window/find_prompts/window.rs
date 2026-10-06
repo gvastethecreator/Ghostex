@@ -403,9 +403,18 @@ impl GpuiFindPromptsModalWindow {
                 if let Some(colors) = page.agent_colors {
                     self.agent_colors = colors;
                 }
-                self.notice = page.opencode_error.map(|detail| FindNotice {
+                self.notice = match (page.opencode_error, page.empryo_error) {
+                    (None, None) => None,
+                    (Some(detail), None) => Some(("opencode history could not be read.", detail)),
+                    (None, Some(detail)) => Some(("Empryo history could not be read.", detail)),
+                    (Some(opencode), Some(empryo)) => Some((
+                        "opencode and Empryo history could not be read.",
+                        format!("{opencode}\n{empryo}"),
+                    )),
+                }
+                .map(|(message, detail)| FindNotice {
                     kind: FindNoticeKind::Info,
-                    message: SharedString::new_static("opencode history could not be read."),
+                    message: SharedString::new_static(message),
                     detail: Some(detail.into()),
                 });
                 self.rebuild_view_rows();

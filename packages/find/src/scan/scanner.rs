@@ -15,6 +15,8 @@ pub struct Scanner {
     pub(super) codex_projects: HashMap<String, String>,
     /// Set when an opencode DB exists but could not be read.
     pub opencode_error: Option<String>,
+    /// Set when Empryo's thread index exists but could not be read.
+    pub empryo_error: Option<String>,
 }
 
 impl Scanner {

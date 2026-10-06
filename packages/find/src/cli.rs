@@ -150,6 +150,9 @@ pub fn run(args: &[String]) -> i32 {
     if let Some(err) = &index.opencode_error {
         eprintln!("zehn: opencode history found but could not be read — {err}");
     }
+    if let Some(err) = &index.empryo_error {
+        eprintln!("zehn: empryo history found but could not be read — {err}");
+    }
 
     if index.records.is_empty() {
         match options.agent_filter {

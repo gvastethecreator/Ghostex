@@ -344,6 +344,9 @@ pub fn search_agent_prompts(
         if let Some(error) = &cached.index.opencode_error {
             payload["opencodeError"] = json!(error);
         }
+        if let Some(error) = &cached.index.empryo_error {
+            payload["empryoError"] = json!(error);
+        }
         if include_facets {
             payload["projects"] = json!(cached
                 .index
