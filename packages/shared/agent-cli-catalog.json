@@ -299,6 +299,10 @@
     },
     "installDirs": {
       "unix": ["~/.empryo/bin"]
+    },
+    "latestVersion": {
+      "url": "https://empryo.com/releases.json",
+      "jsonField": "latest"
     }
   }
 ]
