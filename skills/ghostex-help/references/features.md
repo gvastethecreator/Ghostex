@@ -794,7 +794,8 @@ Empryo has no model to use and when its provider rate-limits a turn. Slash
 commands sent from the chat show in it with what they printed. Commands that
 open an Empryo panel (`/router`, `/models`, `/settings` and the like) show a card
 while the panel is open, with Close panel and Terminal View; a message sent from
-the chat closes the panel first.
+the chat closes the panel first. The Ghostex phone app opens Empryo sessions in
+chat too, with the same cards, and offers Fork and Make Coordinator on them.
 Scrolling up collapses the composer; returning to the bottom expands it.
 Settings > Chat > Keep chat box expanded while scrolling leaves the desktop
 chat box at full size instead (`sessionChatKeepComposerExpanded`, off by default).
