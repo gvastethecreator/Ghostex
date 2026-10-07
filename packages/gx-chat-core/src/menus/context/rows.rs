@@ -1109,6 +1109,100 @@ const HERMES_ROWS: &[RowDefinition] = &[RowDefinition {
     copy: None,
 }];
 
+/// `PI_SHARED_ROWS`: Claude's rows Pi fills, from its transcript and the checkout's git state.
+fn pi_keeps(id: &str) -> bool {
+    matches!(
+        id,
+        "contextUsed"
+            | "contextTokens"
+            | "costUsd"
+            | "sessionTime"
+            | "totalOutputTokens"
+            | "model"
+            | "thinking"
+            | "sessionName"
+            | "repo"
+            | "folder"
+    )
+}
+
+/// `PI_ROWS`: the shared rows in Pi's wording, then the branch and the session's tokens.
+///
+/// CDXC:AgentProviders 2026-10-06 DECISION:
+/// User: Pi's status line shows "model, usage, context, like Claude's", so its Context details offers every row Pi's transcript backs (context, cost, tokens, session time, model, thinking level) plus the checkout's repository, folder and branch; Claude's limit, account and version rows stay Claude-only.
+pub fn pi_rows() -> Vec<RowDefinition> {
+    let mut rows: Vec<RowDefinition> = claude_rows()
+        .into_iter()
+        .filter(|row| pi_keeps(row.id))
+        .map(|row| match row.id {
+            "thinking" => RowDefinition {
+                label: "Thinking level",
+                description: "The session’s thinking level",
+                value: value_effort_name,
+                ..row
+            },
+            "costUsd" => RowDefinition {
+                description: "Spend this session, as Pi priced it",
+                ..row
+            },
+            "sessionTime" => RowDefinition {
+                description: "Time since the Pi session started",
+                value: value_pi_session_time,
+                ..row
+            },
+            "totalOutputTokens" => RowDefinition {
+                description: "Everything Pi's models wrote this session",
+                ..row
+            },
+            "folder" => RowDefinition {
+                description: "The session's working folder",
+                ..row
+            },
+            "repo" => RowDefinition {
+                description: "The name of the project folder",
+                ..row
+            },
+            _ => row,
+        })
+        .collect();
+    rows.extend(CURSOR_ROWS.iter().filter(|row| row.id == "branch").cloned());
+    rows.extend_from_slice(PI_ROWS);
+    rows
+}
+
+fn value_pi_tokens(input: &RowInput) -> Option<String> {
+    let pi = input.status.pi.as_ref()?;
+    // Pi counts cached input apart from `input`; the prompt total adds it back.
+    let prompt = [pi.input_tokens, pi.cache_read_tokens, pi.cache_write_tokens]
+        .into_iter()
+        .flatten()
+        .reduce(|total, tokens| total + tokens);
+    join_parts([
+        count(prompt).map(|tokens| format!("in {tokens}")),
+        count(pi.output_tokens).map(|tokens| format!("out {tokens}")),
+    ])
+}
+
+fn value_pi_session_time(input: &RowInput) -> Option<String> {
+    let started = input
+        .status
+        .pi
+        .as_ref()?
+        .started_at
+        .filter(|started| started.is_finite())?;
+    duration(Some((input.now() - started).max(0.0)))
+}
+
+const PI_ROWS: &[RowDefinition] = &[RowDefinition {
+    id: "tokens",
+    group: GroupId::Usage,
+    label: "Tokens",
+    description: "Input and output tokens this session",
+    recommended: true,
+    value: value_pi_tokens,
+    copy: None,
+}];
+
 /// The catalog for one agent.
 pub fn context_detail_rows(agent: ContextDetailsAgent) -> Vec<RowDefinition> {
     match agent {
@@ -1116,6 +1210,7 @@ pub fn context_detail_rows(agent: ContextDetailsAgent) -> Vec<RowDefinition> {
         ContextDetailsAgent::Claude => claude_rows(),
         ContextDetailsAgent::Cursor => cursor_rows(),
         ContextDetailsAgent::Hermes => hermes_rows(),
+        ContextDetailsAgent::Pi => pi_rows(),
         ContextDetailsAgent::Basic => basic_rows(),
     }
 }

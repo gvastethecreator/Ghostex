@@ -724,7 +724,7 @@ fn pi_decoder_maps_shared_chat_blocks() {
             SessionChatBlock::ToolCall {
                 name: "read".to_string(),
                 input: json!({"path": "/tmp/example"}),
-                call_id: None
+                call_id: Some("call-1".to_string())
             },
         ]
     );
@@ -740,7 +740,7 @@ fn pi_decoder_maps_shared_chat_blocks() {
         vec![SessionChatBlock::ToolResult {
             output: "contents".to_string(),
             is_error: None,
-            call_id: None
+            call_id: Some("call-1".to_string())
         }]
     );
 }

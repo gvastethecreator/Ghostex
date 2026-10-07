@@ -232,6 +232,27 @@ fn sounds_section(
             cx,
         ));
     }
+    if g.visible(s, "resetExpirySystemNotifications") {
+        let spec = g.spec(
+            "resetExpirySystemNotifications",
+            "Reset Expiry Notifications",
+            "Show a system notification when a banked Claude or Codex usage reset expires within 3 days and again within 24 hours. The red notification in the bell stays either way.",
+        );
+        rows.push(toggle_field_with(
+            &p,
+            "resetExpirySystemNotifications",
+            spec,
+            g.values.bool("resetExpirySystemNotifications"),
+            Some(reset_key::<GeneralTab>("resetExpirySystemNotifications")),
+            |page: &mut GeneralTab, checked, _window, cx| {
+                save(page, "resetExpirySystemNotifications", json!(checked), cx);
+                if checked {
+                    post(page, "requestMacOSNotificationPermission", cx);
+                }
+            },
+            cx,
+        ));
+    }
     if g.visible(s, "completionSound") {
         let spec = g.spec(
             "completionSound",

@@ -16,6 +16,7 @@ mod process_login;
 pub(crate) mod recovery;
 mod reset_claim;
 mod reset_credits;
+pub(crate) mod reset_watch;
 pub(crate) mod restart;
 pub(crate) mod restart_verification;
 pub(crate) mod runtime;

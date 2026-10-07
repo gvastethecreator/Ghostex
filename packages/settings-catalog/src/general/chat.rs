@@ -28,6 +28,7 @@ pub(crate) fn sounds() -> Section {
         vec![
             row("completionSound", "Completion Sound", "Sound for terminal completions, or Off.").options(&[opt("Off", "off")]).options_of(COMPLETION_SOUND_OPTIONS, "label", "value"),
             row("showMacOSAttentionNotifications", "Attention Notifications", "Show a system notification when a session needs attention."),
+            row("resetExpirySystemNotifications", "Reset Expiry Notifications", "Show a system notification when a banked Claude or Codex usage reset expires within 3 days and again within 24 hours. The red notification in the bell stays either way."),
             row("attentionNotificationActions", "Agent Completion Alert Test", "Test the current completion alert settings or open Notification Settings."),
             row("actionCompletionSound", "Action Completion Sound", "Sound for action completions.").options_of(COMPLETION_SOUND_OPTIONS, "label", "value"),
             row("copySound", "Copy Sound", "Play a short sound when copying to the clipboard, including text from the chat composer."),

@@ -442,6 +442,13 @@ impl GhosttyConfigOwner {
         let owner = Self { config, functions };
 
         unsafe {
+            // Give native macOS surfaces the GPUI keymap's clipboard alias,
+            // seeding it before user bindings take precedence.
+            #[cfg(target_os = "macos")]
+            {
+                let alias = "keybind = shift+insert=paste_from_clipboard\n";
+                (functions.config_load_string)(owner.as_raw(), alias.as_ptr().cast(), alias.len());
+            }
             (functions.config_load_default_files)(owner.as_raw());
             (functions.config_finalize)(owner.as_raw());
         }

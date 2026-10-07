@@ -27,6 +27,7 @@ pub(crate) fn launch_command_selection(
     let family = match agent {
         SessionChatOptionAgent::Claude => "claude",
         SessionChatOptionAgent::Codex => "codex",
+        SessionChatOptionAgent::Pi => "pi",
         _ => return None,
     };
     let mut words = Vec::new();
@@ -66,7 +67,8 @@ pub(crate) fn launch_command_selection(
             (_, "--model", Some(model)) | (SessionChatOptionAgent::Codex, "-m", Some(model)) => {
                 selection.model = launch_model_choice(family, model);
             }
-            (SessionChatOptionAgent::Claude, "--effort", Some(effort)) => {
+            (SessionChatOptionAgent::Claude, "--effort", Some(effort))
+            | (SessionChatOptionAgent::Pi, "--thinking", Some(effort)) => {
                 selection.effort = launch_effort_choice(effort);
             }
             (SessionChatOptionAgent::Codex, "-c" | "--config", Some(setting)) => {

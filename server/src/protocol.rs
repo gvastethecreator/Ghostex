@@ -514,10 +514,12 @@ pub fn endpoint_for(path: &str) -> Option<EndpointDescriptor> {
         bounded text (goal, instructions, one memory note).
         */
         | "/api/readCoordinator"
+        | "/api/readCoordinatorThreads"
         | "/api/listCoordinators"
         | "/api/updateCoordinator"
         | "/api/linkCoordinatorThread"
         | "/api/setCoordinatorThreadResolved"
+        | "/api/promoteCoordinator"
         | "/api/toggleCloseAfterDone"
         | "/api/openConversation"
         | "/api/sleepSession"

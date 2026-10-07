@@ -217,28 +217,37 @@ pub struct SessionView {
 /// A coordinator's tree in the list: its open threads drawn right under it, indented.
 ///
 /// CDXC:Coordinators 2026-09-30 WHY:
-/// The sidebar is where Ghostex users already scan status, so it is the always-visible overview of a coordinator's work: the coordinator row, then each open thread with its own status dot. A thread follows its coordinator's section (a pinned coordinator takes its threads to Pinned) unless the user parked or snoozed it, and a done thread leaves the tree. This is a group-level value because it reads other rows, which a cached row must never do.
+/// The sidebar is where Ghostex users already scan status, so it is the always-visible overview of a coordinator's work: the coordinator row, then its threads with their own status dots. A thread follows its coordinator's section (a pinned coordinator takes its threads to Pinned) unless the user parked or snoozed it. Which threads are listed and which wait behind the "N older threads" row is `sidebar_view/threads.rs`. This is a group-level value because it reads other rows, which a cached row must never do.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RowNesting {
     /// How deep under a coordinator the row is drawn; 0 for a top-level row.
     pub depth: u8,
     /// The last thread directly under its coordinator, where the tree line ends.
     pub last_child: bool,
-    /// On a coordinator row: the open threads drawn under it.
+    /// On a coordinator row: the threads nested under it, its older ones included.
     pub thread_count: u16,
     /// On a coordinator row: every thread of it in the list, wherever it is drawn (a worktree
     /// thread sits in its worktree's project).
     pub threads: ThreadTally,
     /// On a coordinator row with threads under it: the user folded them away.
     pub collapsed: bool,
-    /// On a thread row: a coordinator above it is folded, so the row is not drawn.
+    /// On a thread row: a coordinator above it is folded, or the row waits behind its
+    /// coordinator's "N older threads" row, so it is not drawn.
     pub folded: bool,
+    /// On a coordinator row: its threads that are older (neither working, waiting nor active in the
+    /// last two hours), which its "N older threads" row lists.
+    pub older_threads: u16,
+    /// On a coordinator row: the user listed its older threads.
+    pub older_threads_shown: bool,
+    /// On a thread row: it is one of its coordinator's older threads and they are not listed.
+    pub older_hidden: bool,
 }
 
 /// A coordinator's threads in the list.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ThreadTally {
-    /// Every thread session still in the list, whatever its state.
+    /// The thread sessions the expanded coordinator lists by default: working, waiting, or active
+    /// in the last two hours.
     pub total: u16,
     pub waiting: u16,
     pub working: u16,
@@ -247,8 +256,8 @@ pub struct ThreadTally {
 /// What a coordinator row's badge shows.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CoordinatorBadge {
-    /// The number beside the crew icon: the working threads, else the waiting ones, else every
-    /// thread session of the coordinator. `0` draws no number.
+    /// The number beside the crew icon: the working threads, else the waiting ones, else the
+    /// coordinator's recent threads. `0` draws no number.
     pub count: u16,
     pub tone: CoordinatorBadgeTone,
 }
@@ -265,7 +274,7 @@ impl RowNesting {
     /// The coordinator row's badge.
     ///
     /// CDXC:Coordinators 2026-10-04 DECISION:
-    /// User: "in this state the main coordinator should show 2 working not 5" (5 threads, 2 working). The badge is the crew icon and one number: how many threads are working; when none work, how many wait on the user; when neither, the total number of thread sessions of the coordinator still in the sidebar (worktree threads included). The tint follows the number: orange when it is the working count, light blue when it is the waiting count, neutral when it is the total. Supersedes the 2026-10-01 decision ("make it just show the people icon and the total number of sessions that are part of this one"), which always showed the total.
+    /// User: "in this state the main coordinator should show 2 working not 5" (5 threads, 2 working). The badge is the crew icon and one number: how many threads are working; when none work, how many wait on the user; when neither, how many threads the coordinator lists by default (working, waiting or active in the last two hours, worktree threads included; the 2026-10-06 rule in `sidebar_view/threads.rs`), so the number matches the rows under it. The tint follows the number: orange when it is the working count, light blue when it is the waiting count, neutral otherwise. Supersedes the 2026-10-01 decision ("make it just show the people icon and the total number of sessions that are part of this one"), which always showed the total.
     pub fn coordinator_badge(&self) -> CoordinatorBadge {
         let threads = self.threads;
         CoordinatorBadge {

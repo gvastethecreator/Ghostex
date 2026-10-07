@@ -245,8 +245,15 @@ impl AgentsTab {
         let key_id = id.clone();
         let key_change = on_change.clone();
         let key_options: Vec<String> = options.iter().map(|option| option.value.clone()).collect();
+        let trigger_label: SharedString = selected
+            .map(|index| options[index].label.clone())
+            .unwrap_or_else(|| placeholder.to_string())
+            .into();
         let trigger = div()
             .id(SharedString::from(format!("{id}-trigger")))
+            .role(gpui::Role::ComboBox)
+            .aria_label(trigger_label)
+            .aria_expanded(open)
             .track_focus(&focus)
             .flex_shrink_0()
             .when_some(width, |this, width| this.w(px(width)))
@@ -278,9 +285,9 @@ impl AgentsTab {
                 let click_id = id.clone();
                 this.cursor_pointer()
                     .hover(move |this| this.bg(hsla(p.raised_hover)))
-                    .on_click(cx.listener(move |page, _: &ClickEvent, window, cx| {
+                    .on_press(cx, move |page, window, cx| {
                         page.toggle_dropdown(&click_id, selected, window, cx);
-                    }))
+                    })
                     .on_key_down(cx.listener(move |page, event: &KeyDownEvent, window, cx| {
                         let key = event.keystroke.key.as_str();
                         let is_open = page.dropdowns.get(&key_id).is_some_and(|state| state.open);
@@ -406,6 +413,9 @@ impl AgentsTab {
             let close_id = id.clone();
             div()
                 .id((SharedString::from(format!("{id}-option")), index))
+                .role(gpui::Role::ListBoxOption)
+                .aria_label(SharedString::from(option.label.clone()))
+                .aria_selected(is_selected)
                 .w_full()
                 .flex_shrink_0()
                 .min_h(px(ROW))
@@ -429,10 +439,10 @@ impl AgentsTab {
                 .when(!is_selected, |this| {
                     this.hover(move |this| this.bg(hsla(p.popup_hover)))
                 })
-                .on_click(cx.listener(move |page, _: &ClickEvent, window, cx| {
+                .on_press(cx, move |page, window, cx| {
                     page.close_dropdown(&close_id, window, cx);
                     on_change(page, value.clone(), window, cx);
-                }))
+                })
                 .child(
                     div()
                         .flex_1()
@@ -516,6 +526,9 @@ impl AgentsTab {
                 let hover_id = id.clone();
                 h_flex()
                     .id((SharedString::from(format!("{id}-option")), *index))
+                    .role(gpui::Role::ListBoxOption)
+                    .aria_label(SharedString::from(option.label.clone()))
+                    .aria_selected(is_selected)
                     .w_full()
                     .flex_shrink_0()
                     .min_h(px(32.0))
@@ -546,10 +559,10 @@ impl AgentsTab {
                             }
                         },
                     ))
-                    .on_click(cx.listener(move |page, _: &ClickEvent, window, cx| {
+                    .on_press(cx, move |page, window, cx| {
                         page.close_dropdown(&close_id, window, cx);
                         on_change(page, value.clone(), window, cx);
-                    }))
+                    })
                     .children(option.icon.as_deref().map(|icon| {
                         agent_icon(if icon == "custom" { None } else { Some(icon) }, &p)
                     }))

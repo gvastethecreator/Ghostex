@@ -50,7 +50,7 @@ pub(crate) fn installation(
             Some("node" | "bun" | "pnpm" | "npm")
         ))
         .then_some(tool),
-        executable: path,
+        executable: crate::platform::live_path::runnable(&path),
     })
 }
 

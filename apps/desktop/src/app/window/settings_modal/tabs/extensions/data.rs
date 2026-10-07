@@ -168,6 +168,7 @@ pub(crate) fn official_icon(id: &str) -> &'static str {
         "supabase" => "modals/settings/database.svg",
         "github-actions" | "kanban" | "quickActions" => icon::PLAYER_PLAY,
         "spaces" => "modals/settings/stack-2.svg",
+        "cloudBoxes" => "modals/settings/box.svg",
         "posthog" => "modals/settings/chart-bar.svg",
         "automate" => "modals/settings/bolt.svg",
         "botAutomations" => "modals/settings/rss.svg",

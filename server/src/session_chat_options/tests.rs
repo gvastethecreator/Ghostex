@@ -459,6 +459,7 @@ fn terminal_values_override_transcript_values_per_option() {
         codex_status: None,
         cursor_status: None,
         hermes_status: None,
+        pi_status: None,
         checkout_status: None,
         model_catalog: None,
     };
@@ -516,6 +517,7 @@ fn detected_options_serialize_to_the_shared_contract_shape() {
             codex_status: None,
             cursor_status: None,
             hermes_status: None,
+            pi_status: None,
             checkout_status: None,
             model_catalog: None,
         },

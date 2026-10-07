@@ -4,6 +4,35 @@ use serde_json::{Value, json};
 use std::time::Duration;
 
 impl GhostexGpuiApp {
+    /// CDXC:Notifications 2026-10-05 DECISION:
+    /// User: a banked reset expiry warning has "an action to redeem now / open the usage panel". Opening the row (click, jump key, or its system notification) opens that account's usage panel, where its resets are used, anchored to the bell. An account without a titlebar usage button on this computer has no panel to open, so it opens Settings > Accounts instead.
+    pub(crate) fn open_account_notification(
+        &mut self,
+        account_id: &str,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let usage = self
+            .titlebar_accounts
+            .iter()
+            .find(|a| a["id"].as_str() == Some(account_id) && a["titlebarMachine"] == "local")
+            .and_then(|a| ExtensionId::new(a["titlebarKey"].as_str().unwrap_or("")));
+        let anchor = self.titlebar_notification_bell_bounds.get();
+        let (Some(id), Some(main), Some(anchor)) = (usage, self.main_window_handle, anchor) else {
+            self.open_gpui_settings_accounts_page(None, cx);
+            return;
+        };
+        let app = cx.weak_entity();
+        cx.defer(move |cx| {
+            let _ = main.update(cx, |_, window, cx| {
+                let _ = app.update(cx, |app, cx| {
+                    if !app.titlebar_popup_menu_open(GpuiTitlebarPopupKind::AccountUsage(id)) {
+                        app.open_titlebar_account_usage(id, anchor, window, cx);
+                    }
+                });
+            });
+        });
+    }
+
     /// Claims the reset the user confirmed in an account's usage panel on the gxserver that owns the account, then refreshes every account button and hands the result back to the panel.
     pub(crate) fn redeem_account_reset(
         &mut self,

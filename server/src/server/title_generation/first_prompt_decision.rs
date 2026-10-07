@@ -12,7 +12,7 @@ pub(crate) fn decide_first_prompt_auto_title(
         .and_then(|settings| settings.get("forkFirstPromptAutoTitlePending"))
         .and_then(Value::as_bool)
         == Some(true);
-    let raw_prompt = prompt;
+    let raw_prompt = prompt.map(crate::coordinators::strip_agent_message_header);
     let normalized_prompt = normalize_first_prompt_title_prompt(prompt);
     let cancelled_prompt = normalize_first_prompt_title_prompt(
         read_runtime_text(session, "gxserverFirstPromptAutoTitleCancelledPrompt").as_deref(),
@@ -239,7 +239,10 @@ pub(crate) fn is_generic_agent_session_title(
 }
 
 pub(crate) fn normalize_first_prompt_title_prompt(prompt: Option<&str>) -> Option<String> {
-    let normalized = prompt?.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = crate::coordinators::strip_agent_message_header(prompt?)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     let normalized = normalized.trim();
     if normalized.is_empty() {
         return None;

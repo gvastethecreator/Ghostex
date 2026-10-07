@@ -187,13 +187,13 @@ fn hook_status_uses_pi_agent_extension_before_legacy_root_paths() {
     write_test_file(
         &agent_extension_path,
         &format!(
-            "// {PI_EXTENSION_MARKER} v4\nconst hook = \"{}\";\n",
+            "// {PI_EXTENSION_MARKER} v5\nconst hook = \"{}\";\n",
             path_string(&hook_paths.notify_hook_path)
         ),
     );
     write_test_file(
         &legacy_root_extension_path,
-        &format!("// {PI_EXTENSION_MARKER} v4\n"),
+        &format!("// {PI_EXTENSION_MARKER} v5\n"),
     );
 
     let provider_paths = provider_hook_paths("pi", &hook_paths);
@@ -374,19 +374,23 @@ fn notify_hook_helper_records_working_status_and_first_prompt() {
     let temp = tempfile::tempdir().expect("tempdir");
     let state_path = temp.path().join("session.state");
     let hook_store = temp.path().join("hook-store");
-    run_notify_hook(vec![
-        path_string(&state_path),
-        json!({
-            "agent": "codex",
-            "event": "UserPromptSubmit",
-            "hook_event_name": "UserPromptSubmit",
-            "prompt": "Please fix flaky tests",
-            "session_id": "codex-session-1"
-        })
-        .to_string(),
-        path_string(&hook_store),
-    ])
-    .expect("notify helper");
+    assert!(
+        run_notify_hook(vec![
+            path_string(&state_path),
+            json!({
+                "agent": "codex",
+                "event": "UserPromptSubmit",
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "Please fix flaky tests",
+                "session_id": "codex-session-1"
+            })
+            .to_string(),
+            path_string(&hook_store),
+        ])
+        .expect("notify helper")
+        .is_none(),
+        "a codex event never answers with coordinator context"
+    );
     let state = read_hook_state(&state_path);
     assert_eq!(
         read_state_string(&state, "status").as_deref(),

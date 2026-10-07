@@ -66,6 +66,13 @@ impl SidebarList {
         now_ms: u64,
     ) -> NativeSidebarSnapshot {
         self.last_inputs.ui = ui;
+        // The page's own machine is the gxserver that serves it and the page has no settings file,
+        // so this machine's Spaces switch is the one that daemon publishes (CDXC:Spaces 2026-10-06).
+        self.last_inputs.settings.sidebar_spaces_enabled = core
+            .presentation()
+            .machine(&ghostex_gx_core::MachineId::Local)
+            .and_then(|machine| machine.side_state().spaces_enabled)
+            .unwrap_or(false);
         let changes = std::mem::take(&mut self.changes);
         self.model.update(core, &self.last_inputs, &changes, now_ms);
         let menus = SidebarMenus::new(

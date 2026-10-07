@@ -100,6 +100,12 @@ impl GhostexGpuiApp {
                 // An AppKit child of the main window moves with it (CDXC:AppModal 2026-10-04 in
                 // workspace_windows/owned_windows.rs); a no-op elsewhere.
                 attach_gpui_app_modal_window_to_main_window(window, main_window_native_view);
+                /*
+                CDXC:AppModal 2026-10-06 WHY:
+                GPUI owns a Windows pop-up by whichever window is active when it opens. A modal opened while another modal was active (`ghostex settings open` with Settings already open, any modal replacing another) was owned by the modal it replaced, and that modal's removal, which GPUI runs after this window exists, destroyed this one with it: every second `settings open` closed Settings. An app modal belongs to the main window, so it is owned by it.
+                */
+                #[cfg(target_os = "windows")]
+                crate::app::window::own_gpui_popup_window(window, main_window_native_view);
                 let view = build(window, cx);
                 *view_out.borrow_mut() = Some(view.clone().into_any());
                 let frame = cx.new(|_| ModalWindowFrame::new(view, palette));
@@ -177,6 +183,9 @@ impl GhostexGpuiApp {
             }
             GpuiAppModalKind::NewCoordinator => {
                 self.open_gpui_new_coordinator_modal(open_message, cx);
+            }
+            GpuiAppModalKind::MakeCoordinator => {
+                self.open_gpui_make_coordinator_modal(open_message, cx);
             }
             GpuiAppModalKind::RemoteSetup => {
                 self.open_gpui_remote_setup_modal(open_message, cx);
@@ -371,6 +380,11 @@ impl GhostexGpuiApp {
         self.app_modal_command_return_focus_target = None;
         if modal.kind == GpuiAppModalKind::ExportTranscriptResult {
             self.pending_export_transcript_reveal_path = None;
+        }
+        // A paste confirmation replaced by another modal is a cancel.
+        if modal.kind == GpuiAppModalKind::TerminalPasteConfirm {
+            self.pending_terminal_paste_confirmation = None;
+            self.terminal_paste_confirmation_dialog_open = false;
         }
         // Quick Access keeps a live controller (quick_access/host.rs); tell it to
         // stop publishing when its window is replaced or dismissed.

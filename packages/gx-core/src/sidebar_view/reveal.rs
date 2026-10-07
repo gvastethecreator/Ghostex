@@ -35,6 +35,7 @@ use crate::sidebar_ui::SidebarUiIntent;
 use super::inputs::{
     effective_sidebar_mode, SectionId, SidebarInputs, SidebarMode, SidebarUiState, LOCAL_MACHINE_ID,
 };
+use super::machine_spaces::section_spaces_enabled;
 use super::model::SidebarViewModel;
 use super::spaces::{resolve_selected_space, space_for_group, SpacesState};
 use super::tags::matches_tag_filters;
@@ -67,6 +68,8 @@ pub struct SidebarRevealPlan {
     pub collapsed_group: bool,
     /// The folded coordinators above the row, by sidebar row id.
     pub collapsed_coordinators: Vec<String>,
+    /// The coordinators above the row whose older threads have to be listed, by sidebar row id.
+    pub older_threads_of: Vec<String>,
     /// The group or its collection is hidden and Show Hidden is off.
     pub show_hidden: bool,
     /// The ticked tag filters leave the row out.
@@ -132,6 +135,17 @@ impl SidebarRevealPlan {
                 sidebar_session_id: sidebar_session_id.clone(),
             });
         }
+        for sidebar_session_id in &self.older_threads_of {
+            if !ui
+                .collapse
+                .expanded_coordinator_older_threads
+                .contains(sidebar_session_id)
+            {
+                intents.push(SidebarUiIntent::ToggleCoordinatorOlderThreads {
+                    sidebar_session_id: sidebar_session_id.clone(),
+                });
+            }
+        }
         if self.expand_list
             && !ui
                 .collapse
@@ -173,6 +187,7 @@ pub fn reveal_plan(
     });
     let inputs = switched.as_ref().unwrap_or(inputs);
     let parking = inputs.settings.enable_session_parking;
+    let group_working = inputs.settings.group_working_sessions;
     // A bot row is only in Bots mode's list and a project row only in Projects mode's, so the
     // row's kind names the mode the reveal has to be in. Bots switched off draws no bot row at all.
     let row_mode = match row_is_bot(core, sidebar_session_id) {
@@ -188,7 +203,7 @@ pub fn reveal_plan(
     // The drawn list is the OTHER machine's, or the other mode's, when the reveal moves either, so
     // it is not asked at all.
     let drawn = (select_machine.is_none() && select_mode.is_none())
-        .then(|| locate(view, sidebar_session_id, parking, now_ms))
+        .then(|| locate(view, sidebar_session_id, parking, group_working, now_ms))
         .flatten();
     let found = match drawn {
         Some(found) => found,
@@ -196,7 +211,7 @@ pub fn reveal_plan(
             // Nothing filtering: no Space, no Show Hidden, no tags. The row is then wherever it is.
             let probe = probe.insert(unfiltered(inputs, row_mode));
             let list = built.insert(SidebarViewModel::build_from_scratch(core, probe, now_ms));
-            locate(list, sidebar_session_id, parking, now_ms)?
+            locate(list, sidebar_session_id, parking, group_working, now_ms)?
         }
     };
     let located = built.as_ref().unwrap_or(view);
@@ -213,6 +228,7 @@ pub fn reveal_plan(
             .collapsed_groups
             .contains(&found.group_id),
         collapsed_coordinators: found.folded_by.clone(),
+        older_threads_of: found.older_of.clone(),
         collapsed_collection_storage_id: collection_storage_id.clone().filter(|storage_id| {
             inputs
                 .ui
@@ -295,6 +311,13 @@ pub fn reveal_plan(
             .collapsed_coordinators
             .remove(sidebar_session_id);
     }
+    for sidebar_session_id in &found.older_of {
+        probe
+            .ui
+            .collapse
+            .expanded_coordinator_older_threads
+            .insert(sidebar_session_id.clone());
+    }
     let opened = SidebarViewModel::build_from_scratch(core, probe, now_ms);
     plan.expand_list = !opened
         .group(&plan.group_id)
@@ -311,7 +334,7 @@ pub(crate) fn unfiltered(inputs: &SidebarInputs, mode: SidebarMode) -> SidebarIn
     probe.ui.selected_tag_filters.clear();
     // Not by clearing the section's Space: an absent selection resolves to the section's FIRST
     // Space, which filters just as hard. Only turning Spaces off draws every group.
-    probe.settings.sidebar_spaces_enabled = false;
+    probe.spaces_lifted = true;
     probe
 }
 
@@ -347,19 +370,21 @@ pub fn space_for_focused_row(
     sidebar_session_id: &str,
     now_ms: u64,
 ) -> Option<FocusedRowSpace> {
-    // Spaces off is the whole answer, and it is the common case: `describeNativeSidebarMachine`
-    // reads no Spaces state at all then, so neither the follow nor the memory has anything to say
-    // and nothing below runs.
     // A bot belongs to no Space, and Bots mode draws none, so neither has a Space to follow or
     // remember; asking a build would only find that out the slow way.
-    if !inputs.settings.sidebar_spaces_enabled
-        || effective_sidebar_mode(&inputs.settings, &inputs.ui) == SidebarMode::Bots
+    if effective_sidebar_mode(&inputs.settings, &inputs.ui) == SidebarMode::Bots
         || row_is_bot(core, sidebar_session_id)
     {
         return None;
     }
     let (moved, other_machine) = inputs_for_row_machine(core, inputs, sidebar_session_id);
     let inputs = moved.as_ref().unwrap_or(inputs);
+    // Spaces off on the row's machine is the whole answer, and it is the common case:
+    // `describeNativeSidebarMachine` reads no Spaces state at all then, so neither the follow nor
+    // the memory has anything to say and nothing below runs.
+    if !section_spaces_enabled(core.presentation(), inputs) {
+        return None;
+    }
     let section_key = inputs.ui.section_key();
     // The drawn list is the SELECTED machine's, so it can only answer for a row on it.
     let drawn = (!other_machine)
@@ -441,12 +466,15 @@ struct Located {
     effective_tag: Option<String>,
     /// The folded coordinators above the row, nearest first.
     folded_by: Vec<String>,
+    /// The coordinators above the row whose older threads it waits behind, nearest first.
+    older_of: Vec<String>,
 }
 
 fn locate(
     view: &SidebarView,
     sidebar_session_id: &str,
     enable_parking: bool,
+    group_working: bool,
     now_ms: u64,
 ) -> Option<Located> {
     let group = find_group(view, sidebar_session_id)?;
@@ -458,9 +486,11 @@ fn locate(
     // A thread under a folded coordinator: its ancestors up the tree, and the top one, whose
     // heading is the thread's.
     let mut folded_by = Vec::new();
+    let mut older_of = Vec::new();
     let mut heading_row = sidebar_session_id;
     if let Some(index) = index.filter(|index| sessions[*index].nesting.folded) {
         let mut depth = sessions[index].nesting.depth;
+        let mut tucked = sessions[index].nesting.older_hidden;
         for ancestor in sessions[..index].iter().rev() {
             if ancestor.nesting.depth >= depth {
                 continue;
@@ -469,6 +499,10 @@ fn locate(
             if ancestor.nesting.collapsed {
                 folded_by.push(ancestor.row.sidebar_session_id.clone());
             }
+            if tucked {
+                older_of.push(ancestor.row.sidebar_session_id.clone());
+            }
+            tucked = ancestor.nesting.older_hidden;
             if depth == 0 {
                 heading_row = &ancestor.row.sidebar_session_id;
                 break;
@@ -489,7 +523,14 @@ fn locate(
         .map(|section| section.id)
         // A row its heading does not draw is in no heading's list, so its heading is worked out
         // from the row itself, exactly as the sections are built.
-        .or_else(|| row.map(|row| super::ordering::section_of(row, enable_parking, now_ms)))?;
+        .or_else(|| {
+            row.map(|row| {
+                let group_working = group_working
+                    && !super::ordering::held_out_of_working(sessions)
+                        .contains(&row.sidebar_session_id);
+                super::ordering::section_of(row, enable_parking, group_working, now_ms)
+            })
+        })?;
     Some(Located {
         group_id: group.core.group_id.clone(),
         storage_id: group.core.storage_id.clone(),
@@ -497,6 +538,7 @@ fn locate(
         drawn,
         effective_tag: row.and_then(|row| row.effective_tag.clone()),
         folded_by,
+        older_of,
     })
 }
 
@@ -513,7 +555,7 @@ fn space_of_group(core: &Core, inputs: &SidebarInputs, group: &GroupView) -> Opt
         .project_context
         .as_ref()
         .is_some_and(|project| project.bot_profile.is_some());
-    if !inputs.settings.sidebar_spaces_enabled || is_bot {
+    if !section_spaces_enabled(core.presentation(), inputs) || is_bot {
         return None;
     }
     let machine = machine_key(&inputs.ui.selected_machine_id);

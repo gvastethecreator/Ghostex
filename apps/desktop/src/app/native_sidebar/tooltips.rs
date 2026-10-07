@@ -88,11 +88,7 @@ fn sidebar_tooltip_sized(
     } else {
         tooltip_background(menu)
     };
-    let radius = if frosted {
-        px(gpui_component::tooltip::FROSTED_TOOLTIP_RADIUS)
-    } else {
-        px(8.0 * scale)
-    };
+    let radius = px(gpui_component::tooltip::TOOLTIP_RADIUS);
     let secondary = titlebar_popup_menu_foreground().opacity(0.6);
     Tooltip::element(move |_, _| {
         let lines = text.lines().filter(|line| !line.trim().is_empty());

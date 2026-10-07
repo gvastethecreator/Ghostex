@@ -70,6 +70,10 @@ impl PresentationStore {
             summary.side_state.spaces = side.spaces.as_ref() != Some(&spaces);
             side.spaces = Some(spaces);
         }
+        if let Some(enabled) = snapshot.sidebar_spaces_enabled.take() {
+            summary.side_state.spaces |= side.spaces_enabled != Some(enabled);
+            side.spaces_enabled = Some(enabled);
+        }
         if let Some(tags) = snapshot.custom_session_tags.take() {
             summary.side_state.custom_session_tags =
                 side.custom_session_tags.as_ref() != Some(&tags);
@@ -371,6 +375,15 @@ impl PresentationStore {
             }
         }
         summary
+    }
+
+    /// Records the daemon's own Spaces switch from a Spaces frame the store already accepted.
+    /// Reports the change as a Spaces change, which is what every reader of it rebuilds on.
+    pub fn apply_spaces_enabled(&mut self, machine: &MachineId, enabled: bool) -> bool {
+        let side = &mut self.machine_mut(machine).side;
+        let changed = side.spaces_enabled != Some(enabled);
+        side.spaces_enabled = Some(enabled);
+        changed
     }
 
     /// Notes a frame that carries a revision but no state the store holds (for example

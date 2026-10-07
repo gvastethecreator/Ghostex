@@ -19,6 +19,7 @@ use crate::core::Core;
 use crate::keys::ProjectKey;
 
 use super::inputs::SidebarInputs;
+use super::machine_spaces::section_spaces_enabled;
 use super::model::SidebarViewModel;
 use super::reveal::{machine_key, unfiltered};
 use super::spaces::{OTHER_SPACE_ID, SpaceSelection, SpacesState, selection_shows_project};
@@ -117,7 +118,7 @@ pub fn plan_space_sleep(
     space_id: &str,
     now_ms: u64,
 ) -> Option<SpaceSleepPlans> {
-    if !inputs.settings.sidebar_spaces_enabled {
+    if !section_spaces_enabled(core.presentation(), inputs) {
         return None;
     }
     let machine = machine_key(&inputs.ui.selected_machine_id);

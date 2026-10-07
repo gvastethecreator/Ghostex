@@ -96,6 +96,10 @@ pub struct SidebarSpacesChangedFrame {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revision: Option<i64>,
     pub sidebar_spaces: SidebarSpacesState,
+    /// The daemon's own Spaces switch, sent with every Spaces frame and on its own when only the
+    /// switch moved. Absent on an older daemon, which leaves the client's copy alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sidebar_spaces_enabled: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

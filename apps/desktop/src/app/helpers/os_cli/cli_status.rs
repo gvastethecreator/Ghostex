@@ -151,6 +151,7 @@ pub(crate) fn gpui_ghostex_cli_status_message_with_cua_update_check(
     let cua_driver_path = gpui_cua_driver_executable_path();
     let cua_app_installed = gpui_is_dir(Path::new("/Applications/CuaDriver.app"));
     let cua_driver_installed = cua_driver_path.is_some() || cua_app_installed;
+    let cua_driver_skill_path = gpui_cua_driver_skill_path();
     let desktop_control_installed = cua_driver_installed && computer_use_skill_installed;
     // SpaceO's probes (version, latest release, daemon ping) run beside Trycua's instead of after them.
     let (spaceo_status, (cua_driver_update_status, cua_permission_status)) =
@@ -287,6 +288,8 @@ pub(crate) fn gpui_ghostex_cli_status_message_with_cua_update_check(
         "cuaDriverPermissionDetail": cua_permission_status.detail,
         "cuaDriverPath": cua_driver_path.as_ref().map(|path| gpui_path_string(path)),
         "cuaDriverScreenRecordingPermissionGranted": cua_permission_status.screen_recording_granted,
+        "cuaDriverSkillInstalled": cua_driver_skill_path.is_some(),
+        "cuaDriverSkillPath": cua_driver_skill_path.as_ref().map(|path| gpui_path_string(path)),
         "cuaDriverUpdateAvailable": cua_driver_update_status.update_available,
         "cuaDriverVersion": cua_driver_update_status.current_version,
         "detail": detail,

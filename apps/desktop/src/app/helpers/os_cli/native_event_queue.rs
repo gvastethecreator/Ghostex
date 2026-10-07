@@ -45,12 +45,7 @@ pub(crate) fn queue_gpui_session_attention_notification_click(session_id: String
     foreground
         .spawn(async move {
             let _ = app.update_in(&mut async_app, |this, window, cx| {
-                cx.activate(true);
-                // The window already showing the session takes the click (app/workspace_windows/).
-                let row_id = session_id.clone();
-                this.activate_session_in_its_window(&row_id, window, cx, move |app, cx| {
-                    app.dispatch_gpui_status_pet_activation(session_id.as_str(), cx);
-                });
+                this.activate_system_notification(session_id, window, cx);
             });
         })
         .detach();

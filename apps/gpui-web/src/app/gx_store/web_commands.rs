@@ -17,6 +17,7 @@ fn section_id(value: &str) -> Option<SectionId> {
         "browser" => SectionId::Browser,
         "pinned" => SectionId::Pinned,
         "drafts" => SectionId::Drafts,
+        "working" => SectionId::Working,
         "sessions" => SectionId::Sessions,
         "parked" => SectionId::Parked,
         "snoozed" => SectionId::Snoozed,
@@ -96,6 +97,9 @@ impl GhostexGpuiApp {
                 section: section_id(command.get("section").and_then(Value::as_str)?)?,
             }),
             "toggleCoordinator" => Some(SidebarUiIntent::ToggleCoordinatorCollapsed {
+                sidebar_session_id: text("sessionId")?,
+            }),
+            "toggleCoordinatorOlder" => Some(SidebarUiIntent::ToggleCoordinatorOlderThreads {
                 sidebar_session_id: text("sessionId")?,
             }),
             "selectSpace" => Some(SidebarUiIntent::SelectSpace {

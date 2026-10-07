@@ -20,7 +20,16 @@ pub const NOTIFICATION_FEED_UPDATE_ENDPOINT: &str = "/api/updateNotificationFeed
 /// `type` of the state message the bell reads.
 pub const NOTIFICATION_FEED_STATE_MESSAGE_TYPE: &str = "notificationFeedState";
 
-const KINDS: [&str; 4] = ["finished", "needsInput", "bell", "custom"];
+/// `resetExpiring` and `resetRedeemed` are account rows (banked usage resets): they carry
+/// `accountId`, and their `sessionId` names no session.
+const KINDS: [&str; 6] = [
+    "finished",
+    "needsInput",
+    "bell",
+    "custom",
+    "resetExpiring",
+    "resetRedeemed",
+];
 
 /// What the panel and the jump keys ask for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -86,6 +95,9 @@ fn normalize_item(value: &Value) -> Option<Value> {
     let created_at = non_empty("createdAt")?;
     let kind = non_empty("kind").filter(|kind| KINDS.contains(kind))?;
     let mut item = Map::new();
+    if let Some(account_id) = non_empty("accountId") {
+        item.insert("accountId".into(), Value::from(account_id));
+    }
     if let Some(agent_name) = non_empty("agentName") {
         item.insert("agentName".into(), Value::from(agent_name));
     }

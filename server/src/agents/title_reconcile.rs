@@ -138,6 +138,18 @@ pub(crate) fn reconcile_agent_metadata_title(
         )
     });
     let Some(metadata_title) = metadata_title else {
+        if let Some(restored) = restore_title_taken_from_another_conversation(
+            repository,
+            lifecycle,
+            &session,
+            &runtime_settings,
+            identity.agent_session_id.as_deref(),
+        )? {
+            if let Some(transaction) = transaction {
+                transaction.commit().map_err(sql_error)?;
+            }
+            return Ok(restored);
+        }
         return Ok(AgentTitleReconcileResult {
             changed: false,
             metadata_title_found: false,
@@ -153,18 +165,18 @@ pub(crate) fn reconcile_agent_metadata_title(
         metadata_title.record_revision.as_deref(),
     );
 
-    // CDXC:Coordinators 2026-10-03 SEE-ALSO: coordinator_keeps_its_title in server/src/coordinators/title.rs; only a rename the user requested (the pending title) may replace a coordinator's name.
+    // CDXC:Coordinators 2026-10-05 SEE-ALSO: keeps_its_given_title in server/src/coordinators/title.rs; only a rename the user requested (the pending title) may replace a coordinator's or a thread's name.
     let user_requested_title = pending_title
         .as_deref()
         .is_some_and(|pending_title| titles_match(pending_title, &metadata_title.title));
     if !user_requested_title
         && session.get("title").and_then(Value::as_str) != Some(metadata_title.title.as_str())
-        && crate::coordinators::coordinator_keeps_its_title(db, &session)
+        && crate::coordinators::keeps_its_given_title(db, &session)
     {
         return Ok(AgentTitleReconcileResult {
             changed: false,
             metadata_title_found: true,
-            reason: "coordinator-keeps-its-title".to_string(),
+            reason: "keeps-its-given-title".to_string(),
             session: Some(session),
         });
     }
@@ -185,6 +197,26 @@ pub(crate) fn reconcile_agent_metadata_title(
     next_runtime_settings.insert("titleSource".to_string(), json!("terminal-auto"));
     if let Some(agent_session_id) = metadata_title.agent_session_id.as_deref() {
         next_runtime_settings.insert("agentSessionId".to_string(), json!(agent_session_id));
+    }
+    let source_agent_session_id = metadata_title
+        .agent_session_id
+        .clone()
+        .or_else(|| identity.agent_session_id.clone());
+    let current_title = session.get("title").and_then(Value::as_str);
+    if current_title != Some(metadata_title.title.as_str()) {
+        next_runtime_settings.insert(
+            TITLE_METADATA_RESTORE_KEY.to_string(),
+            json!({
+                "agentSessionId": source_agent_session_id,
+                "title": metadata_title.title,
+                "previous": {
+                    "title": current_title,
+                    "titleSource": runtime_settings.get("titleSource"),
+                    "titleMetadataSource": runtime_settings.get("titleMetadataSource"),
+                    "titleMetadataProvider": runtime_settings.get("titleMetadataProvider"),
+                },
+            }),
+        );
     }
     if let Some(updated_at) = metadata_title.updated_at.as_deref() {
         next_runtime_settings.insert("titleMetadataUpdatedAt".to_string(), json!(updated_at));
@@ -268,6 +300,99 @@ pub(crate) fn reconcile_agent_metadata_title(
         reason: "metadata-title-applied".to_string(),
         session: Some(updated),
     })
+}
+
+/// What a title taken from agent metadata replaced, and which conversation it was read from.
+const TITLE_METADATA_RESTORE_KEY: &str = "titleMetadataRestore";
+
+/// CDXC:SessionTitles 2026-10-05 WHY:
+/// A session whose identity briefly pointed at another live session's conversation (a reused Windows pid grafted coordinator G4snt's process tree under thread G0hhy on 2026-10-04) took that conversation's `/rename` title, and nothing ever undid it: once the identity was back, the session's own transcript had no rename record, so reconciliation found no title and kept the wrong one. Every metadata title therefore records the conversation it came from and the title it replaced. When the session's conversation is no longer that one, its own metadata has no title, the title is still the one written, no rename is pending, and that conversation belongs to ANOTHER running or sleeping session, the replaced title comes back. Any other mismatch (`/clear` or `/resume` into a conversation without a name) keeps the title, since the user may have chosen it, and retires the record so the check runs once.
+/// SEE-ALSO: server/src/zmx/process_identity.rs `resolve_process_tree_agent_identity`, .dependencies/wmx/src/process_snapshot.rs.
+fn restore_title_taken_from_another_conversation(
+    repository: &DomainRepository<'_>,
+    lifecycle: &LifecycleParams,
+    session: &Value,
+    runtime_settings: &serde_json::Map<String, Value>,
+    current_agent_session_id: Option<&str>,
+) -> Result<Option<AgentTitleReconcileResult>, DomainStateError> {
+    let Some(restore) = runtime_settings
+        .get(TITLE_METADATA_RESTORE_KEY)
+        .and_then(Value::as_object)
+    else {
+        return Ok(None);
+    };
+    let source = restore
+        .get("agentSessionId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty());
+    let current = current_agent_session_id
+        .map(str::trim)
+        .filter(|id| !id.is_empty());
+    let (Some(source), Some(current)) = (source, current) else {
+        return Ok(None);
+    };
+    if source == current {
+        return Ok(None);
+    }
+    let written_title = restore.get("title").and_then(Value::as_str);
+    let still_written =
+        written_title.is_some() && session.get("title").and_then(Value::as_str) == written_title;
+    let rename_pending =
+        read_text_from_map(runtime_settings, "pendingAgentTitleRequestTitle").is_some();
+    let previous = restore.get("previous").and_then(Value::as_object);
+    let previous_title = previous
+        .and_then(|previous| previous.get("title"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|title| !title.is_empty());
+    let owned_by_another_session = still_written
+        && !rename_pending
+        && previous_title.is_some()
+        && repository
+            .list_sessions_with_agent_session_id(source)?
+            .iter()
+            .any(|owner| {
+                owner.get("sessionId").and_then(Value::as_str)
+                    != Some(lifecycle.session_id.as_str())
+                    && crate::agents::is_active_identity_owner(owner)
+            });
+    let mut next_runtime_settings = runtime_settings.clone();
+    next_runtime_settings.remove(TITLE_METADATA_RESTORE_KEY);
+    let mut update = lifecycle_update(lifecycle);
+    if owned_by_another_session {
+        for key in [
+            "titleSource",
+            "titleMetadataSource",
+            "titleMetadataProvider",
+        ] {
+            match previous
+                .and_then(|previous| previous.get(key))
+                .filter(|value| !value.is_null())
+            {
+                Some(value) => next_runtime_settings.insert(key.to_string(), value.clone()),
+                None => next_runtime_settings.remove(key),
+            };
+        }
+        next_runtime_settings.insert("titleMetadataCheckedAt".to_string(), json!(now_iso()));
+        update.insert("title".to_string(), json!(previous_title));
+    }
+    update.insert(
+        "runtimeSettings".to_string(),
+        Value::Object(next_runtime_settings),
+    );
+    let updated = repository.update_session(&update)?;
+    Ok(Some(AgentTitleReconcileResult {
+        changed: owned_by_another_session,
+        metadata_title_found: false,
+        reason: if owned_by_another_session {
+            "metadata-title-from-another-session-restored"
+        } else {
+            "metadata-title-missing"
+        }
+        .to_string(),
+        session: Some(updated),
+    }))
 }
 
 /*

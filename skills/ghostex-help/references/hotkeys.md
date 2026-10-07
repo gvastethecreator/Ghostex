@@ -93,6 +93,15 @@ Default bindings are listed for macOS (`cmd`) with the Windows/Linux default whe
 | Jump to Project 7 | `cmd+ctrl+7` | `cmd+alt+7` | Jump to project 7 as shown in the sidebar. | `jumpToProject7` |
 | Jump to Project 8 | `cmd+ctrl+8` | `cmd+alt+8` | Jump to project 8 as shown in the sidebar. | `jumpToProject8` |
 | Jump to Project 9 | `cmd+ctrl+9` | `cmd+alt+9` | Jump to project 9 as shown in the sidebar. | `jumpToProject9` |
+| Go to Space 1 | `cmd+alt+shift+1` |  | Switch to Space 1 as shown in the sidebar. | `goToSpace1` |
+| Go to Space 2 | `cmd+alt+shift+2` |  | Switch to Space 2 as shown in the sidebar. | `goToSpace2` |
+| Go to Space 3 | `cmd+alt+shift+3` |  | Switch to Space 3 as shown in the sidebar. | `goToSpace3` |
+| Go to Space 4 | `cmd+alt+shift+4` |  | Switch to Space 4 as shown in the sidebar. | `goToSpace4` |
+| Go to Space 5 | `cmd+alt+shift+5` |  | Switch to Space 5 as shown in the sidebar. | `goToSpace5` |
+| Go to Space 6 | `cmd+alt+shift+6` |  | Switch to Space 6 as shown in the sidebar. | `goToSpace6` |
+| Go to Space 7 | `cmd+alt+shift+7` |  | Switch to Space 7 as shown in the sidebar. | `goToSpace7` |
+| Go to Space 8 | `cmd+alt+shift+8` |  | Switch to Space 8 as shown in the sidebar. | `goToSpace8` |
+| Go to Space 9 | `cmd+alt+shift+9` |  | Switch to Space 9 as shown in the sidebar. | `goToSpace9` |
 | Focus Session 1 | `cmd+1` |  | Focus session slot 1. | `focusSessionSlot1` |
 | Focus Session 2 | `cmd+2` |  | Focus session slot 2. | `focusSessionSlot2` |
 | Focus Session 3 | `cmd+3` |  | Focus session slot 3. | `focusSessionSlot3` |

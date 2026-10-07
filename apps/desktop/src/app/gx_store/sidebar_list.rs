@@ -226,6 +226,11 @@ impl SidebarList {
         self.dirty = true;
     }
 
+    /// Drops the cached settings read, so the next update reads the file as saved now.
+    pub(super) fn forget_settings(&mut self) {
+        self.settings_read_at = None;
+    }
+
     /// The settings the list depends on, re-read at most once a second. The two hotkey labels the
     /// list carries are formatted in the same place, so they cost a settings read only when the
     /// file's content hash really moved.

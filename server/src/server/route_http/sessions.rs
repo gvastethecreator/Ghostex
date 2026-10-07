@@ -72,6 +72,13 @@ pub(super) async fn route_sessions_http(
                     &project_id,
                     &session_id,
                 )?;
+                if crate::empty_session_cleanup::requests_empty_session_cleanup(params) {
+                    empty_session_cleanup_runtime::schedule_empty_session_cleanup(
+                        state.clone(),
+                        project_id,
+                        session_id,
+                    );
+                }
                 Ok(json!({ "session": session }))
             },
         ),
@@ -415,6 +422,7 @@ pub(super) async fn route_sessions_http(
             },
         ),
         "/api/readCoordinator"
+        | "/api/readCoordinatorThreads"
         | "/api/listCoordinators"
         | "/api/updateCoordinator"
         | "/api/linkCoordinatorThread"
@@ -432,6 +440,15 @@ pub(super) async fn route_sessions_http(
                 },
             )
         }
+        "/api/promoteCoordinator" => handle_domain_http(
+            &state,
+            endpoint.path,
+            request_id,
+            &body_json,
+            |repository, db, params, _| {
+                coordinator_runtime::promote_coordinator(&state, db, repository, params)
+            },
+        ),
         "/api/toggleCloseAfterDone" => handle_domain_http(
             &state,
             endpoint.path,

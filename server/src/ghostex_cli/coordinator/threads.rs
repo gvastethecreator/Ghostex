@@ -47,10 +47,8 @@ pub(super) fn start_thread(parsed: &ParsedArgs) -> CliResult<()> {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    let coordinator_title = agents::text(coordinator, "title").to_string();
     let brief = thread_brief(
         &BriefContext {
-            title: &coordinator_title,
             goal: agents::text(coordinator, "goal"),
             instructions: agents::text(coordinator, "instructions"),
             notes: &notes,
@@ -145,7 +143,7 @@ pub(super) fn start_thread(parsed: &ParsedArgs) -> CliResult<()> {
         "/api/queueSessionChatPrompt",
         &json!({
             "globalRef": reference, "projectId": project_id, "sessionId": session_id,
-            "text": message, "startupSend": true,
+            "text": message, "startupSend": true, "sendRequestId": uuid::Uuid::new_v4().to_string(),
         }),
         &flags,
     )

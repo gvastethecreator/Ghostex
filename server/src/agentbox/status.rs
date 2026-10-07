@@ -284,6 +284,17 @@ fn status_value(home: &Path, refresh: bool) -> Value {
 
 /// `{"action":"status"}`. Blocking: call it from `spawn_blocking`.
 pub(crate) fn read_status(home: &Path, refresh: bool) -> Value {
+    if !super::location::cloud_boxes_enabled() {
+        return json!({
+            "supported": false,
+            "installed": false,
+            "turnedOff": true,
+            "providers": [],
+            "error": ghostex_settings_catalog::built_in_extensions::turned_off_message(
+                ghostex_settings_catalog::built_in_extensions::CLOUD_BOXES,
+            ),
+        });
+    }
     if !refresh {
         if let Ok(cache) = status_cache().lock() {
             if let Some((value, at)) = cache.as_ref() {

@@ -157,6 +157,12 @@ pub(crate) struct ResetCredit {
     /// Why this reset may not work right now (paused, or only usable at a limit).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// Anthropic paused the grant: it cannot be claimed now.
+    #[serde(skip)]
+    pub paused: bool,
+    /// The claim succeeds only while the account is at a usage limit.
+    #[serde(skip)]
+    pub requires_limit: bool,
 }
 #[derive(Clone, Default)]
 pub(crate) struct Snapshot {

@@ -43,6 +43,8 @@ pub enum BrowserPageMetadataEvent {
         can_go_forward: bool,
     },
     TitleChanged(String),
+    /// A page context-menu copy (link/image address, or the image itself).
+    CopyToClipboard(gpui::ClipboardItem),
 }
 
 pub type BrowserPageMetadataHandler = Rc<dyn Fn(BrowserPageMetadataEvent)>;

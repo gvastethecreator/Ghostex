@@ -244,7 +244,18 @@ pub(super) fn parse_pi_record(builder: &mut TranscriptBuilder, record: &Map<Stri
             ));
         }
         "title" | "title_change" => builder.set_meta_title(text_field(record, "title")),
-        "model_change" => builder.set_meta_model(text_field(record, "model")),
+        // `/name` and `--name` write the session's display name as `session_info`.
+        "session_info" => builder.set_meta_title(text_field(record, "name")),
+        // Pi writes `provider` and `modelId`; OMP writes `model` already joined.
+        "model_change" => builder.set_meta_model(
+            match (
+                text_field(record, "provider"),
+                text_field(record, "modelId"),
+            ) {
+                (Some(provider), Some(model)) => Some(format!("{provider}/{model}")),
+                _ => text_field(record, "model"),
+            },
+        ),
         "thinking_level_change" => {
             if let Some(level) = text_field(record, "thinkingLevel") {
                 builder.push(ExportEntry::new(

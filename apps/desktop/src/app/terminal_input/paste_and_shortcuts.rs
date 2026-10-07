@@ -5,12 +5,10 @@
 
 use gpui::ClipboardItem;
 use gpui::Window;
-use gpui_component::WindowExt;
-use gpui_component::button::ButtonVariant;
-use gpui_component::dialog::DialogButtonProps;
 
 use crate::app::helpers::*;
 use crate::app::model::*;
+use crate::app::window::*;
 use crate::*;
 
 impl GhostexGpuiApp {
@@ -247,6 +245,7 @@ impl GhostexGpuiApp {
                             text: text.to_string(),
                             view,
                         });
+                    self.open_terminal_paste_confirmation_modal(cx);
                     cx.notify();
                 }
                 return true;
@@ -257,65 +256,43 @@ impl GhostexGpuiApp {
         self.send_text_to_focused_terminal_surface(text, cx)
     }
 
-    pub(crate) fn sync_terminal_paste_confirmation_dialog(
+    /// Asks before a paste that could run commands, in a native app-modal window
+    /// (window/terminal_paste_confirm_modal.rs) so CEF views cannot cover it.
+    fn open_terminal_paste_confirmation_modal(&mut self, cx: &mut gpui::Context<Self>) {
+        let palette = self.gpui_native_modal_palette();
+        let host = self.native_app_modal_host(cx, |app, command, cx| {
+            app.handle_terminal_paste_confirmation_modal_command(command, cx);
+        });
+        self.open_native_app_modal(
+            GpuiAppModalKind::TerminalPasteConfirm,
+            TERMINAL_PASTE_CONFIRM_MODAL_WIDTH,
+            TERMINAL_PASTE_CONFIRM_MODAL_INITIAL_HEIGHT,
+            move |window, cx| {
+                cx.new(|cx| GpuiTerminalPasteConfirmModalWindow::new(palette, host, window, cx))
+            },
+            cx,
+        );
+        if self.native_app_modal_kind() == Some(GpuiAppModalKind::TerminalPasteConfirm) {
+            self.terminal_paste_confirmation_dialog_open = true;
+        } else {
+            self.pending_terminal_paste_confirmation = None;
+        }
+    }
+
+    fn handle_terminal_paste_confirmation_modal_command(
         &mut self,
-        window: &mut Window,
+        command: TerminalPasteConfirmModalCommand,
         cx: &mut gpui::Context<Self>,
     ) {
-        if self.terminal_paste_confirmation_dialog_open
-            || self.pending_terminal_paste_confirmation.is_none()
-        {
-            return;
+        let pending = self.pending_terminal_paste_confirmation.take();
+        self.terminal_paste_confirmation_dialog_open = false;
+        self.release_native_app_modal_window(GpuiAppModalKind::TerminalPasteConfirm, cx);
+        if let (TerminalPasteConfirmModalCommand::Paste, Some(pending)) = (command, pending) {
+            pending
+                .view
+                .update(cx, |view, cx| view.paste_text(&pending.text, cx));
         }
-        self.terminal_paste_confirmation_dialog_open = true;
-        let entity = cx.entity().clone();
-        let ok_entity = entity.clone();
-        window.open_alert_dialog(cx, move |alert, _, _| {
-            alert
-                .confirm()
-                .title("Paste potentially unsafe text?")
-                .description(
-                    "This paste contains a newline or terminal control sequence and may run commands.",
-                )
-                .button_props(
-                    DialogButtonProps::default()
-                        .show_cancel(true)
-                        .cancel_text("Cancel")
-                        .ok_text("Paste")
-                        .ok_variant(ButtonVariant::Default)
-                        .on_ok({
-                            let ok_entity = ok_entity.clone();
-                            move |_, _, cx| {
-                                ok_entity.update(cx, |this, cx| {
-                                    if let Some(pending) =
-                                        this.pending_terminal_paste_confirmation.take()
-                                    {
-                                        pending
-                                            .view
-                                            .update(cx, |view, cx| view.paste_text(&pending.text, cx));
-                                    }
-                                    this.terminal_paste_confirmation_dialog_open = false;
-                                    cx.notify();
-                                    true
-                                })
-                            }
-                        })
-                        .on_cancel({
-                            let entity = entity.clone();
-                            move |_, _, cx| {
-                                entity.update(cx, |this, cx| {
-                                    this.pending_terminal_paste_confirmation = None;
-                                    this.terminal_paste_confirmation_dialog_open = false;
-                                    cx.notify();
-                                    true
-                                })
-                            }
-                        }),
-                )
-                .overlay_closable(false)
-                .close_button(false)
-                .keyboard(true)
-        });
+        cx.notify();
     }
 
     pub(crate) fn focused_gpui_engine_terminal_action_target(

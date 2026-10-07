@@ -70,8 +70,17 @@ pub(super) async fn route_chat_http(
             handle_read_session_chat_image_http(&state, endpoint.path, request_id, &body_json)
         }
         "/api/answerSessionChatPrompt" => {
-            handle_answer_session_chat_prompt_http(&state, endpoint.path, request_id, &body_json)
-                .await
+            crate::session_chat_send_requests::send_once(
+                &state,
+                endpoint.path,
+                request_id,
+                &body_json,
+                |state, endpoint_path, request_id, body| async move {
+                    handle_answer_session_chat_prompt_http(&state, endpoint_path, request_id, &body)
+                        .await
+                },
+            )
+            .await
         }
         "/api/interruptSessionChat" => {
             handle_interrupt_session_chat_http(&state, endpoint.path, request_id, &body_json).await
@@ -122,13 +131,34 @@ pub(super) async fn route_chat_http(
         | "/api/sendSessionChatQueuedPrompt"
         | "/api/setSessionChatDraft"
         | "/api/acknowledgeSessionChatDraftHandoff" => {
-            let mut response = handle_session_chat_queue_http(
-                &state,
-                endpoint.path,
-                request_id.clone(),
-                &body_json,
-            )
-            .await;
+            // A queued prompt is a send too: a repeated `sendRequestId` must not queue it twice.
+            let mut response = if endpoint.path == "/api/queueSessionChatPrompt" {
+                let queue_state = state.clone();
+                crate::session_chat_send_requests::send_once(
+                    &state,
+                    endpoint.path,
+                    request_id.clone(),
+                    &body_json,
+                    move |_, endpoint_path, request_id, body| async move {
+                        handle_session_chat_queue_http(
+                            &queue_state,
+                            endpoint_path,
+                            request_id,
+                            &body,
+                        )
+                        .await
+                    },
+                )
+                .await
+            } else {
+                handle_session_chat_queue_http(
+                    &state,
+                    endpoint.path,
+                    request_id.clone(),
+                    &body_json,
+                )
+                .await
+            };
             crate::session_chat_send_diagnostics::record_response(
                 &state,
                 &request_id,

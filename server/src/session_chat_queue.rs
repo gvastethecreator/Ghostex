@@ -480,7 +480,10 @@ pub async fn deliver_session_chat_queued_prompt(
         require_session(&db, server_id, project_id, session_id)?;
         claim_prompt(&db, project_id, session_id, prompt_id)?
     };
-    let outcome = send(text).await;
+    let outcome = deliver_once(
+        paths, server_id, project_id, session_id, prompt_id, text, send,
+    )
+    .await;
     let db = open_gxserver_database(paths).map_err(internal_error)?;
     let mut held = false;
     let error_message = match outcome {
@@ -520,6 +523,50 @@ pub async fn deliver_session_chat_queued_prompt(
         error_message,
         snapshot: read_snapshot(&db, project_id, session_id)?,
     })
+}
+
+/// CDXC:SessionChat 2026-10-05 WHY:
+/// A row a gxserver restart caught mid-delivery comes back `failed` (SESSION_CHAT_QUEUE_RESTART_REASON), and retrying it used to type it again even when the agent already had it. Each row's delivery is a send in the send ledger (session_chat_send_requests.rs) under `queuedPrompt:<promptId>`: a retry of an interrupted delivery first reads the agent's transcript and, when the prompt is there, settles the row as sent without typing. A prompt the transcript does not show is typed again, because the user retried it after being told the delivery was cut off.
+async fn deliver_once(
+    paths: &GxserverPaths,
+    server_id: &str,
+    project_id: &str,
+    session_id: &str,
+    prompt_id: &str,
+    text: String,
+    send: &SessionChatQueueSender,
+) -> Result<(), DomainStateError> {
+    use crate::session_chat_send_requests::{
+        begin, begin_again, interrupted_send_arrived, mark_sent, Begin, SendRequestKey,
+    };
+    const ENDPOINT: &str = "queuedPromptDelivery";
+    let key = SendRequestKey::new(project_id, session_id, &format!("queuedPrompt:{prompt_id}"));
+    let needles = crate::coordinators::delivery_needles(&text);
+    let mut begun = begin(paths, &key, ENDPOINT, &needles)?;
+    if let Begin::Interrupted { since_ms, needles } = &begun {
+        if interrupted_send_arrived(paths, server_id, &key, *since_ms, needles).await {
+            mark_sent(paths, &key, &json!({ "recoveredAfterRestart": true }));
+            return Ok(());
+        }
+        begun = begin_again(paths, &key, ENDPOINT, needles)?;
+    }
+    match begun {
+        Begin::Send(attempt) => {
+            let outcome = send(text).await;
+            attempt.settle(match &outcome {
+                Ok(()) => crate::session_chat_send_requests::Outcome::Sent(json!({})),
+                Err(error) if crate::session_chat_send_requests::submitted_nothing(error.code) => {
+                    crate::session_chat_send_requests::Outcome::Refused
+                }
+                Err(_) => crate::session_chat_send_requests::Outcome::Uncertain,
+            });
+            outcome
+        }
+        Begin::Sent(_) => Ok(()),
+        Begin::InFlight(_) | Begin::Interrupted { .. } => Err(DomainStateError::bad_request(
+            "This prompt is being delivered right now.",
+        )),
+    }
 }
 
 /// Marks the head row `failed` without attempting a send: used when the

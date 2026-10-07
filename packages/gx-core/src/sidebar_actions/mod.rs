@@ -23,7 +23,8 @@
 //! two sort rows, whose TypeScript path ends in a no-op on the desktop. `delayed_send`, `agent_run`
 //! and `machine_disable` are the three the sidebar page answered itself with no Rust owner: a row's
 //! Delayed Send dialog, the agent launcher's run, and a machine tab's Hide Machine, which posts the
-//! list `remote_machine_settings` normalizes.
+//! list `remote_machine_settings` normalizes. `group_working` is the Sort & Filter page's
+//! Group Working Sessions row, a settings patch like Hide Machine.
 
 mod agent_run;
 mod bulk;
@@ -33,6 +34,7 @@ mod flags;
 mod fork;
 mod generate_title;
 mod group_sleep;
+mod group_working;
 mod lifecycle;
 mod machine_disable;
 mod modals;
@@ -69,6 +71,10 @@ pub use fork::{
 };
 pub use generate_title::plan_generate_session_title;
 pub use group_sleep::plan_group_sleep;
+pub use group_working::{
+    owns_group_working_sessions_command, plan_group_working_sessions,
+    GROUP_WORKING_SESSIONS_ACTION, GROUP_WORKING_SESSIONS_SETTINGS_SOURCE,
+};
 pub use lifecycle::{
     apply_lifecycle_answer, owns_lifecycle_message, plan_lifecycle_request, FocusOptions,
     LifecycleAnswer, LifecycleCall, LifecycleFollowUp, LifecycleRequest, LIFECYCLE_PATCH_TTL_MS,

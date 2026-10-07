@@ -114,7 +114,7 @@ impl TailcatRuntime {
             allowed_client_keys: state.allowed_client_keys.clone(),
             binary_path,
             key_file,
-            ports: state.ports.clone(),
+            ports: tailcat_served_ports(state),
         };
         if self.is_current_spec(&spec) {
             return;

@@ -140,6 +140,12 @@ pub const CATALOG: &[CatalogStore] = &[
         Local,
     ),
     store(
+        "piContext",
+        "ghostex.chat.context-details.pi.v1",
+        false,
+        Local,
+    ),
+    store(
         "basicContext",
         "ghostex.chat.context-details.basic.v1",
         false,

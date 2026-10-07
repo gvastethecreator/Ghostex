@@ -60,6 +60,7 @@ pub(super) fn read(session_key: &str, now_ms: i64, errors: &mut BootReads) -> Co
     let codex_context = parse(load("codexContext", "", now_ms, errors));
     let cursor_context = parse(load("cursorContext", "", now_ms, errors));
     let hermes_context = parse(load("hermesContext", "", now_ms, errors));
+    let pi_context = parse(load("piContext", "", now_ms, errors));
     let basic_context = parse(load("basicContext", "", now_ms, errors));
     let dismissed_notice = parse(load("notices", session_key, now_ms, errors));
     let summary_mode = decode_summary(load("summary", session_key, now_ms, errors).as_deref());
@@ -78,6 +79,7 @@ pub(super) fn read(session_key: &str, now_ms: i64, errors: &mut BootReads) -> Co
             "codex": codex_context,
             "cursor": cursor_context,
             "hermes": hermes_context,
+            "pi": pi_context,
             "basic": basic_context,
         }),
         dismissed_notice,

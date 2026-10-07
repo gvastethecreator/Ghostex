@@ -109,6 +109,23 @@ pub(crate) fn create_agent_session_params_for_project(
     /*
     CDXC:SessionIdentity 2026-09-30 WHY: A create that names no agent Ghostex knows and only carries a command (Find's resume sends `os-integration-terminal` with `claude --resume <id>`, as `ghostex://terminal` does) locked the row to that placeholder id, so `launch_agent_mismatch` refused every hook the agent sent and only the ~20s live-process scan could name it. Chat View cannot open before that, so a session resumed from Find sat in the terminal (observed 2026-09-30, session S90:P3lv0:G41ci: its SessionStart hook arrived 1.5s after launch and was dropped). The agent the command starts is the session's agent from creation; the launch command and account are still resolved under the requested id, so the command runs exactly as given.
     */
+    // A new local Pi session runs on an id Ghostex chose (CDXC:SessionIdentity in pi_session_id.rs).
+    let pi_session_id = (agentbox_provider.is_none()
+        && read_text_from_map(&runtime_settings, "agentSessionId").is_none()
+        && resume_agent_family_id(Some(agent_id.clone()), &agent_config, &launch_settings)
+            .as_deref()
+            == Some("pi"))
+    .then(|| {
+        let base = configured_command
+            .clone()
+            .or_else(|| default_agent_command("pi").map(str::to_string))
+            .unwrap_or_else(|| "pi".to_string());
+        super::pi_session_id::mint_pi_session_id(&base)
+    })
+    .flatten();
+    if let Some(id) = pi_session_id.as_deref() {
+        runtime_settings.insert("agentSessionId".to_string(), json!(id));
+    }
     let session_agent_id = (agent_icon.is_none()
         && !agent_id.starts_with("custom-")
         && default_agent_command(&agent_id).is_none()
@@ -137,20 +154,42 @@ pub(crate) fn create_agent_session_params_for_project(
             )
             .launch_plan
         }
-        _ => build_agent_launch_plan(AgentLaunchInput {
-            accept_all_mode: read_text_from_map(&agent_config, "acceptAllMode")
-                .or_else(|| read_text_from_map(&launch_settings, "acceptAllMode")),
-            agent_id: agent_id.clone(),
-            agent_session_id: read_text_from_map(&runtime_settings, "agentSessionId"),
-            command: account_command.or(configured_command),
-            delayed_send_deadline_at: read_text_from_map(&launch_settings, "delayedSendDeadlineAt"),
-            first_user_message: read_text_from_map(&runtime_settings, "firstUserMessage"),
-            global_accept_all_enabled: settings
-                .get("agentAcceptAllEnabled")
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
-            icon: agent_icon.clone(),
-        }),
+        _ => {
+            let mut plan = build_agent_launch_plan(AgentLaunchInput {
+                accept_all_mode: read_text_from_map(&agent_config, "acceptAllMode")
+                    .or_else(|| read_text_from_map(&launch_settings, "acceptAllMode")),
+                agent_id: agent_id.clone(),
+                agent_session_id: read_text_from_map(&runtime_settings, "agentSessionId"),
+                command: account_command.or(configured_command),
+                delayed_send_deadline_at: read_text_from_map(
+                    &launch_settings,
+                    "delayedSendDeadlineAt",
+                ),
+                first_user_message: read_text_from_map(&runtime_settings, "firstUserMessage"),
+                global_accept_all_enabled: settings
+                    .get("agentAcceptAllEnabled")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+                icon: agent_icon.clone(),
+            });
+            // Only the command this launch runs names the id; `agentCommand` stays the base that
+            // resume, fork and account wrapping rebuild from.
+            if let (Some(id), Some(plan)) = (pi_session_id.as_deref(), plan.as_object_mut()) {
+                if let Some(command) = plan
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .filter(|command| !command.trim().is_empty())
+                    .map(|command| super::pi_session_id::with_pi_session_id(command, id))
+                {
+                    plan.insert(
+                        "startupText".to_string(),
+                        Value::String(as_atuin_ignored_shell_input(&command)),
+                    );
+                    plan.insert("command".to_string(), Value::String(command));
+                }
+            }
+            plan
+        }
     };
     let launch_plan_object = launch_plan.as_object().cloned().unwrap_or_default();
     let has_launch_command = launch_plan_object
@@ -236,6 +275,7 @@ pub(crate) fn create_agent_session_params_for_project(
     See `agents/drafts.rs` for what the marker means and where it is removed.
     */
     apply_draft_session_create_param(params, &mut runtime_settings);
+    crate::empty_session_cleanup::apply_new_session_marker(params, &mut runtime_settings);
 
     let mut runtime_relevant = Map::new();
     if let Some(deadline_at) = launch_plan_object
@@ -326,8 +366,8 @@ pub(crate) fn project_agent_session_default_title(project: &Value, session: &Val
     )
 }
 
-/// CDXC:AgentProviders 2026-09-17 DECISION:
-/// User: an agent spawning another agent sets that worker's model and effort for the session only, for Claude and Codex only, and a resumed worker keeps them.
+/// CDXC:AgentProviders 2026-10-06 DECISION:
+/// User: "yes, Ghostex chooses Pi's model and thinking level at launch, like Claude and Codex." This extends the 2026-09-17 decision (an agent spawning another agent sets that worker's model and effort for the session only, and a resumed worker keeps them) from Claude and Codex to Pi, whose model is `provider/id` (`--model`) and whose effort is its thinking level (`--thinking`).
 /// Typing `/model` or `/effort` into Claude Code saves the choice as the default for every new session, so the choice travels as launch flags instead.
 /// The flags live in the session's saved base command, which resume, fork and account wrapping all rebuild from.
 /// SEE-ALSO: server/src/ghostex_cli/actions/create.rs (create-agent), server/src/ghostex_cli/board.rs and server/src/board_start_work.rs (board start-work).
@@ -344,12 +384,39 @@ fn apply_requested_agent_model(
         return Ok(command);
     }
     let family = resume_agent_family_id(Some(agent_id.to_string()), agent_config, launch_settings)
-        .filter(|family| matches!(family.as_str(), "claude" | "codex"))
+        .filter(|family| matches!(family.as_str(), "claude" | "codex" | "pi" | "zcode"))
         .ok_or_else(|| {
             DomainStateError::bad_request(
-                "A launch model or effort can only be set for Claude and Codex agents.",
+                "A launch model or effort can only be set for Claude, Codex, Pi and ZCode agents.",
             )
         })?;
+    if family == "zcode" {
+        // CDXC:Coordinators 2026-10-04 WHY:
+        // ZCode has no launch model flag, so a coordinator create's chosen model reaches the
+        // session as a `/model` line the create flow queues before the first request. There is
+        // no such delivery for a spawned thread yet, so a thread's model request stays refused
+        // rather than silently dropped, and ZCode takes no effort choice at all.
+        if effort.is_some() {
+            return Err(DomainStateError::bad_request(
+                "ZCode agents take no effort choice.",
+            ));
+        }
+        if crate::coordinators::coordinator_create_request(params)?.is_none() {
+            return Err(DomainStateError::bad_request(
+                "A ZCode thread keeps its configured model; only a coordinator's own model can be set.",
+            ));
+        }
+        return Ok(command);
+    }
+    if family == "pi"
+        && effort
+            .as_deref()
+            .is_some_and(|effort| !crate::session_chat_pi_models::is_pi_thinking_level(effort))
+    {
+        return Err(DomainStateError::bad_request(
+            "A Pi effort is its thinking level: off, minimal, low, medium, high, xhigh or max.",
+        ));
+    }
     let base = command
         .or_else(|| default_agent_command(&family).map(str::to_string))
         .unwrap_or_else(|| family.clone());
@@ -357,7 +424,7 @@ fn apply_requested_agent_model(
 }
 
 /// CDXC:Coordinators 2026-09-30 WHY:
-/// A coordinator's role is a system prompt flag in the saved base command (see coordinators/role.rs), added here beside the per-session model flags so resume, fork and account wrapping keep it. Only Claude and Codex have such a flag, so a coordinator on any other agent is refused rather than started without its role.
+/// A coordinator's role is a system prompt flag in the saved base command (see coordinators/role.rs), added here beside the per-session model flags so resume, fork and account wrapping keep it. Claude carries the whole role file this way; Codex and ZCode carry only the guide pointer (ZCode has no such flag, so its role arrives through the SessionStart hook instead), and an agent outside the supported families is refused rather than started without its role.
 fn apply_coordinator_role(
     agent_id: &str,
     agent_config: &Map<String, Value>,
@@ -375,7 +442,7 @@ fn apply_coordinator_role(
         .filter(|family| crate::coordinators::coordinator_agent_family_supported(family))
         .ok_or_else(|| {
             DomainStateError::bad_request(
-                "A coordinator runs on Claude or Codex. Pick one of those agents.",
+                "A coordinator runs on Claude, Codex or ZCode. Pick one of those agents.",
             )
         })?;
     let base = command
@@ -608,10 +675,12 @@ pub(crate) fn requested_agent_model_option(
             )))
         }
     };
+    // `@` names a pinned model version in some Pi providers (`vertex/<model>@<date>`); a value
+    // with it is shell-quoted when the launch command is built.
     if value.len() > 160
         || !value
             .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || b"-._[]():/".contains(&byte))
+            .all(|byte| byte.is_ascii_alphanumeric() || b"-._[]():/@".contains(&byte))
     {
         return Err(DomainStateError::bad_request(format!(
             "\"{value}\" is not a valid model or effort."

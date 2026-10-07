@@ -584,6 +584,7 @@ pub fn run_native_statusline_hook(args: Vec<String>) -> Result<(), DomainStateEr
         return store_and_render_statusline(&hook_state_dir, agent, true, &input);
     };
     let _ = store_and_render_statusline(&hook_state_dir, agent, false, &input);
+    kill_children_with_this_process();
     // The user's command was written for the shell Claude Code runs it in: Git Bash when Git for Windows is installed, PowerShell otherwise.
     let mut command = match crate::platform::live_path::find("git", &[])
         .and_then(|git| Some(git.parent()?.parent()?.join("bin").join("bash.exe")))
@@ -611,6 +612,43 @@ pub fn run_native_statusline_hook(args: Vec<String>) -> Result<(), DomainStateEr
     }
     let _ = child.wait();
     Ok(())
+}
+
+/// Claude Code kills a statusLine command that overruns or is superseded, but on Windows that kills only gxserver: the wrapped command's bash and everything under it (`npx`, `node`) were orphaned and piled up by the hundreds. A kill-on-close job holding this process takes them down with it, since children inherit the job. Best effort: a failure leaves the old behaviour.
+#[cfg(windows)]
+fn kill_children_with_this_process() {
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::{
+        Foundation::CloseHandle,
+        System::{
+            JobObjects::{
+                AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+                SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+            },
+            Threading::GetCurrentProcess,
+        },
+    };
+
+    unsafe {
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job.is_null() {
+            return;
+        }
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = zeroed();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let limited = SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &limits as *const _ as *const _,
+            size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        ) != 0;
+        if !limited || AssignProcessToJobObject(job, GetCurrentProcess()) == 0 {
+            CloseHandle(job);
+        }
+        // On success the handle stays open for the life of this process; the
+        // OS closes it on exit or kill, which kills the job's processes.
+    }
 }
 
 fn store_and_render_statusline(

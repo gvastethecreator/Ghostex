@@ -52,6 +52,13 @@ fn quote(value: &str) -> String {
 }
 
 impl AccountsTab {
+    /// Forgets the Add account flows of `provider` (a finished sign-in's success message, its
+    /// email and consent) so the next Add account starts from an empty form.
+    pub(crate) fn reset_setup_flows(&mut self, provider: &str) {
+        let prefix = format!("setup:{provider}:");
+        self.flows.retain(|key, _| !key.starts_with(&prefix));
+    }
+
     /// Starts the one-second status poll of a flow whose job is running.
     fn ensure_flow_poll(&mut self, key: &str, cx: &mut Context<Self>) {
         let Some(flow) = self.flows.get_mut(key) else {

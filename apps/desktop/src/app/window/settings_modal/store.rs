@@ -734,9 +734,17 @@ impl SettingsStore {
     /// `getInitialSettingsModalTab`: an explicit page wins; a plain Settings open returns to the
     /// page remembered this app run, else the one saved in `settingsModalNavigation`, except a
     /// remembered Debugging page while Show Advanced is off.
+    ///
+    /// CDXC:Settings 2026-10-05 WHY:
+    /// An open that names General (`initialTab: "settings"`, as `ghostex settings open <key>` sends for every General setting) or carries a General deep link (`initialSection`, the Sidebar Tags `createTag` action) used to read as a plain open and returned to the remembered page, so the prefilled search ran on Agents or Accounts and said "No settings on this page match your search" for rows that exist under General. Only an open that names no page returns to the remembered one.
     fn initial_tab(&self) -> SettingsTabId {
+        if let Some(requested) = self.request.initial_tab {
+            return self.resolve_tab(requested);
+        }
         let requested = self.request.requested_tab();
-        if requested != SettingsTabId::General {
+        if self.request.initial_section.is_some()
+            || self.request.initial_sidebar_tags_action.is_some()
+        {
             return self.resolve_tab(requested);
         }
         let remembered = REMEMBERED_TAB.with(Cell::get).or_else(|| {

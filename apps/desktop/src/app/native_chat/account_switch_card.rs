@@ -358,6 +358,7 @@ impl NativeChatView {
         let heading = div()
             .id("account-switch-heading")
             .role(gpui::Role::Status)
+            .when(card["dismissible"] == true, |this| this.pr(px(28.0 * s)))
             .child(
                 div()
                     .flex()
@@ -486,6 +487,36 @@ impl NativeChatView {
             }])
             .occlude()
             .child(heading)
+            .when(card["dismissible"] == true, |this| {
+                this.child(
+                    div()
+                        .id("account-switch-close")
+                        .role(gpui::Role::Button)
+                        .aria_label("Close")
+                        .absolute()
+                        .top(px(10.0 * s))
+                        .right(px(10.0 * s))
+                        .size(px(24.0 * s))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(6.0 * s))
+                        .chat_cursor_pointer()
+                        .hover(|style| style.bg(palette.tile))
+                        .child(
+                            svg()
+                                .path("titlebar/x.svg")
+                                .size(px(14.0 * s))
+                                .text_color(palette.muted),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.invoke(
+                                json!({"type":"accounts","request":{"operation":"dismissSwitch"}}),
+                                cx,
+                            )
+                        })),
+                )
+            })
             .child(account(&card["from"], verified, &palette, s))
             .child(account(&card["to"], verified, &palette, s))
             .child(footer)

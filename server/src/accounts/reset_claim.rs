@@ -1,4 +1,8 @@
-use super::{claude_resets, helpers, launch, model::Provider, reset_credits, store};
+use super::{
+    claude_resets, helpers, launch,
+    model::{Provider, SavedAccount},
+    reset_credits, store,
+};
 use crate::{domain::DomainStateError, server::AppState};
 use serde_json::{json, Map, Value};
 use std::{collections::HashSet, sync::Mutex, time::Instant};
@@ -33,6 +37,12 @@ impl Outcome {
             kind: "failed",
             message: message.into(),
         }
+    }
+    pub(crate) fn kind(&self) -> &'static str {
+        self.kind
+    }
+    pub(crate) fn message(&self) -> &str {
+        &self.message
     }
 }
 
@@ -78,8 +88,19 @@ pub(crate) fn redeem(
             .find(|a| a.id == id)
             .ok_or_else(|| DomainStateError::bad_request("Choose a saved account."))?
     };
+    let outcome = claim_for_account(state, &account, credit_id, request_id)?;
+    Ok(json!({"outcome":outcome.kind,"message":outcome.message}))
+}
+
+/// Claims `credit_id` for a saved account: the usage panel's redeem and the reset watcher's automatic redeem both come through here, so the identity check, the one-claim-per-account guard and the post-claim usage refresh are the same for both.
+pub(crate) fn claim_for_account(
+    state: &AppState,
+    account: &SavedAccount,
+    credit_id: &str,
+    request_id: &str,
+) -> Result<Outcome, DomainStateError> {
     let home = &state.paths.home_dir;
-    launch::validate_identity(home, &account)?;
+    launch::validate_identity(home, account)?;
     let _in_flight = {
         let mut set = IN_FLIGHT.lock().unwrap_or_else(|e| e.into_inner());
         if !set
@@ -125,5 +146,5 @@ pub(crate) fn redeem(
         }
     };
     state.accounts.refresh_since(home, started);
-    Ok(json!({"outcome":outcome.kind,"message":outcome.message}))
+    Ok(outcome)
 }

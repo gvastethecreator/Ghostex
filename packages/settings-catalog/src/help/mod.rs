@@ -242,7 +242,10 @@ fn catalog_entry(row: &SettingRow, location: &Location) -> CatalogEntry {
         advanced: row.advanced || ADVANCED_MAIN_SETTING_KEYS.contains(&row.key),
         agent_writable,
         platform_defaults: platform_defaults(row.key),
-        availability: availability_note(row.key),
+        availability: availability_note(row.key).or_else(|| {
+            crate::built_in_extensions::feature_owning_page(location.tab.0)
+                .and_then(crate::built_in_extensions::availability_note)
+        }),
     }
 }
 

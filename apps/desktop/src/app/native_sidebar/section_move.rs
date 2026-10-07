@@ -9,8 +9,10 @@ use crate::GhostexGpuiApp;
 /// The sections a drop can move a session into.
 const DROP_SECTIONS: [&str; 3] = ["pinned", "sessions", "parked"];
 
-/// A row in one of these can be dragged to another section.
-const SOURCE_SECTIONS: [&str; 4] = ["pinned", "drafts", "sessions", "parked"];
+/// A row in one of these can be dragged to another section. Drafts and Working are worked out
+/// from the row (an unsent draft, a working agent), so a drop never targets them and a drag from
+/// them to Sessions changes nothing.
+const SOURCE_SECTIONS: [&str; 5] = ["pinned", "drafts", "working", "sessions", "parked"];
 
 fn section_of<'a>(group: &'a NativeSidebarGroup, session_id: &str) -> Option<&'a str> {
     group
@@ -57,7 +59,7 @@ impl GhostexGpuiApp {
             _ => return None,
         };
         if from == to
-            || (from == "drafts" && to == "sessions")
+            || (matches!(from, "drafts" | "working") && to == "sessions")
             || !SOURCE_SECTIONS.contains(&from)
             || !DROP_SECTIONS.contains(&to)
             || (to == "parked" && !session_parking_enabled())

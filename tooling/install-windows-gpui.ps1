@@ -4,6 +4,11 @@ param(
 
     [string]$InstallDir,
 
+    # User: the per-user layout the release's Velopack installer produces (%LOCALAPPDATA%\Ghostex\current).
+    # Machine: C:\Program Files\Ghostex (needs administrator approval). Custom: -InstallDir as given.
+    [ValidateSet("User", "Machine", "Custom")]
+    [string]$Scope = "User",
+
     [switch]$Elevated
 )
 
@@ -28,18 +33,44 @@ if (-not $WindowsProgramFilesRoot) {
 if (-not $WindowsProgramFilesRoot) {
     throw "Windows did not report its Program Files directory."
 }
-$DefaultInstallDir = Join-Path $WindowsProgramFilesRoot "Ghostex"
-if (-not $InstallDir) { $InstallDir = $DefaultInstallDir }
+$LocalAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+if (-not $LocalAppData) {
+    throw "Windows did not report its local application data directory."
+}
+$MachineInstallDir = Join-Path $WindowsProgramFilesRoot "Ghostex"
+# Velopack's root for packId Ghostex; the app itself lives in its `current` folder.
+$UserRootDir = Join-Path $LocalAppData "Ghostex"
+$UserInstallDir = Join-Path $UserRootDir "current"
+if (-not $InstallDir) {
+    $InstallDir = switch ($Scope) {
+        "User" { $UserInstallDir }
+        "Machine" { $MachineInstallDir }
+        default { throw "-Scope Custom needs -InstallDir." }
+    }
+}
 $InstallDir = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
-$MachineInstall = [string]::Equals($InstallDir, $DefaultInstallDir, [StringComparison]::OrdinalIgnoreCase)
 if ($InstallDir -eq [IO.Path]::GetPathRoot($InstallDir).TrimEnd('\') -or
     $InstallDir -eq $StagedAppPath.TrimEnd('\') -or
     $StagedAppPath.StartsWith($InstallDir + '\', [StringComparison]::OrdinalIgnoreCase) -or
     $InstallDir.StartsWith($StagedAppPath.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
     throw "The install directory must be separate from the staged app and cannot be a drive root: $InstallDir"
 }
+<#
+CDXC:Build 2026-10-07 WHY:
+The per-user app folder sits beside Ghostex's own Data, State, Cache and Logs under %LOCALAPPDATA%\Ghostex, and the install mirrors the staged app over the install folder (robocopy /MIR deletes what the build does not contain). Refuse any install folder that is or contains a Ghostex data folder, so a wrong -InstallDir or GHOSTEX_INSTALL_DIR can never wipe user data.
+#>
+$ProtectedDataDirs = @((Join-Path $UserRootDir "Data"), (Join-Path $UserRootDir "State"))
+if ($env:GHOSTEX_HOME -and [IO.Path]::IsPathRooted($env:GHOSTEX_HOME)) {
+    $ProtectedDataDirs += [IO.Path]::GetFullPath($env:GHOSTEX_HOME).TrimEnd('\')
+}
+foreach ($ProtectedDataDir in $ProtectedDataDirs) {
+    if ([string]::Equals($InstallDir, $ProtectedDataDir, [StringComparison]::OrdinalIgnoreCase) -or
+        $ProtectedDataDir.StartsWith($InstallDir + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        throw "The install directory cannot be or contain Ghostex's data folder ${ProtectedDataDir}: $InstallDir"
+    }
+}
 
-if ($MachineInstall -and -not (Test-IsAdministrator)) {
+if ($Scope -eq "Machine" -and -not (Test-IsAdministrator)) {
     if ($Elevated) {
         throw "Ghostex installation requires administrator access."
     }
@@ -54,6 +85,8 @@ if ($MachineInstall -and -not (Test-IsAdministrator)) {
         "`"$StagedAppPath`""
         "-InstallDir"
         "`"$InstallDir`""
+        "-Scope"
+        $Scope
         "-Elevated"
     )
     $Installer = Start-Process `
@@ -70,6 +103,9 @@ if ($MachineInstall -and -not (Test-IsAdministrator)) {
 }
 
 $InstalledExecutable = Join-Path $InstallDir "Ghostex.exe"
+if ($Scope -eq "User" -and (Test-Path -LiteralPath (Join-Path $UserRootDir "Update.exe") -PathType Leaf)) {
+    Write-Host "A release install lives in $UserRootDir; this build replaces its app files, so its Update.exe stops updating it until the release installer runs again."
+}
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 <#
@@ -162,23 +198,183 @@ if (Test-Path -LiteralPath $StagedWmx -PathType Leaf) {
     }
 }
 
-$ProgramsFolder = if ($MachineInstall) { [Environment+SpecialFolder]::CommonPrograms } else { [Environment+SpecialFolder]::Programs }
+$ProgramsFolder = if ($Scope -eq "Machine") { [Environment+SpecialFolder]::CommonPrograms } else { [Environment+SpecialFolder]::Programs }
 $ProgramsDir = [Environment]::GetFolderPath($ProgramsFolder)
 if (-not $ProgramsDir) {
     throw "Windows did not report its Start Menu directory."
 }
-$ShortcutDir = Join-Path $ProgramsDir "Ghostex"
-$ShortcutPath = Join-Path $ShortcutDir "Ghostex.lnk"
-New-Item -ItemType Directory -Force -Path $ShortcutDir | Out-Null
-
 $Shell = New-Object -ComObject WScript.Shell
-$Shortcut = $Shell.CreateShortcut($ShortcutPath)
-$Shortcut.TargetPath = $InstalledExecutable
-$Shortcut.WorkingDirectory = $InstallDir
-$Shortcut.Description = "Ghostex"
-$Shortcut.IconLocation = "$InstalledExecutable,0"
-$Shortcut.Save()
-
 Write-Host "Installed Ghostex to $InstallDir (Ghostex.exe verified as the rebuilt binary, SHA256 $($StagedHash.Substring(0, 12)))"
-Write-Host "Created Start Menu shortcut at $ShortcutPath"
+
+if ($Scope -ne "User") {
+    $ShortcutDir = Join-Path $ProgramsDir "Ghostex"
+    $ShortcutPath = Join-Path $ShortcutDir "Ghostex.lnk"
+    New-Item -ItemType Directory -Force -Path $ShortcutDir | Out-Null
+    $Shortcut = $Shell.CreateShortcut($ShortcutPath)
+    $Shortcut.TargetPath = $InstalledExecutable
+    $Shortcut.WorkingDirectory = $InstallDir
+    $Shortcut.Description = "Ghostex"
+    $Shortcut.IconLocation = "$InstalledExecutable,0"
+    $Shortcut.Save()
+    Write-Host "Created Start Menu shortcut at $ShortcutPath"
+    exit 0
+}
+
+<#
+CDXC:Build 2026-10-07 WHY:
+A release install gets its Start Menu shortcut from Velopack (`--shortcuts StartMenuRoot`, so Programs\Ghostex.lnk with no folder) carrying the AppUserModelID velopack.Ghostex, the id the app's process takes (windows_updater.rs). The per-user dev install writes the same shortcut with the same id, so toasts, the taskbar button and pins behave as they do for users. WScript.Shell cannot write that property, so the shortcut goes through IShellLinkW and IPropertyStore, compiled only when a shortcut actually needs rewriting.
+SEE-ALSO: tooling/release-gpui/windows.ps1 (packId, --shortcuts), apps/desktop/src/windows_updater.rs (the process id), apps/desktop/src/app/helpers/os_cli/windows_notifications.rs.
+#>
+$AppUserModelId = "velopack.Ghostex"
+$MachineExecutable = Join-Path $MachineInstallDir "Ghostex.exe"
+
+function Get-ShortcutState([string]$Path) {
+    $Link = $Shell.CreateShortcut($Path)
+    $Item = (New-Object -ComObject Shell.Application).NameSpace((Split-Path -Parent $Path)).ParseName((Split-Path -Leaf $Path))
+    $Id = if ($Item) { [string]$Item.ExtendedProperty("System.AppUserModel.ID") } else { "" }
+    [pscustomobject]@{ Target = $Link.TargetPath; Directory = $Link.WorkingDirectory; Id = $Id }
+}
+
+function Test-SamePath([string]$Left, [string]$Right) {
+    $Left -and $Right -and [string]::Equals($Left.TrimEnd('\'), $Right.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Save-VelopackShortcut([string]$Path) {
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        $State = Get-ShortcutState $Path
+        if ((Test-SamePath $State.Target $InstalledExecutable) -and (Test-SamePath $State.Directory $InstallDir) -and $State.Id -eq $AppUserModelId) {
+            return $false
+        }
+    }
+    if (-not ("GhostexShortcut" -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+
+public static class GhostexShortcut
+{
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+    private class ShellLink {}
+
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
+    private interface IShellLinkW
+    {
+        void GetPath(IntPtr file, int size, IntPtr data, uint flags);
+        void GetIDList(out IntPtr list);
+        void SetIDList(IntPtr list);
+        void GetDescription(IntPtr name, int size);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+        void GetWorkingDirectory(IntPtr directory, int size);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string directory);
+        void GetArguments(IntPtr arguments, int size);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string arguments);
+        void GetHotkey(out short hotkey);
+        void SetHotkey(short hotkey);
+        void GetShowCmd(out int command);
+        void SetShowCmd(int command);
+        void GetIconLocation(IntPtr path, int size, out int index);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string path, int index);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, uint reserved);
+        void Resolve(IntPtr window, uint flags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    private struct PropertyKey
+    {
+        public Guid FormatId;
+        public uint PropertyId;
+    }
+
+    [StructLayout(LayoutKind.Explicit, Size = 24)]
+    private struct PropVariant
+    {
+        [FieldOffset(0)] public ushort Type;
+        [FieldOffset(8)] public IntPtr Pointer;
+    }
+
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
+    private interface IPropertyStore
+    {
+        void GetCount(out uint count);
+        void GetAt(uint index, out PropertyKey key);
+        void GetValue(ref PropertyKey key, out PropVariant value);
+        void SetValue(ref PropertyKey key, ref PropVariant value);
+        void Commit();
+    }
+
+    public static void Save(string path, string target, string directory, string appUserModelId)
+    {
+        var link = (IShellLinkW)new ShellLink();
+        link.SetPath(target);
+        link.SetWorkingDirectory(directory);
+        link.SetDescription("Ghostex");
+        link.SetIconLocation(target, 0);
+        var store = (IPropertyStore)link;
+        // PKEY_AppUserModel_ID as VT_LPWSTR.
+        var key = new PropertyKey { FormatId = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), PropertyId = 5 };
+        var value = new PropVariant { Type = 31, Pointer = Marshal.StringToCoTaskMemUni(appUserModelId) };
+        try
+        {
+            store.SetValue(ref key, ref value);
+            store.Commit();
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(value.Pointer);
+        }
+        ((IPersistFile)link).Save(path, true);
+    }
+}
+'@
+    }
+    [GhostexShortcut]::Save($Path, $InstalledExecutable, $InstallDir, $AppUserModelId)
+    return $true
+}
+
+$ShortcutPath = Join-Path $ProgramsDir "Ghostex.lnk"
+if (Save-VelopackShortcut $ShortcutPath) {
+    Write-Host "Created Start Menu shortcut at $ShortcutPath"
+}
+
+<#
+CDXC:Build 2026-10-07 WHY:
+Moving from the Program Files install to the per-user one must not leave the old copy in use: a Desktop shortcut, a taskbar pin or a login entry that still opens C:\Program Files\Ghostex would start that build and its own gxserver next to the new one. The user's own entry points that open exactly the Program Files Ghostex.exe are pointed at the per-user copy (the user decided nothing is deleted automatically, so the Program Files folder and its machine-wide Start Menu folder stay and are listed instead).
+#>
+$EntryPointFolders = @(
+    [Environment]::GetFolderPath([Environment+SpecialFolder]::DesktopDirectory),
+    (Join-Path $env:APPDATA "Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar")
+)
+foreach ($Folder in $EntryPointFolders) {
+    if (-not $Folder -or -not (Test-Path -LiteralPath $Folder -PathType Container)) { continue }
+    foreach ($Link in @(Get-ChildItem -LiteralPath $Folder -Filter "*.lnk" -File -ErrorAction SilentlyContinue)) {
+        if (Test-SamePath ($Shell.CreateShortcut($Link.FullName).TargetPath) $MachineExecutable) {
+            [void](Save-VelopackShortcut $Link.FullName)
+            Write-Host "Pointed $($Link.FullName) at the per-user install (it opened $MachineExecutable)"
+        }
+    }
+}
+$RunKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+$RunValues = Get-ItemProperty -LiteralPath $RunKey -ErrorAction SilentlyContinue
+if ($RunValues) {
+    foreach ($Value in $RunValues.PSObject.Properties) {
+        if ($Value.Name -like "PS*" -or $Value.Value -isnot [string]) { continue }
+        $Index = $Value.Value.IndexOf($MachineExecutable, [StringComparison]::OrdinalIgnoreCase)
+        if ($Index -lt 0) { continue }
+        $Updated = $Value.Value.Remove($Index, $MachineExecutable.Length).Insert($Index, $InstalledExecutable)
+        Set-ItemProperty -LiteralPath $RunKey -Name $Value.Name -Value $Updated
+        Write-Host "Pointed the login item `"$($Value.Name)`" at the per-user install (it opened $MachineExecutable)"
+    }
+}
+
+$Leftovers = @()
+if (Test-Path -LiteralPath $MachineInstallDir) { $Leftovers += $MachineInstallDir }
+$CommonPrograms = [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonPrograms)
+if ($CommonPrograms -and (Test-Path -LiteralPath (Join-Path $CommonPrograms "Ghostex"))) {
+    $Leftovers += Join-Path $CommonPrograms "Ghostex"
+}
+if ($Leftovers.Count -gt 0) {
+    Write-Host "No longer used and left in place (remove them once no session started before this install is running): $($Leftovers -join '; ')"
+}
 exit 0

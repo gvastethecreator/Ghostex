@@ -481,13 +481,20 @@ impl Core {
                 SideStateUpdate::ProjectCollections(frame.sidebar_project_collections),
                 output,
             ),
-            ServerEvent::SidebarSpacesChanged(frame) => self.handle_side_state(
-                machine,
-                &frame.header.server_id,
-                frame.revision,
-                SideStateUpdate::Spaces(frame.sidebar_spaces),
-                output,
-            ),
+            ServerEvent::SidebarSpacesChanged(frame) => {
+                let enabled = frame.sidebar_spaces_enabled;
+                self.handle_side_state(
+                    machine,
+                    &frame.header.server_id,
+                    frame.revision,
+                    SideStateUpdate::Spaces(frame.sidebar_spaces),
+                    output,
+                );
+                if let Some(enabled) = enabled.filter(|_| output.changes.ignored.is_none()) {
+                    output.changes.side_state.spaces |=
+                        self.presentation.apply_spaces_enabled(machine, enabled);
+                }
+            }
             ServerEvent::CustomSessionTagsChanged(frame) => self.handle_side_state(
                 machine,
                 &frame.header.server_id,

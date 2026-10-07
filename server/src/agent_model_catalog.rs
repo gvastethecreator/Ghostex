@@ -55,8 +55,9 @@ const USER_AGENT: &str = "ghostex-gxserver";
 
 struct CatalogState {
     catalog: Arc<Value>,
-    /// True once the copy came from GitHub (fetched now or cached from an
-    /// earlier run) rather than from the bundle.
+    /// True from boot: the effective lineup (the newest of the bundle and
+    /// the cache) counts as published, so every client is told it, not only
+    /// once a fetch succeeds. See adopt_cached_copy.
     published: bool,
     etag: Option<String>,
 }
@@ -78,7 +79,8 @@ fn state() -> &'static RwLock<CatalogState> {
     })
 }
 
-/// The catalog in effect: the last good published copy, else the bundle.
+/// The catalog in effect: the newest of the bundle and the cache from boot,
+/// then the last good copy fetched from GitHub.
 pub fn current() -> Arc<Value> {
     state()
         .read()
@@ -164,8 +166,8 @@ fn changed_event(server_id: &str, catalog: &Value) -> Value {
     })
 }
 
-/// The event a socket gets as it connects, when this server holds a
-/// published copy; a bundle-only server has nothing a client lacks.
+/// The event a socket gets as it connects: the effective lineup, which every
+/// server announces from boot (see adopt_cached_copy).
 pub fn connect_event(server_id: &str) -> Option<Value> {
     let state = state().read().ok()?;
     state
@@ -199,20 +201,27 @@ fn updated_at(catalog: &Value) -> &str {
 /// one (an app update must not be shadowed by a stale cache). A `ghostex`
 /// command calls it too, so it reads the lineup gxserver serves.
 pub fn adopt_cached_copy(paths: &GxserverPaths) {
-    let Some(cached) = fs::read_to_string(cache_path(paths))
+    /*
+    CDXC:AgentModelCatalog 2026-10-04 WHY:
+    The effective lineup counts as published from boot, not only once a fetch succeeds: a build
+    whose bundled catalog is newer than the published file (a release ahead of the catalog repo)
+    would otherwise never push it, and a client that connects before the first poll — the fetch
+    is delayed and can lose that race — would keep the previous release's lineup for its whole
+    session. Clients date-guard what they adopt, so the always-push is safe.
+    */
+    let cached = fs::read_to_string(cache_path(paths))
         .ok()
         .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-        .filter(is_valid_catalog)
-    else {
-        return;
-    };
+        .filter(is_valid_catalog);
     let Ok(mut state) = state().write() else {
         return;
     };
-    if updated_at(&cached) >= updated_at(&state.catalog) {
-        state.catalog = Arc::new(cached);
-        state.published = true;
+    if let Some(cached) = cached {
+        if updated_at(&cached) >= updated_at(&state.catalog) {
+            state.catalog = Arc::new(cached);
+        }
     }
+    state.published = true;
 }
 
 enum Fetched {

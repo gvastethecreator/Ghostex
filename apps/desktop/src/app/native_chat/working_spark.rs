@@ -1,6 +1,6 @@
 use super::appearance::ChatAppearance;
 use crate::app::helpers::ThrottledAnimationExt;
-use crate::assets::chat_working::VISUAL;
+use crate::assets::chat_working::{VISUAL, spark_svg_size};
 use gpui::{
     AnyElement, IntoElement, ParentElement, Styled, Transformation, div, percentage, px, rgb, size,
     svg,
@@ -36,7 +36,7 @@ pub(super) fn spark(p: &ChatAppearance, reduced_motion: bool) -> AnyElement {
             .child(
                 svg()
                     .path("chat-working/spark")
-                    .size(px(VISUAL.spark_size * p.scale))
+                    .size(px(spark_svg_size(VISUAL.spark_size) * p.scale))
                     .text_color(p.foreground),
             )
             .into_any_element();
@@ -61,7 +61,8 @@ pub(super) fn spark(p: &ChatAppearance, reduced_motion: bool) -> AnyElement {
                         .with_scaling(size(scale, scale));
                 let glow_step = (pulse * 32.0).round() as u8;
                 let glow_inset = (VISUAL.spark_box - 96.0) / 2.0 * p.scale;
-                let glyph_inset = (VISUAL.spark_box - VISUAL.spark_size) / 2.0 * p.scale;
+                let glyph_svg = spark_svg_size(VISUAL.spark_size);
+                let glyph_inset = (VISUAL.spark_box - glyph_svg) / 2.0 * p.scale;
                 container
                     .child(
                         svg()
@@ -93,7 +94,7 @@ pub(super) fn spark(p: &ChatAppearance, reduced_motion: bool) -> AnyElement {
                             .absolute()
                             .left(px(glyph_inset))
                             .top(px(glyph_inset))
-                            .size(px(VISUAL.spark_size * p.scale))
+                            .size(px(glyph_svg * p.scale))
                             .path("chat-working/spark")
                             .text_color(p.foreground.opacity(opacity))
                             .with_transformation(transform),

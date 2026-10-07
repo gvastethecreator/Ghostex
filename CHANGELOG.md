@@ -2,6 +2,91 @@
 
 ## Unreleased
 
+## 10.13.0 - 2026-10-06
+
+**Ghostex 10.13.0 is out.** Ghostex can spend a banked Claude or Codex reset before it expires, Windows gets real system notifications, working sessions can fold into a Working section, the built-in browser can open, save and copy links and images, and Pi works much better.
+
+### 👥 Accounts
+- **Ghostex can spend a banked Claude or Codex reset for you before it expires.** It only uses a reset that would otherwise be lost. Turn it on per provider in Settings > Accounts > Auto-redeem expiring resets (off by default).
+- **The bell warns in red when a banked reset expires within 3 days and again within 24 hours,** with an optional system notification (Settings > General > Notifications > Reset Expiry Notifications).
+
+### 🔔 Notifications
+- **Windows: attention alerts and reset warnings show as real Windows notifications,** and clicking one brings Ghostex forward on that session. Linux shows them through the desktop's notifications.
+
+### 🗂️ Sidebar
+- **Group working sessions moves sessions into a collapsed Working section under their project while their agent works.** The session you have open and sessions with an unanswered question stay in Sessions, and a session goes back on its own when its agent stops. Turn it on in Settings > Sidebar or the sidebar's More > Sort & Filter (off by default).
+- **Drag sideways with the mouse on an empty part of the sidebar list to switch Spaces,** like a sideways trackpad swipe; one switch per drag, with a grabbing hand cursor.
+- **Sidebar setting changes show right away** instead of after a delay.
+
+### 🧭 Coordinators
+- **The Threads panel lists the 3 most recently finished threads,** with older ones folded into "N more done", on the computer and the phone.
+- **Threads keep the title their coordinator gives them.**
+- **A message to an agent is typed at most once,** even when the send is retried after a timeout or a restart.
+
+### 🤖 Pi
+- **Pi works on native Windows and reports its state accurately:** a finished turn only when nothing more is coming, Esc as an interrupt, and its dialogs as needing you.
+- **The chat shows Pi's thinking, links each tool call to its result, and shows provider errors and Pi's edit diffs.**
+
+### 🌐 Browser
+- **Right-click a link or an image in the built-in browser** to open it in a new tab, save it, or copy it or its address. Downloads a page starts ask where to save instead of being dropped.
+
+### 🧩 Integrations
+- **Desktop control is now called Fast Computer & Browser Use,** links to the trycua/cua project, and installs the driver's own Cua Driver skill, which the Agent skills list can also install or remove.
+
+### 🪟 Windows
+- **The Dev servers panel lists this computer's servers in PowerShell mode** instead of saying it could not inspect WSL ports.
+- **`ghostex ports` works on native Windows,** so the phone's Web preview lists this computer's servers with their page titles.
+- **Clicking the title bar no longer leaves the chat selecting text as the mouse moves.**
+- **The "Paste potentially unsafe text?" confirmation opens above browser tabs and the Files view** instead of being hidden behind them.
+
+### 📱 On the phone
+- **Android: the status bar shows the Ghostex flower** instead of a terminal icon.
+
+### 🩹 Fixes and polish
+- **macOS: arrow keys move the cursor in the VS Code view** instead of typing red FS/GS/RS/US characters.
+- **Every tooltip has rounded corners.**
+- **Opening a General setting by name lands on General with the setting found,** instead of an empty search on the last page you used.
+- **A `ghostex` command that times out says so** instead of telling you to start Ghostex.
+
+## 10.12.0 - 2026-10-05
+
+**Ghostex 10.12.0 is out.** Make any session a coordinator without interrupting it, run coordinators on ZCode, switch Claude accounts on Windows, copy whole tool calls from the chat, and a new session tidies away the project's empty ones.
+
+### 🧭 Coordinators
+- **Make Coordinator turns an existing session into a coordinator without interrupting it.** Right-click a Claude, Codex or ZCode session, open Advanced and choose Make Coordinator, or use the session's menu on the phone. It keeps its conversation, gets the crown right away, and picks up the coordinator playbook once its current turn ends. From a terminal: `ghostex coordinator promote <session>`.
+- **Coordinators can run on ZCode, with a model picker** in New Coordinator…, thanks to @Ni7e.
+- **Messages between agents name the sender after the message,** so a new thread titles itself from its task instead of from the agent that sent it.
+
+### 👥 Accounts
+- **Windows: Ghostex confirms a Claude account switch by checking which account the restarted agent really uses.** Switching on Windows also needs a Claude Swap version with Windows history sharing, which is on its way upstream.
+- **Switching the account of a session you never sent a message to works,** instead of failing with "No conversation found".
+- **A failed account switch card has a close (X) button** that dismisses it on the computer and the phone.
+- **Add account in Settings > Accounts always opens the sign-in form,** and long email addresses in menus are shortened instead of stretching the menu.
+- **Account chips fill their row in the sidebar.**
+
+### 💬 Chat
+- **Tool calls in the chat are selectable and have a copy-all button** that copies the tool's name, input and result, on the computer, the web and the phone.
+- **The spinning working icon no longer shows flickering square lines.**
+
+### ⌨️ Terminal
+- **Shift+Insert pastes** in terminals and in text fields such as the chat composer and dialogs, thanks to @rgruenewald.
+- **Windows: Shift+Enter inserts a newline in Claude Code.**
+- **Windows: no more leftover characters at the left edge of a terminal,** for example after Claude's /usage.
+
+### 🗂️ Sessions and sidebar
+- **Starting a new session closes the project's older sessions that are still completely empty:** nothing sent, no chat draft, nothing queued and no text in the agent's input box. This applies to the hotkey, the project's agent button and menu, the New Thread picker and the phone.
+- **Windows: a session can no longer take on another session's identity** when Windows reuses a process ID or an agent runs `claude -p` inside it, and a title taken from the wrong conversation corrects itself.
+- **Search and Notifications stay in the sidebar's top row;** only Feedback moves into the sidebar menu when the sidebar is narrow.
+- **Windows: the sidebar's minimum width is 200 px (300 px on a 150% screen),** so its top row always fits.
+
+### 📱 On the phone
+- **SVG project icons show on the phone,** such as a project's favicon.svg.
+- **Image chips in the phone's composer no longer leave a stray line after them.**
+- **Windows: Easy Connect pairing with the phone works,** because the pairing code now names the port the Ghostex server really listens on.
+
+### 🩹 Fixes and polish
+- **Model pickers show this release's model lineup right after an update** instead of the previous release's, thanks to @Ni7e.
+
 ## 10.11.1 - 2026-10-04
 
 **Ghostex 10.11.1 is out.** On Windows, Ghostex's small pop-ups now stay with Ghostex instead of floating over other apps, and the agent menu keeps all its rows.

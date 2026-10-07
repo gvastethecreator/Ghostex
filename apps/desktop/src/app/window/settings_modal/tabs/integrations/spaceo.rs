@@ -1,4 +1,4 @@
-//! SpaceO's rows in the Desktop control section, laid out like Fast Computer Use's: the SpaceO row
+//! SpaceO's rows in the Desktop control section, laid out like Fast Computer & Browser Use's: the SpaceO row
 //! (Install, or Update, Reinstall and Uninstall once installed), its job progress, its install
 //! command, and the permissions its background daemon reports.
 
@@ -129,6 +129,7 @@ impl IntegrationsTab {
                 }),
                 Some(ICON_DEVICE_LAPTOP),
                 RowTitle {
+                    link: None,
                     label: name.clone(),
                     description: format!(
                         "{installed_prefix}{name} gives agents their own hidden screen on this Mac: apps open on a virtual display, so agents click, type and take screenshots there while you keep your own screen, pointer and focus. Installing it also installs the Ghostex SpaceO skill. Needs an Apple Silicon Mac with macOS 14 or later."
@@ -146,6 +147,7 @@ impl IntegrationsTab {
                     None,
                     None,
                     RowTitle {
+                        link: None,
                         label: detail,
                         description: if output.is_empty() {
                             job.plan.clone().unwrap_or_default()
@@ -221,6 +223,7 @@ impl IntegrationsTab {
                 Some(tone),
                 Some(ICON_SETTINGS),
                 RowTitle {
+                    link: None,
                     label: format!("{name} permissions"),
                     description: format!(
                         "{permission}. {name} needs Accessibility to click and type in apps, and Screen Recording to take screenshots of the apps it runs.{grant_target}"
@@ -397,6 +400,7 @@ impl IntegrationsTab {
             None,
             None,
             RowTitle {
+                link: None,
                 label: "Install command".to_string(),
                 description: format!(
                     "Install {name} runs this command in the background, then keeps {name} running and installs the Ghostex SpaceO skill. You can also run it yourself."

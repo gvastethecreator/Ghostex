@@ -28,7 +28,14 @@ use super::probing::{
 CDXC:AgentHooks 2026-06-21-19:26:
 The Rust hook artifact must perform the same work as TypeScript gxserver's installed notify script: normalize provider lifecycle events, update the local sidecar for legacy clients, persist hook-session identity for restore, capture the first user prompt for gxserver-owned auto-title jobs, and post authenticated hook events back to gxserver. The shell wrapper calls this hidden helper so Rust does not depend on a random system Node runtime.
 */
-pub fn run_notify_hook(args: Vec<String>) -> Result<(), DomainStateError> {
+pub fn run_notify_hook(args: Vec<String>) -> Result<Option<String>, DomainStateError> {
+    /*
+    CDXC:Coordinators 2026-10-03 WHY:
+    The helper's return carries the coordinator context gxserver answered a ZCode SessionStart
+    with. The bash wrapper captures this process's stdout, so the `agent-hook-notify` dispatcher
+    prints it; the native Windows wrapper prints the returned value itself, in place of its
+    canned response. Every other event returns None.
+    */
     let state_path = args.first().map(String::as_str).unwrap_or_default();
     let input_arg = args.get(1).cloned().unwrap_or_else(|| {
         let mut input = String::new();
@@ -86,7 +93,7 @@ pub fn run_notify_hook(args: Vec<String>) -> Result<(), DomainStateError> {
             .as_deref()
             .is_some_and(|id| id.starts_with("sess_subagent"))
         {
-            return Ok(());
+            return Ok(None);
         }
         Some(
             crate::session_chat_zcode::zcode_database_path(None)
@@ -104,7 +111,7 @@ pub fn run_notify_hook(args: Vec<String>) -> Result<(), DomainStateError> {
     if agent_key == "codex"
         && super::resolution::is_codex_subagent_transcript(transcript_path.as_deref())
     {
-        return Ok(());
+        return Ok(None);
     }
     /*
     CDXC:SessionIdentity 2026-09-27 WHY:
@@ -114,7 +121,13 @@ pub fn run_notify_hook(args: Vec<String>) -> Result<(), DomainStateError> {
         && env_string("CLAUDE_CODE_SESSION_KIND").as_deref() == Some("bg")
         && session_id.as_deref() != read_state_string(&state, "agentSessionId").as_deref()
     {
-        return Ok(());
+        return Ok(None);
+    }
+    // See CDXC:SessionIdentity 2026-10-05 in nested_agent.rs: a Claude run another agent started from its tool is not the session's agent.
+    if matches!(agent_key.as_str(), "claude" | "openclaude")
+        && super::nested_agent::claude_hook_is_nested()
+    {
+        return Ok(None);
     }
     /*
     CDXC:SessionIdentity 2026-09-27 WHY:
@@ -122,7 +135,7 @@ pub fn run_notify_hook(args: Vec<String>) -> Result<(), DomainStateError> {
     */
     let hermes = agent_key == "hermes-agent";
     if hermes && !hook_process_has_terminal() {
-        return Ok(());
+        return Ok(None);
     }
     let hermes_subagent = hermes && env_string("HERMES_DELEGATED_CHILD_CONTEXT").is_some();
     if hermes_subagent
@@ -131,7 +144,7 @@ pub fn run_notify_hook(args: Vec<String>) -> Result<(), DomainStateError> {
             "pre_approval_request" | "post_approval_response"
         )
     {
-        return Ok(());
+        return Ok(None);
     }
     let session_id = session_id.filter(|_| !hermes_subagent);
     let transcript_path = transcript_path.filter(|_| !hermes_subagent);
@@ -284,7 +297,7 @@ pub fn run_notify_hook(args: Vec<String>) -> Result<(), DomainStateError> {
                 .then(|| prompt.filter(|prompt| is_actual_user_message_prompt(prompt)))
                 .flatten()
         });
-    post_gxserver_hook_event(
+    let response = post_gxserver_hook_event(
         &agent_key,
         session_id.as_deref(),
         transcript_path.as_deref(),
@@ -296,7 +309,20 @@ pub fn run_notify_hook(args: Vec<String>) -> Result<(), DomainStateError> {
     if has_state_path {
         write_hook_state(Path::new(state_path), &state)?;
     }
-    Ok(())
+    if agent_key == "zcode" && event_name.eq_ignore_ascii_case("SessionStart") {
+        if let Some(context) = coordinator_additional_context(&response) {
+            return Ok(Some(
+                serde_json::to_string(&json!({ "additionalContext": context })).map_err(
+                    |error| {
+                        DomainStateError::bad_request(format!(
+                            "Could not serialize the coordinator session context: {error}"
+                        ))
+                    },
+                )?,
+            ));
+        }
+    }
+    Ok(None)
 }
 
 /*
@@ -402,21 +428,21 @@ fn post_gxserver_hook_event(
     event_name: &str,
     state: &Map<String, Value>,
     payload: &Value,
-) {
+) -> String {
     let base_url = match env_string("GHOSTEX_GXSERVER_BASE_URL") {
         Some(value) => value.trim_end_matches('/').to_string(),
-        None => return,
+        None => return String::new(),
     };
     let (Some(project_id), Some(surface_id)) = parse_global_session_ref(
         env::var("GHOSTEX_GLOBAL_SESSION_REF")
             .unwrap_or_default()
             .as_str(),
     ) else {
-        return;
+        return String::new();
     };
     let token = read_gxserver_auth_token();
     if token.is_empty() {
-        return;
+        return String::new();
     }
     let protocol_version = env_string("GHOSTEX_GXSERVER_PROTOCOL_VERSION")
         .and_then(|value| value.parse::<i64>().ok())
@@ -510,13 +536,14 @@ fn post_gxserver_hook_event(
         "protocolVersion": protocol_version,
         "params": params,
     });
-    let _ = post_json(
+    post_json(
         &base_url,
         "/api/ingestAgentHookEvent",
         &token,
         protocol_version,
         &body,
-    );
+    )
+    .unwrap_or_default()
 }
 
 fn post_json(
@@ -525,15 +552,15 @@ fn post_json(
     token: &str,
     protocol_version: i64,
     body: &Value,
-) -> std::io::Result<()> {
+) -> std::io::Result<String> {
     let Ok(url) = url::Url::parse(base_url) else {
-        return Ok(());
+        return Ok(String::new());
     };
     if url.scheme() != "http" {
-        return Ok(());
+        return Ok(String::new());
     }
     let Some(host) = url.host_str() else {
-        return Ok(());
+        return Ok(String::new());
     };
     let port = url.port_or_known_default().unwrap_or(80);
     let address = format!("{host}:{port}");
@@ -549,7 +576,20 @@ fn post_json(
     stream.write_all(request.as_bytes())?;
     let mut response = Vec::new();
     let _ = stream.read_to_end(&mut response);
-    Ok(())
+    Ok(String::from_utf8_lossy(&response).into_owned())
+}
+
+/// The `additionalContext` gxserver answered with, when the response carries one. The hook prints
+/// it only for a ZCode SessionStart on a coordinator session, so every other event keeps the
+/// wrapper's canned response and every other agent sees an empty helper stdout.
+fn coordinator_additional_context(response: &str) -> Option<String> {
+    let body = response.split_once("\r\n\r\n")?.1;
+    let value = serde_json::from_str::<Value>(body.trim()).ok()?;
+    value
+        .get("additionalContext")
+        .and_then(Value::as_str)
+        .filter(|context| !context.trim().is_empty())
+        .map(str::to_string)
 }
 
 fn read_gxserver_auth_token() -> String {

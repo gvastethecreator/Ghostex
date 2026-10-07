@@ -43,6 +43,11 @@ pub(crate) async fn record_response(
         "ts": chrono::Utc::now().to_rfc3339(),
         "event": "sessionChatSendFailure",
         "requestId": request_id,
+        "sendRequestId": response
+            .response
+            .extensions()
+            .get::<crate::session_chat_send_requests::SendRequestIdExtension>()
+            .map(|id| id.0.clone()),
         "serverId": state.metadata.server_id,
         "endpoint": response.endpoint_path,
         "statusCode": response.response.status().as_u16(),

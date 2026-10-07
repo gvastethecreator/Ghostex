@@ -13,20 +13,22 @@
 //!   (`stage_agent_launch_placeholder`) and the menu-host cache drop it made are made here too,
 //!   in the same order, because answering here means the dispatcher never reaches either.
 //! - Hide Machine: `saveSidebarSettingsPatch` forwards to the bridge's `sidebarCommand` arm, which
-//!   calls `handle_gpui_app_modal_update_settings_patch_message`; called directly.
+//!   calls `handle_gpui_app_modal_update_settings_patch_message`; called directly. Sort & Filter's
+//!   Group Working Sessions (added 2026-10-05, no TypeScript past) saves through the same function.
 //!
 //! **The counters that prove this path fires in the app** are the `state` object on
 //! `gxStore.sidebarActions.summary`, which rides the periodic path and writes its first line at
 //! zero, and the per-command `gxStore.sidebarOpen` line, which names the call and never the payload
 //! (a machine's host, a project's agent choice and a session's title are the user's).
 //!
-//! SEE-ALSO: packages/gx-core/src/sidebar_actions/{delayed_send,agent_run,machine_disable}.rs.
+//! SEE-ALSO: packages/gx-core/src/sidebar_actions/{delayed_send,agent_run,machine_disable,group_working}.rs.
 
 use web_time::Instant;
 
 use ghostex_gx_core::{
     ActionEffect, SidebarActionPlan, owns_agent_run_command, owns_delayed_send_command,
-    owns_machine_disable_command, plan_agent_run, plan_delayed_send_action, plan_machine_disable,
+    owns_group_working_sessions_command, owns_machine_disable_command, plan_agent_run,
+    plan_delayed_send_action, plan_group_working_sessions, plan_machine_disable,
 };
 use serde_json::Value;
 
@@ -49,6 +51,8 @@ pub(crate) struct SidebarStateActionCounters {
     pub(crate) agent_nothing: u64,
     /// Hide Machine settings patches saved.
     pub(crate) machine_hides: u64,
+    /// Sort & Filter's Group Working Sessions settings patches saved.
+    pub(crate) group_working_toggles: u64,
     /// Commands of the three that went to the old runtime because the store's list is not drawn.
     pub(crate) declined_source: u64,
 }
@@ -66,7 +70,8 @@ impl GhostexGpuiApp {
     ) -> bool {
         let delayed_send = owns_delayed_send_command(command);
         let agent_run = owns_agent_run_command(command);
-        if !delayed_send && !agent_run && !owns_machine_disable_command(command) {
+        let group_working = owns_group_working_sessions_command(command);
+        if !delayed_send && !agent_run && !group_working && !owns_machine_disable_command(command) {
             return false;
         }
         if !self.gx_store_sidebar_list_ready() {
@@ -78,6 +83,9 @@ impl GhostexGpuiApp {
             plan_delayed_send_action(self.gx_store.sidebar_list.view(), command)
         } else if agent_run {
             plan_agent_run(self.gx_store.sidebar_list.view(), command)
+        } else if group_working {
+            let saved = crate::shared_settings::shared_sidebar_settings_snapshot();
+            plan_group_working_sessions(command, saved.object())
         } else {
             // The settings as saved, which is the object the end function merges the patch over.
             let saved = crate::shared_settings::shared_sidebar_settings_snapshot();
@@ -136,7 +144,11 @@ impl GhostexGpuiApp {
                     self.dispatch_gpui_sidebar_host_message(message.clone(), cx);
                 }
                 ActionEffect::UpdateSettingsPatch { message } => {
-                    self.gx_store.sidebar_open.state.machine_hides += 1;
+                    if owns_group_working_sessions_command(command) {
+                        self.gx_store.sidebar_open.state.group_working_toggles += 1;
+                    } else {
+                        self.gx_store.sidebar_open.state.machine_hides += 1;
+                    }
                     self.handle_gpui_app_modal_update_settings_patch_message(message, cx);
                 }
                 other => debug_assert!(false, "unexpected state-action effect: {other:?}"),

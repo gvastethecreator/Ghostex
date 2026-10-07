@@ -165,6 +165,9 @@ pub struct SessionChatDetectedSelection {
     /// What the Hermes session's own row in its session store reports
     /// (`session_chat_hermes_status.rs`), camelCase and absent-when-absent.
     pub hermes_status: Option<Value>,
+    /// What the Pi session's own transcript reports: model, thinking level, token and cost totals,
+    /// context use (`session_chat_pi_status.rs`), camelCase and absent-when-absent.
+    pub pi_status: Option<Value>,
     /// The session checkout's repository, branch and folder, sent for the agents that report no
     /// status of their own (`session_chat_cursor_status.rs`).
     pub checkout_status: Option<Value>,
@@ -251,6 +254,9 @@ impl SessionChatDetectedOptions {
         }
         if let Some(status) = self.selection.hermes_status.as_ref() {
             map.insert("hermesStatus".to_string(), status.clone());
+        }
+        if let Some(status) = self.selection.pi_status.as_ref() {
+            map.insert("piStatus".to_string(), status.clone());
         }
         if let Some(status) = self.selection.checkout_status.as_ref() {
             map.insert("checkoutStatus".to_string(), status.clone());

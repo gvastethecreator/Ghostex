@@ -117,6 +117,8 @@ fn text<'a>(status: Option<&'a Value>, key: &str) -> Option<&'a str> {
 struct Skill {
     id: String,
     name: String,
+    /// The folder name agents invoke it by, as `$<skill_name>`.
+    skill_name: String,
     description: String,
     command: String,
     tier: String,
@@ -140,6 +142,7 @@ fn visible_skills() -> Vec<Skill> {
                     Some(Skill {
                         id: text("id")?,
                         name: text("name")?,
+                        skill_name: text("skillName").unwrap_or_default(),
                         description: text("description").unwrap_or_default(),
                         command: text("command").unwrap_or_default(),
                         tier: text("tier").unwrap_or_default(),
@@ -241,11 +244,20 @@ fn install_job(
     }
 }
 
+/// `GHOSTEX_TRYCUA_REPOSITORY_LABEL` and `GHOSTEX_TRYCUA_REPOSITORY_URL`: the link after the name.
+fn trycua_repository() -> (String, String) {
+    let catalog = settings_catalog();
+    (
+        catalog.text(SKILLS_MODULE, "GHOSTEX_TRYCUA_REPOSITORY_LABEL"),
+        catalog.text(SKILLS_MODULE, "GHOSTEX_TRYCUA_REPOSITORY_URL"),
+    )
+}
+
 /// `GHOSTEX_TRYCUA_PRODUCT_NAME`.
 fn trycua_name() -> String {
     let name = settings_catalog().text(SKILLS_MODULE, "GHOSTEX_TRYCUA_PRODUCT_NAME");
     if name.is_empty() {
-        "Fast Computer Use".to_string()
+        "Fast Computer & Browser Use".to_string()
     } else {
         name
     }
@@ -257,7 +269,10 @@ fn cua_permission_status(status: Option<&Value>, loading: bool) -> (&'static str
         return ("Checking", ListItemStatus::Neutral);
     }
     if flag(status, "cuaDriverInstalled") != Some(true) {
-        return ("Fast Computer Use Not Installed", ListItemStatus::Warning);
+        return (
+            "Fast Computer & Browser Use Not Installed",
+            ListItemStatus::Warning,
+        );
     }
     let accessibility = flag(status, "cuaDriverAccessibilityPermissionGranted");
     let screen = flag(status, "cuaDriverScreenRecordingPermissionGranted");
@@ -295,6 +310,19 @@ fn tinted_label(
         .line_height(px(16.0))
         .text_color(hsla(rgb(if p.light { text_light } else { text_dark })))
         .child(label.to_string())
+        .into_any_element()
+}
+
+/// CDXC:Settings 2026-10-06 DECISION:
+/// User: every skill row shows the command that runs it ("`$ghostex-computer-use` for example"), but "only show the command to run it if it's installed".
+fn skill_invocation(p: &SettingsPalette, skill_name: &str) -> AnyElement {
+    div()
+        .flex_shrink_0()
+        .font_family(MODAL_MONO_FONT)
+        .text_size(px(13.0))
+        .line_height(px(18.9))
+        .text_color(hsla(p.muted))
+        .child(format!("${skill_name}"))
         .into_any_element()
 }
 
@@ -405,6 +433,8 @@ struct RowTitle {
     badge: Option<&'static str>,
     /// A dependency note such as Needs Trycua.
     pill: Option<String>,
+    /// An element after the label: the tool's repository link, or an installed skill's `$name`.
+    link: Option<AnyElement>,
 }
 
 /// CDXC:Settings 2026-09-09 DECISION:
@@ -427,11 +457,13 @@ fn integration_row(
         .gap(px(8.0))
         .child(
             div()
+                .min_w_0()
                 .text_size(px(14.0))
                 .line_height(px(18.9))
                 .text_color(hsla(p.foreground))
                 .child(title.label.clone()),
         )
+        .children(title.link)
         .children(title.badge.map(|badge| {
             div()
                 .ml(px(6.0))
@@ -595,6 +627,7 @@ impl IntegrationsTab {
             Some(tone),
             Some(ICON_TERMINAL),
             RowTitle {
+                link: None,
                 label: "Command line tool".to_string(),
                 description: format!(
                     "{label}. Ghostex keeps the app-bundled ghostex command linked automatically for mobile apps and CLI-backed integration setup. gx is linked when that alias is available and not taken by another command."
@@ -724,6 +757,60 @@ impl IntegrationsTab {
         actions
     }
 
+    /// The `trycua/cua ↗` link after the product name, opening the repository in the browser.
+    fn trycua_repository_link(&self, p: &SettingsPalette, cx: &mut Context<Self>) -> AnyElement {
+        let (label, url) = trycua_repository();
+        div()
+            .id("integrations-trycua-repository")
+            .flex_shrink_0()
+            .cursor_pointer()
+            .text_size(px(14.0))
+            .line_height(px(18.9))
+            .text_color(hsla(p.primary))
+            .hover(|this| this.underline())
+            .tooltip(tooltip_text(url.clone()))
+            .on_click(cx.listener(move |page, _: &ClickEvent, _window, cx| {
+                post_store_message(
+                    &page.store,
+                    json!({ "type": "openExternalUrl", "url": url }),
+                    cx,
+                );
+            }))
+            .child(label)
+            .into_any_element()
+    }
+
+    /// The Install skill button an installed driver shows until its Cua Driver skill is installed;
+    /// the Agent skills list installs the same skill.
+    fn cua_driver_skill_install_button(
+        &mut self,
+        p: &SettingsPalette,
+        disabled: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let button = settings_button(
+            p,
+            "integrations-trycua-install-skill",
+            "Install skill",
+            Some(ICON_DOWNLOAD),
+            ButtonVariant::Outline,
+            disabled,
+            Some("Fast Computer & Browser Use is busy.".into()),
+            |page: &mut Self, _window, cx| page.post("installCuaDriverSkill", cx),
+            cx,
+        );
+        if disabled {
+            return button;
+        }
+        div()
+            .id("integrations-trycua-install-skill-tooltip")
+            .tooltip(tooltip_text(
+                "Install the Cua Driver skill (cua-driver skills install) so your agents know the driver's commands.",
+            ))
+            .child(button)
+            .into_any_element()
+    }
+
     /// `DesktopControlSection`.
     fn desktop_control_section(
         &mut self,
@@ -747,7 +834,16 @@ impl IntegrationsTab {
         let mut rows = Vec::new();
         if show_trycua {
             let controls = if installed {
-                self.trycua_installed_actions(p, status, checking, cx)
+                let mut controls = Vec::new();
+                if flag(status, "cuaDriverSkillInstalled") == Some(false) {
+                    controls.push(self.cua_driver_skill_install_button(
+                        p,
+                        checking || job.running,
+                        cx,
+                    ));
+                }
+                controls.extend(self.trycua_installed_actions(p, status, checking, cx));
+                controls
             } else {
                 let disabled = checking || job.running || job.blocked_reason.is_some();
                 let reason = if checking {
@@ -807,9 +903,10 @@ impl IntegrationsTab {
                 }),
                 Some(ICON_DEVICE_DESKTOP),
                 RowTitle {
+                    link: Some(self.trycua_repository_link(p, cx)),
                     label: name.clone(),
                     description: format!(
-                        "{installed_prefix}{name} is a utility that lets any agent control your machine: clicking, typing, and seeing what is on screen. Ghostex Computer Use and Ghostex Browser Use run through it, so install it once and then install those skills below."
+                        "{installed_prefix}{name} is Trycua's open-source driver that lets any agent control your machine and browsers: clicking, typing, and seeing what is on screen. Its Cua Driver skill teaches agents the driver's commands, and Ghostex Computer Use and Ghostex Browser Use add Ghostex's own guidance on top."
                     ),
                     badge: None,
                     pill: None,
@@ -824,6 +921,7 @@ impl IntegrationsTab {
                     None,
                     None,
                     RowTitle {
+                        link: None,
                         label: detail,
                         description: if output.is_empty() {
                             job.plan.clone().unwrap_or_default()
@@ -897,6 +995,7 @@ impl IntegrationsTab {
                 None,
                 None,
                 RowTitle {
+                    link: None,
                     label: "Install command".to_string(),
                     description: format!(
                         "Install {name} runs this command in the background and shows its progress here. You can also run it yourself."
@@ -951,6 +1050,7 @@ impl IntegrationsTab {
                 Some(tone),
                 Some(ICON_SETTINGS),
                 RowTitle {
+                    link: None,
                     label: "System permissions".to_string(),
                     description: format!(
                         "{permission}. {name} needs Accessibility to click and type in apps, and Screen Recording to understand what is visible on the desktop."
@@ -1141,6 +1241,8 @@ impl IntegrationsTab {
             }),
             Some(skill_icon(&skill.id)),
             RowTitle {
+                link: (installed && !skill.skill_name.is_empty())
+                    .then(|| skill_invocation(p, &skill.skill_name)),
                 label: skill.name.clone(),
                 description: format!("{}\n\n{}", skill.description, skill.command),
                 badge: None,
@@ -1188,6 +1290,7 @@ impl IntegrationsTab {
             }),
             Some(ICON_DEVICE_DESKTOP),
             RowTitle {
+                link: None,
                 label: "Show the floating button".to_string(),
                 description: format!(
                     "{hotkey} opens the button's panel. With the same keys, A captures an area, Space the current app, F the full screen, and T writes a prompt, straight away."
@@ -1217,6 +1320,7 @@ impl IntegrationsTab {
             }),
             Some(ICON_DEVICE_DESKTOP),
             RowTitle {
+                link: None,
                 label: "Switch to the session after sending".to_string(),
                 description: "After a prompt is sent, the Ghostex window shows the session it went to, without coming in front of the app you are in.".to_string(),
                 badge: None,
@@ -1301,7 +1405,7 @@ impl Render for IntegrationsTab {
                 );
             }
             let show_trycua = search.row_visible(section, "bundledAgentSkills");
-            // Accessibility and Screen Recording are macOS grants; Fast Computer Use needs none on Windows or Linux.
+            // Accessibility and Screen Recording are macOS grants; Fast Computer & Browser Use needs none on Windows or Linux.
             let show_permissions =
                 cfg!(target_os = "macos") && search.row_visible(section, "cuaPermissions");
             // SpaceO runs only on Apple Silicon Macs with macOS 14 or later; the status says when this one can't.

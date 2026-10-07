@@ -51,6 +51,27 @@ pub(crate) fn find_in(name: &str, directories: &[PathBuf]) -> Option<PathBuf> {
         .find(|path| is_executable(path))
 }
 
+/// CDXC:PlatformSupport 2026-10-07 WHY:
+/// npm (and mise's `npm:` backend, whose `mise which` prints it) puts an extensionless POSIX shell shim next to `name.cmd` and `name.ps1` in `node_modules\.bin`. Windows cannot start the extensionless one (os error 193), so a version check on it failed and the Agents page called an installed ZCode "not installed". On Windows a path another tool reported is mapped to the sibling Windows can run, in PATHEXT order and `.ps1` last; macOS and Linux keep the path as given.
+pub(crate) fn runnable(path: &str) -> String {
+    #[cfg(windows)]
+    {
+        let given = Path::new(path);
+        if let (Some(directory), Some(name)) = (
+            given.parent(),
+            given.file_name().and_then(|name| name.to_str()),
+        ) {
+            if let Some(found) = candidates(directory, name)
+                .into_iter()
+                .find(|candidate| is_executable(candidate))
+            {
+                return found.to_string_lossy().into_owned();
+            }
+        }
+    }
+    path.to_string()
+}
+
 /// Adds `dir` to the user PATH for programs started from now on (Windows only).
 #[cfg(windows)]
 pub(crate) fn add_user_path_directory(dir: &Path) -> Result<(), String> {

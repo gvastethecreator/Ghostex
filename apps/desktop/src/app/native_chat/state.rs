@@ -784,20 +784,29 @@ impl NativeChatView {
                 snapshot["composerOverflow"] =
                     json!(ghostex_gx_chat_core::composer::layout::fit_composer_controls(&measured));
             }
+            let selection_only = !self.host_composer
+                && super::suggestions::only_selection_moved(&self.snapshot, &snapshot);
             self.snapshot = Arc::new(snapshot);
-            self.adopt_status_line_reservation();
-            // A host that draws the composer also draws what opens from it (the model menu, the
-            // context editor, the suggestions, the rewind and Save to Markdown dialogs), so the
-            // transcript-only view opens none of their windows.
-            if !self.host_composer {
-                self.open_pending_model_menu(cx);
-                self.sync_context_editor_window(cx);
-                self.sync_save_markdown_window(cx);
-                self.sync_rewind_window(cx);
-                self.sync_suggestion_window(cx);
+            if selection_only {
+                self.repaint_suggestions(cx);
+            } else {
+                if self.snapshot["suggestions"].is_null() {
+                    self.suggestions.clear_hover();
+                }
+                self.adopt_status_line_reservation();
+                // A host that draws the composer also draws what opens from it (the model menu, the
+                // context editor, the suggestions, the rewind and Save to Markdown dialogs), so the
+                // transcript-only view opens none of their windows.
+                if !self.host_composer {
+                    self.open_pending_model_menu(cx);
+                    self.sync_context_editor_window(cx);
+                    self.sync_save_markdown_window(cx);
+                    self.sync_rewind_window(cx);
+                    self.sync_suggestion_window(cx);
+                }
+                self.load_earlier_if_near_top(cx);
+                self.notify_if_shown(cx);
             }
-            self.load_earlier_if_near_top(cx);
-            self.notify_if_shown(cx);
         }
         for request in output["requests"].as_array().into_iter().flatten() {
             if self.host_composer && Self::is_host_composer_request(request) {

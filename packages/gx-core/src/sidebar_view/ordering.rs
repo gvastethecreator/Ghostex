@@ -11,8 +11,10 @@
 //!
 //! SEE-ALSO: apps/mobile/app/src/contract/grouping.ts mirrors the parked ordering.
 
+use std::collections::{HashMap, HashSet};
+
 use super::inputs::{SectionId, SessionSortMode};
-use super::view::SessionRow;
+use super::view::{SessionRow, SessionView};
 
 /// A new session leads the list for ten minutes.
 pub(crate) const NEW_SESSION_PRIORITY_MS: i64 = 10 * 60 * 1_000;
@@ -47,8 +49,60 @@ pub(crate) fn is_draft_section_session(row: &SessionRow, now_ms: u64) -> bool {
     row.is_draft && !row.is_pinned && row.has_composer_draft && !is_new_session(row, now_ms)
 }
 
-/// `getProjectSessionSection`.
-pub(crate) fn section_of(row: &SessionRow, enable_parking: bool, now_ms: u64) -> SectionId {
+/// Whether a row sits in its project's Working section while Group working sessions is on: its
+/// agent is working, and nothing on it is waiting for the user (an unanswered question's pink fill,
+/// or a failed model change's red dot). A working row never has the blue attention dot. The rows
+/// [`held_out_of_working`] names stay where they are whatever this says.
+///
+/// CDXC:Sidebar 2026-10-05 DECISION:
+/// User: "Add a setting that hides sessions that are working status (should be in filter & view and also in settings, both toggle same thing)", then, replacing hiding: "For the hide working we should have a new section called working in the sidebar and minimize it by default basically unless it has pink or blue dot or it's not working anymore then it goes back to sessions section under the project". One setting, `groupWorkingSessions` (off by default), toggled from the More menu's Sort & Filter page and from Settings > Sidebar. Each project gets a Working heading between Drafts and Sessions, collapsed by default (and, like Drafts, Parked and Snoozed, collapsed again after a restart). Only rows that would otherwise sit in Sessions move there; pinned, draft, parked and snoozed rows keep their own headings. A row returns to Sessions on its own the moment it stops working or starts waiting on the user. The session you have open stays in Sessions while its agent works (decided after a live test showed the focused coordinator folding away into the collapsed heading), and so does every coordinator above it, so opening a thread never hides it inside its working coordinator's block.
+pub(crate) fn is_grouped_working(row: &SessionRow) -> bool {
+    !row.is_browser
+        && row.activity == "working"
+        && row.pending_question_count == 0
+        && !row.model_selection_failed
+}
+
+/// The rows Group working sessions leaves in their own section even while their agent works, by
+/// sidebar row id: the focused session and the coordinators above it in this group
+/// (CDXC:Sidebar 2026-10-05 on [`is_grouped_working`]). Empty when nothing in the group is focused.
+pub(crate) fn held_out_of_working(sessions: &[SessionView]) -> HashSet<String> {
+    let mut held = HashSet::new();
+    let Some(focused) = sessions.iter().position(|session| session.is_focused) else {
+        return held;
+    };
+    let by_key: HashMap<_, usize> = sessions
+        .iter()
+        .enumerate()
+        .filter_map(|(index, session)| session.row.key.as_ref().map(|key| (key, index)))
+        .collect();
+    let mut index = focused;
+    // Bounded by the group's size, so a coordinator cycle cannot loop.
+    for _ in 0..sessions.len() {
+        let row = &sessions[index].row;
+        if !held.insert(row.sidebar_session_id.clone()) {
+            break;
+        }
+        match row
+            .coordinator_parent
+            .as_ref()
+            .and_then(|parent| by_key.get(parent))
+        {
+            Some(parent) => index = *parent,
+            None => break,
+        }
+    }
+    held
+}
+
+/// `getProjectSessionSection`, plus the Working heading. `group_working` is false for a row
+/// [`held_out_of_working`] names.
+pub(crate) fn section_of(
+    row: &SessionRow,
+    enable_parking: bool,
+    group_working: bool,
+    now_ms: u64,
+) -> SectionId {
     if row.is_browser {
         return SectionId::Browser;
     }
@@ -63,6 +117,8 @@ pub(crate) fn section_of(row: &SessionRow, enable_parking: bool, now_ms: u64) ->
     }
     if row.is_pinned {
         SectionId::Pinned
+    } else if group_working && is_grouped_working(row) {
+        SectionId::Working
     } else {
         SectionId::Sessions
     }
@@ -76,6 +132,7 @@ pub(crate) fn row_deadline_ms(row: &SessionRow, now_ms: u64) -> Option<u64> {
             .created_ms
             .map(|created| created + NEW_SESSION_PRIORITY_MS),
         row.timing.snoozed_until_ms,
+        super::threads::recent_thread_deadline_ms(row),
     ]
     .into_iter()
     .flatten()
@@ -85,11 +142,14 @@ pub(crate) fn row_deadline_ms(row: &SessionRow, now_ms: u64) -> Option<u64> {
 }
 
 /// `createDisplaySessionLayout` for one group: browser rows first, then terminal rows, each split
-/// into pinned, drafts, new, the rest, parked, and snoozed.
+/// into pinned, drafts, working (while `group_working` is on, except the `held` rows), new, the
+/// rest, parked, and snoozed.
 pub(crate) fn order_rows_for_display(
     rows: &[std::sync::Arc<SessionRow>],
     sort_mode: SessionSortMode,
     enable_parking: bool,
+    group_working: bool,
+    held: &HashSet<String>,
     now_ms: u64,
 ) -> Vec<usize> {
     let mut browser: Vec<usize> = Vec::new();
@@ -107,6 +167,8 @@ pub(crate) fn order_rows_for_display(
         &browser,
         sort_by_last_activity,
         enable_parking,
+        group_working,
+        held,
         now_ms,
     );
     ordered.extend(order_kind(
@@ -114,6 +176,8 @@ pub(crate) fn order_rows_for_display(
         &terminal,
         sort_by_last_activity,
         enable_parking,
+        group_working,
+        held,
         now_ms,
     ));
     ordered
@@ -124,10 +188,13 @@ fn order_kind(
     indices: &[usize],
     sort_by_last_activity: bool,
     enable_parking: bool,
+    group_working: bool,
+    held: &HashSet<String>,
     now_ms: u64,
 ) -> Vec<usize> {
     let mut pinned: Vec<usize> = Vec::new();
     let mut drafts: Vec<usize> = Vec::new();
+    let mut working: Vec<usize> = Vec::new();
     let mut new_sessions: Vec<usize> = Vec::new();
     let mut other: Vec<usize> = Vec::new();
     let mut parked: Vec<usize> = Vec::new();
@@ -142,6 +209,11 @@ fn order_kind(
             drafts.push(*index);
         } else if row.is_pinned {
             pinned.push(*index);
+        } else if group_working
+            && is_grouped_working(row)
+            && !held.contains(&row.sidebar_session_id)
+        {
+            working.push(*index);
         } else if !row.is_browser && is_new_session(row, now_ms) {
             new_sessions.push(*index);
         } else {
@@ -157,12 +229,14 @@ fn order_kind(
     drafts.sort_by(by_created_desc);
     new_sessions.sort_by(by_created_desc);
     if sort_by_last_activity {
+        sort_by_activity(rows, &mut working);
         sort_by_activity(rows, &mut other);
     }
     sort_parked_by_last_activity(rows, &mut parked);
 
     let mut ordered = pinned;
     ordered.extend(drafts);
+    ordered.extend(working);
     ordered.extend(new_sessions);
     ordered.extend(other);
     ordered.extend(parked);

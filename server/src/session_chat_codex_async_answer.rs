@@ -22,6 +22,8 @@ pub struct AsyncAnswer {
     pub title: String,
     pub options: usize,
     pub text: Option<String>,
+    /// Where the asking message starts in the transcript; an answer is recorded after it.
+    pub question_offset: Option<u64>,
 }
 
 pub(crate) fn resolve(
@@ -62,7 +64,11 @@ pub(crate) fn resolve(
                 .into_iter()
                 .enumerate()
             {
-                questions.push((format!("{}:{index}", message.id), question));
+                questions.push((
+                    format!("{}:{index}", message.id),
+                    question,
+                    message.byte_offset,
+                ));
             }
         }
     };
@@ -79,11 +85,11 @@ pub(crate) fn resolve(
     collect(messages);
     let question = questions
         .iter()
-        .find(|(key, _)| key == id)
-        .map(|(_, question)| question);
+        .find(|(key, ..)| key == id)
+        .map(|(_, question, offset)| (question, *offset));
     // CDXC:SessionChat 2026-09-22 WHY:
     // A cached card can outlive the question in Codex's current transcript after compaction or resume. Skip must persist its retirement even when there is no terminal question left to dismiss.
-    let Some(question) = question else {
+    let Some((question, question_offset)) = question else {
         return if text.is_none() {
             Ok(None)
         } else {
@@ -93,9 +99,9 @@ pub(crate) fn resolve(
             )
         };
     };
-    let repeated_title = questions
-        .iter()
-        .any(|(key, other)| key != id && normalized(&other.title) == normalized(&question.title));
+    let repeated_title = questions.iter().any(|(key, other, _)| {
+        key != id && normalized(&other.title) == normalized(&question.title)
+    });
     let (message_id, index) = id
         .rsplit_once(':')
         .ok_or("Codex's question ID is invalid.")?;
@@ -113,6 +119,7 @@ pub(crate) fn resolve(
             .map(|options| options.iter().take(32).filter(|s| s.len() <= 512).count())
             .unwrap_or(0),
         text,
+        question_offset,
     }))
 }
 
@@ -501,6 +508,10 @@ impl Driver<'_> {
                 "answer": text,
             }])
         );
+        let expected = format!("{prefix}{text}");
+        if answer_already_recorded(answer, &expected).await {
+            return Ok(());
+        }
         let screen = capture_session_terminal_text_vt(self.zmx_name)
             .await
             .ok_or("Could not read Codex's input box. Nothing was submitted.")?;
@@ -545,7 +556,6 @@ impl Driver<'_> {
         )
         .await
         .map_err(|error| error.message)?;
-        let expected = format!("{prefix}{text}");
         let mut cursor = SessionChatIncrementalState::default();
         cursor.rebase(baseline);
         let deadline = Instant::now() + Duration::from_secs(10);
@@ -622,6 +632,39 @@ impl Driver<'_> {
         }
         Err("Codex could not return to its main prompt. Check the terminal before sending another message.".into())
     }
+}
+
+/// CDXC:SessionChat 2026-10-05 WHY:
+/// A retained answer whose transcript check timed out ("Codex has not recorded the question answer yet") left its card up, and answering again typed the reply a second time once Codex had in fact taken the first. Before typing, the retained reply looks for a user turn after the question that already carries this exact answer and, when there is one, settles as answered without writing anything.
+async fn answer_already_recorded(answer: &AsyncAnswer, expected: &str) -> bool {
+    let path = answer.transcript_path.clone();
+    let after = answer.question_offset;
+    let expected = expected.to_string();
+    tokio::task::spawn_blocking(move || {
+        read_incremental_transcript_messages(
+            &path,
+            &mut SessionChatIncrementalState::default(),
+            decode_codex_transcript_line,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap_or_default()
+        .iter()
+        .any(|message| {
+            message.role == SessionChatRole::User
+                && message
+                    .byte_offset
+                    .zip(after)
+                    .is_none_or(|(offset, after)| offset > after)
+                && message.blocks.iter().any(
+                    |block| matches!(block, SessionChatBlock::Text { text } if text == &expected),
+                )
+        })
+    })
+    .await
+    .unwrap_or(false)
 }
 
 pub(crate) async fn run(

@@ -432,6 +432,17 @@ pub(crate) const SUPPLEMENTAL_ROWS: &[Supplemental] = &[
         user_only: false,
     },
     Supplemental {
+        key: "cloudBoxesHidden",
+        tab: EXTENSIONS,
+        group: None,
+        section: "official",
+        section_title: "Built-in",
+        title: "Turn off Cloud Boxes",
+        subtitle: "Turn off Cloud Boxes everywhere: the Cloud Boxes page in Settings, the Run on choice of a new thread, Run in a Box in the Select Agent menu and the agentbox commands. Off by default; your boxes and box settings are kept.",
+        options: &[],
+        user_only: false,
+    },
+    Supplemental {
         key: "defaultEditorCommand",
         tab: OPEN_TARGETS,
         group: None,

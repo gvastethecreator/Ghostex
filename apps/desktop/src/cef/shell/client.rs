@@ -17,6 +17,7 @@ wrap_client! {
         permission_handler: Option<PermissionHandler>,
         focus_handler: Option<FocusHandler>,
         keyboard_handler: Option<KeyboardHandler>,
+        download_handler: Option<DownloadHandler>,
     }
 
     impl Client {
@@ -26,6 +27,10 @@ wrap_client! {
 
         fn keyboard_handler(&self) -> Option<KeyboardHandler> {
             self.keyboard_handler.clone()
+        }
+
+        fn download_handler(&self) -> Option<DownloadHandler> {
+            self.download_handler.clone()
         }
 
         fn life_span_handler(&self) -> Option<LifeSpanHandler> {

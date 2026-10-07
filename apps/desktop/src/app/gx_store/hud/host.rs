@@ -165,8 +165,18 @@ impl GhostexGpuiApp {
 
     /// Settings were saved or re-read: the HUD's `settings` block and everything drawn from it,
     /// and the status item and pet, which read the same settings (gx_store/indicators/).
+    ///
+    /// CDXC:Sidebar 2026-10-05 WHY:
+    /// The list reads the settings it depends on (Group working sessions, parking, Compact Session
+    /// Rows) through a one-second cache, and a save only rebuilt the list when the HUD itself
+    /// moved. So a sidebar setting changed from Settings, the Sort & Filter menu or
+    /// `ghostex settings set` could stay undrawn until some unrelated event came along. The cached
+    /// read is dropped and the list brought up to date on every save; an update whose inputs did
+    /// not move returns at once.
     pub(crate) fn gx_store_hud_settings_changed(&mut self, cx: &mut gpui::Context<Self>) {
+        self.gx_store.sidebar_list.forget_settings();
         self.gx_store_hud_sources_changed(cx);
+        self.gx_store_update_sidebar_list(cx);
         self.gx_store_indicators_settings_changed(cx);
     }
 

@@ -11,7 +11,7 @@ use std::sync::Arc;
 use crate::keys::SessionKey;
 
 use super::inputs::{SectionId, SidebarSettings, SidebarUiState};
-use super::ordering::{order_rows_for_display, row_deadline_ms};
+use super::ordering::{held_out_of_working, order_rows_for_display, row_deadline_ms};
 use super::sections::{project_session_sections, SectionLayout};
 use super::tags::matches_tag_filters;
 use super::threads::nest_threads;
@@ -277,10 +277,17 @@ pub(crate) fn lay_out_group_rows(
         .iter()
         .map(|session| session.row.clone())
         .collect();
+    let held = if settings.group_working_sessions {
+        held_out_of_working(store_rows)
+    } else {
+        Default::default()
+    };
     let ordered = order_rows_for_display(
         &rows,
         settings.sort_mode,
         settings.enable_session_parking,
+        settings.group_working_sessions,
+        &held,
         now_ms,
     );
     let sessions: Vec<SessionView> = ordered
@@ -297,7 +304,10 @@ pub(crate) fn lay_out_group_rows(
     let (sessions, section_by_session) = nest_threads(
         sessions,
         settings.enable_session_parking,
+        settings.group_working_sessions,
+        &held,
         &ui.collapse.collapsed_coordinators,
+        &ui.collapse.expanded_coordinator_older_threads,
         now_ms,
     );
     let section_collapse = ui

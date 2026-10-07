@@ -249,6 +249,7 @@ impl GhostexGpuiApp {
                                 "sessionId": session_id,
                                 "startupSend": true,
                                 "text": message,
+                                "sendRequestId": uuid::Uuid::new_v4().to_string(),
                             }),
                         )
                         .await
@@ -284,6 +285,7 @@ impl GhostexGpuiApp {
                                 "projectId": key.project_id,
                                 "sessionId": key.session_id,
                                 "text": message,
+                                "sendRequestId": uuid::Uuid::new_v4().to_string(),
                             }),
                         )
                         .await

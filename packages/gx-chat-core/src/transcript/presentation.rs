@@ -39,7 +39,7 @@ use crate::transcript::tool_rows::tool_run_shows_all_rows;
 use crate::transcript::transcript::{
     completed_chat_work, project_chat_transcript, TranscriptProjection,
 };
-use crate::transcript::transcript_rows::{file_rows, tool_detail, tool_fold, tool_rows};
+use crate::transcript::transcript_rows::{file_rows, open_tool_detail, tool_fold, tool_rows};
 use crate::transcript::turns::{partition_completed_work, worked_duration_label, RenderItem};
 
 /// A message's file changes and tool calls, in the order their rows are numbered.
@@ -731,5 +731,5 @@ pub fn row_detail_scope(
         let change = files.get(index)?;
         return Some(serde_json::json!({ "lines": change.lines }));
     }
-    tools.get(index).map(tool_detail)
+    tools.get(index).map(open_tool_detail)
 }

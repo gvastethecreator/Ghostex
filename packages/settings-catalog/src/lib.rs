@@ -64,6 +64,20 @@ pub fn extra_pages(platform: Platform) -> Vec<Page> {
     pages::pages(platform)
 }
 
+/// Whether Settings' own search lists a row for `key`: a row of the General (and Theme) sections
+/// or of another searchable page. Keys the Help catalog adds without one (its supplemental rows and
+/// app state) have none, so searching Settings for their title finds nothing.
+pub fn has_search_row(platform: Platform, key: &str) -> bool {
+    general_sections(platform)
+        .iter()
+        .any(|section| section.settings.iter().any(|row| row.key == key))
+        || extra_pages(platform).iter().any(|page| {
+            page.sections
+                .iter()
+                .any(|section| section.settings.iter().any(|row| row.key == key))
+        })
+}
+
 /// Every setting key with its default value, in the order the settings file lists them.
 pub fn defaults() -> &'static [(&'static str, J)] {
     data::DEFAULT_GHOSTEX_SETTINGS

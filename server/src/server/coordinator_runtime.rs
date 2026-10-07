@@ -46,6 +46,9 @@ struct SupervisorMemory {
     delivery_checked_at: HashMap<SessionKey, i64>,
     /// Since when a thread has been idle without its pending message (sent at, since).
     undelivered_idle_since: HashMap<SessionKey, (String, i64)>,
+    /// The `sendRequestId` of each report still waiting to reach its coordinator, by coordinator
+    /// and report text, so a retried report is the same send to gxserver's send ledger.
+    report_send_ids: HashMap<(SessionKey, String), String>,
 }
 
 enum ReportKind {
@@ -507,8 +510,22 @@ async fn deliver(state: Arc<AppState>, memory: Arc<Mutex<SupervisorMemory>>, del
             ),
         };
         let message = agent_message(&report.sender, &body);
-        match send_to_coordinator(&state, &coordinator, &message).await {
+        let report_key = (coordinator.clone(), message.clone());
+        let send_request_id = memory
+            .lock()
+            .map(|mut memory| {
+                memory
+                    .report_send_ids
+                    .entry(report_key.clone())
+                    .or_insert_with(|| Uuid::new_v4().to_string())
+                    .clone()
+            })
+            .unwrap_or_else(|_| Uuid::new_v4().to_string());
+        match send_to_coordinator(&state, &coordinator, &message, &send_request_id).await {
             Ok(()) => {
+                if let Ok(mut memory) = memory.lock() {
+                    memory.report_send_ids.remove(&report_key);
+                }
                 let settle_state = state.clone();
                 let thread = report.thread.clone();
                 let kind_key = match &report.kind {
@@ -547,6 +564,7 @@ async fn deliver(state: Arc<AppState>, memory: Arc<Mutex<SupervisorMemory>>, del
                             "coordinatorProjectId": coordinator.0,
                             "coordinatorSessionId": coordinator.1,
                             "threadSessionId": report.thread.session_id,
+                            "sendRequestId": send_request_id,
                         })),
                     },
                 );
@@ -569,6 +587,9 @@ async fn deliver(state: Arc<AppState>, memory: Arc<Mutex<SupervisorMemory>>, del
                 .insert(coordinator, (failures + 1, now_ms() + delay));
         } else {
             memory.retry.remove(&coordinator);
+            memory
+                .report_send_ids
+                .retain(|(owner, _), _| owner != &coordinator);
         }
     }
 }
@@ -741,17 +762,20 @@ fn settle_undelivered(state: &AppState, thread: &ThreadRecord, sent_at: &str) {
 }
 
 /// The same default delivery `ghostex agents send` uses: typed now, picked up by a busy agent at
-/// its next input boundary, and a sleeping coordinator is woken for it.
+/// its next input boundary, and a sleeping coordinator is woken for it. A report retried after a
+/// failure keeps its `sendRequestId`, so one that did arrive is never typed again.
 async fn send_to_coordinator(
     state: &AppState,
     coordinator: &SessionKey,
     message: &str,
+    send_request_id: &str,
 ) -> std::result::Result<(), String> {
     let body = json!({
         "params": {
             "projectId": coordinator.0,
             "sessionId": coordinator.1,
             "text": message,
+            "sendRequestId": send_request_id,
         }
     });
     let routed = crate::session_chat_send::handle_send_session_chat_message_http(
@@ -815,6 +839,58 @@ pub(crate) fn prepare_coordinator_create_params(
         Value::String(role_file.to_string_lossy().to_string()),
     );
     Ok(params)
+}
+
+/// `/api/promoteCoordinator`: makes an existing session a coordinator, then queues its playbook
+/// in the session's chat queue, which hands it over only once the agent is idle (never mid-turn).
+/// See the CDXC:Coordinators decision on `promote_session_to_coordinator`.
+pub(crate) fn promote_coordinator(
+    state: &AppState,
+    db: &rusqlite::Connection,
+    repository: &DomainRepository<'_>,
+    params: &Map<String, Value>,
+) -> std::result::Result<Value, DomainStateError> {
+    let role_file = coordinators::ensure_coordinator_role_file(&state.paths).map_err(|error| {
+        DomainStateError {
+            code: "internalError",
+            message: format!("Could not write the coordinator role file: {error}"),
+        }
+    })?;
+    let promotion = coordinators::promote_session_to_coordinator(
+        db,
+        state.metadata.server_id.as_str(),
+        params,
+        &role_file,
+    )?;
+    let (project_id, session_id) = &promotion.key;
+    schedule_presentation_session_delta(state, db, repository, project_id, session_id)?;
+    let mut queue_params = Map::new();
+    queue_params.insert("projectId".to_string(), json!(project_id));
+    queue_params.insert("sessionId".to_string(), json!(session_id));
+    queue_params.insert("text".to_string(), json!(promotion.playbook_message));
+    let playbook_error = match crate::session_chat_queue::handle_session_chat_queue_endpoint(
+        &state.paths,
+        state.metadata.server_id.as_str(),
+        "/api/queueSessionChatPrompt",
+        &queue_params,
+    ) {
+        Ok(result) => {
+            if result.broadcast {
+                crate::session_chat_queue_runtime::broadcast_session_chat_queue_state(
+                    state, project_id, session_id,
+                );
+            }
+            None
+        }
+        Err(error) => Some(error.message),
+    };
+    Ok(json!({
+        "ok": true,
+        "globalRef": crate::ids::create_global_session_ref(state.metadata.server_id.as_str(), project_id, session_id),
+        "title": promotion.title,
+        "playbookQueued": playbook_error.is_none(),
+        "playbookError": playbook_error,
+    }))
 }
 
 pub(crate) fn handle_coordinator_http(

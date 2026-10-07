@@ -18,6 +18,8 @@ pub(super) struct Arguments {
     pub title: Option<String>,
     pub project_id: Option<String>,
     pub delivery: Delivery,
+    /// `--request-id`: the send's id, reused by a caller that retries it.
+    pub request_id: Option<String>,
     pub all: bool,
     pub json: bool,
     pub help: bool,
@@ -33,6 +35,7 @@ pub(super) fn parse(args: &[String]) -> CliResult<Arguments> {
         title: None,
         project_id: None,
         delivery: Delivery::Normal,
+        request_id: None,
         all: false,
         json: false,
         help: args.is_empty(),
@@ -60,7 +63,7 @@ pub(super) fn parse(args: &[String]) -> CliResult<Arguments> {
                     Delivery::Queue
                 };
             }
-            "--body-file" | "--server" | "--task" | "--title" | "--project-id" => {
+            "--body-file" | "--server" | "--task" | "--title" | "--project-id" | "--request-id" => {
                 let value = args
                     .next()
                     .filter(|value| !value.starts_with("--") && !value.is_empty())
@@ -70,6 +73,7 @@ pub(super) fn parse(args: &[String]) -> CliResult<Arguments> {
                     "--task" => Some(&mut parsed.task),
                     "--title" => Some(&mut parsed.title),
                     "--project-id" => Some(&mut parsed.project_id),
+                    "--request-id" => Some(&mut parsed.request_id),
                     _ => None,
                 };
                 if let Some(slot) = slot {
@@ -91,6 +95,20 @@ pub(super) fn parse(args: &[String]) -> CliResult<Arguments> {
     }
     if parsed.help {
         return Ok(parsed);
+    }
+    if parsed.request_id.is_some() && parsed.command != "send" {
+        return Err(CliError::Other(
+            "--request-id is only available for send.".into(),
+        ));
+    }
+    if parsed
+        .request_id
+        .as_ref()
+        .is_some_and(|id| id.trim().is_empty() || id.chars().count() > 128)
+    {
+        return Err(CliError::Other(
+            "--request-id must be 1 to 128 characters.".into(),
+        ));
     }
     if parsed.command != "create"
         && (parsed.task.is_some() || parsed.title.is_some() || parsed.project_id.is_some())

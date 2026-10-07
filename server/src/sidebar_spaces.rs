@@ -49,6 +49,18 @@ const SIDEBAR_SPACE_COLORS: [&str; 13] = [
 /// Space carries no usable icon.
 const DEFAULT_SIDEBAR_SPACE_ICON: &str = "stack";
 
+/// This machine's own Spaces switch (`sidebarSpacesEnabled`, the built-in Spaces extension on
+/// Settings › Extensions), as its settings file holds it.
+///
+/// CDXC:Spaces 2026-10-06 DECISION:
+/// "so spaces is a setting per gxserver not per client app, but it's toggled in settings like it is now basically". The daemon publishes its own switch with its Spaces document (the presentation snapshot and every `sidebarSpacesChanged` frame), and a client viewing this machine shows Spaces exactly when it is on.
+pub fn read_sidebar_spaces_enabled(paths: &crate::paths::GxserverPaths) -> bool {
+    ghostex_settings_catalog::built_in_extensions::enabled_in_value(
+        crate::session_lifecycle::read_sidebar_settings(paths).as_ref(),
+        ghostex_settings_catalog::built_in_extensions::SPACES,
+    )
+}
+
 pub fn empty_sidebar_spaces_state() -> Value {
     json!({
         "order": [],

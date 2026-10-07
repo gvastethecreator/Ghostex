@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 use crate::core::Core;
 use crate::keys::{MachineId, CHATS_GROUP_ID};
 use crate::sidebar_view::collections::CollectionsState;
+use crate::sidebar_view::machine_spaces::spaces_enabled_on;
 use crate::sidebar_view::spaces::SpacesState;
 use crate::sidebar_view::tags::TagCatalog;
 use crate::sidebar_view::{
@@ -88,11 +89,9 @@ impl<'a> SidebarMenus<'a> {
                     .machine(&MachineId::Local)
                     .and_then(|entry| entry.side_state().custom_session_tags.as_ref()),
             ),
-            // The Spaces submenu follows the same switch the drawn list does: with Spaces off the
-            // sidebar has none to offer.
-            spaces: inputs
-                .settings
-                .sidebar_spaces_enabled
+            // The Spaces submenu follows the same switch the drawn list does, the drawn machine's:
+            // with Spaces off the sidebar has none to offer.
+            spaces: spaces_enabled_on(store, inputs, &machine)
                 .then(|| side_state.and_then(|side| side.spaces.as_ref()))
                 .flatten()
                 .map(SpacesState::from_wire),

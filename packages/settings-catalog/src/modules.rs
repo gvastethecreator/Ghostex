@@ -2,7 +2,7 @@
 
 use crate::data::*;
 use crate::hotkeys::{default_hotkeys, hotkey_definitions};
-use crate::json::{Json, ToJson};
+use crate::json::{Json, ToJson, J};
 use crate::platform_text::{
     copy_on_select_description, copy_on_select_options, paste_previewable_images_description,
     APP_ICON_CONTROLS_VISIBLE,
@@ -60,6 +60,14 @@ pub fn exports(module: &str, platform: Platform) -> Vec<(&'static str, Json)> {
                 GHOSTEX_TRYCUA_PRODUCT_NAME.to_json(),
             ),
             (
+                "GHOSTEX_TRYCUA_REPOSITORY_LABEL",
+                GHOSTEX_TRYCUA_REPOSITORY_LABEL.to_json(),
+            ),
+            (
+                "GHOSTEX_TRYCUA_REPOSITORY_URL",
+                GHOSTEX_TRYCUA_REPOSITORY_URL.to_json(),
+            ),
+            (
                 "VISIBLE_BUNDLED_GHOSTEX_AGENT_SKILLS",
                 VISIBLE_BUNDLED_GHOSTEX_AGENT_SKILLS.to_json(),
             ),
@@ -82,7 +90,18 @@ pub fn exports(module: &str, platform: Platform) -> Vec<(&'static str, Json)> {
         module::OFFICIAL_EXTENSIONS => vec![
             (
                 "GHOSTEX_OFFICIAL_EXTENSIONS",
-                GHOSTEX_OFFICIAL_EXTENSIONS.to_json(),
+                Json::Arr(
+                    GHOSTEX_OFFICIAL_EXTENSIONS
+                        .as_array()
+                        .iter()
+                        .filter(|entry| {
+                            entry.get("id").and_then(J::as_str).is_none_or(|id| {
+                                crate::built_in_extensions::available_on(id, platform)
+                            })
+                        })
+                        .map(ToJson::to_json)
+                        .collect(),
+                ),
             ),
             (
                 "GHOSTEX_OFFICIAL_EXTENSION_CATEGORIES",

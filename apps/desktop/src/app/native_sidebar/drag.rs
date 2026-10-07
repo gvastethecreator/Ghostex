@@ -114,6 +114,30 @@ impl GhostexGpuiApp {
                 return;
             }
         }
+        // A project or collection over the rows under a project's header aims at the slot next to
+        // that project (gx-core `project_body_drop_command`).
+        if matches!(source.kind, "group" | "collection")
+            && matches!(target_kind, "session" | "section" | "session-group")
+        {
+            let group_id = match target_kind {
+                "session-group" => Some(target_id),
+                _ => group_id,
+            };
+            let command = group_id
+                .and_then(|group_id| {
+                    self.gx_store_project_body_drop_command(source.kind, &source.id, group_id)
+                })
+                .and_then(|command| {
+                    self.resolve_native_sidebar_drop_landing(command, |app, command| {
+                        app.with_native_sidebar_project_drop_landing(command)
+                    })
+                });
+            if self.native_sidebar.drop_command != command {
+                self.native_sidebar.drop_command = command;
+                cx.notify();
+            }
+            return;
+        }
         if target_kind == "section" {
             if self.native_sidebar.drop_command.take().is_some() {
                 cx.notify();
@@ -211,12 +235,16 @@ impl GhostexGpuiApp {
 
     /// Where a project or collection drop's line is drawn on this row's block: above the row the
     /// dropped one lands right before, or below the one it lands right after when it becomes the
-    /// last among its siblings.
+    /// last among its siblings. `first` is the line above the list's first row.
+    ///
+    /// CDXC:Sidebar 2026-10-06 WHY:
+    /// The line sits in the gap above the row it is drawn before, but the list's first row has no gap above it, so the scroll view clipped the line and a project dragged to the top of the list showed no line. That line is drawn on the first row's top edge instead.
     pub(crate) fn native_sidebar_project_drop_line(&self, kind: &str, id: &str) -> Option<&'static str> {
         let landing = self.native_sidebar.drop_command.as_ref()?.get("landing")?;
         let names = |row: &Value| row["kind"] == kind && row["id"] == id;
         if names(&landing["before"]) {
-            return Some("before");
+            let first = landing["after"].is_null() && landing["collectionId"].is_null();
+            return Some(if first { "first" } else { "before" });
         }
         (landing["before"].is_null() && names(&landing["after"])).then_some("after")
     }
@@ -321,17 +349,28 @@ impl GhostexGpuiApp {
 }
 
 pub(super) fn drop_line(position: &str, scale: f32) -> AnyElement {
+    drop_line_spanning(position, scale, px(0.0), px(0.0))
+}
+
+/// The drop line of a row whose box is wider than its parent's block: `left` and `right` are how far
+/// the box sits inside (positive) or outside (negative) the block's edges.
+pub(super) fn drop_line_spanning(
+    position: &str,
+    scale: f32,
+    left: gpui::Pixels,
+    right: gpui::Pixels,
+) -> AnyElement {
     let mut line = div()
         .absolute()
-        .left_0()
-        .right_0()
+        .left(left)
+        .right(right)
         .h(px(2.0 * scale))
         .bg(gpui::rgb(0x60a5fa));
-    if position == "after" {
-        line = line.bottom(px(-3.0 * scale));
-    } else {
-        line = line.top(px(-3.0 * scale));
-    }
+    line = match position {
+        "after" => line.bottom(px(-3.0 * scale)),
+        "first" => line.top_0(),
+        _ => line.top(px(-3.0 * scale)),
+    };
     line.into_any_element()
 }
 

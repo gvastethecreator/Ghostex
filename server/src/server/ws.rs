@@ -115,8 +115,8 @@ pub(crate) async fn handle_event_socket(socket: WebSocket, state: Arc<AppState>,
     {
         return;
     }
-    // A client that connects after the last poll still gets the published
-    // lineup this server holds (agent_model_catalog.rs).
+    // The connecting client gets the effective lineup from boot, not only
+    // after the first poll succeeds (agent_model_catalog.rs).
     if let Some(event) = crate::agent_model_catalog::connect_event(&state.metadata.server_id) {
         if outbound_tx.try_send(event).is_err() {
             return;
@@ -446,6 +446,7 @@ pub(crate) fn send_presentation_snapshot_for_subscription(
     */
     let auto_settle_after_days = session_lifecycle::read_sweep_auto_settle_after_days(&state.paths);
     let sidebar_v2_selected = session_lifecycle::read_sidebar_v2_selected(&state.paths);
+    let sidebar_spaces_enabled = crate::sidebar_spaces::read_sidebar_spaces_enabled(&state.paths);
     let Ok(_event_sequence) = lock_presentation_event_sequence(state) else {
         return true;
     };
@@ -454,6 +455,7 @@ pub(crate) fn send_presentation_snapshot_for_subscription(
         &state.metadata.server_id,
         auto_settle_after_days,
         sidebar_v2_selected,
+        sidebar_spaces_enabled,
         sessions,
     ) else {
         return true;

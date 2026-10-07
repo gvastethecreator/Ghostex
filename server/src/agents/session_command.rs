@@ -168,6 +168,35 @@ pub(crate) fn option_takes_value(agent: &str, word: &str) -> bool {
                 | "--image"
                 | "--local-provider"
         ),
+        "pi" => matches!(
+            word,
+            "--provider"
+                | "--model"
+                | "--api-key"
+                | "--system-prompt"
+                | "--append-system-prompt"
+                | "--mode"
+                | "--session"
+                | "--session-id"
+                | "--fork"
+                | "--session-dir"
+                | "--name"
+                | "-n"
+                | "--models"
+                | "--tools"
+                | "-t"
+                | "--exclude-tools"
+                | "-xt"
+                | "--thinking"
+                | "--extension"
+                | "-e"
+                | "--skill"
+                | "--prompt-template"
+                | "--theme"
+                | "--use-theme"
+                | "--export"
+                | "--tui-mode"
+        ),
         _ => false,
     }
 }
@@ -208,6 +237,16 @@ pub(crate) fn with_agent_model_options(
             ("claude", value) if effort.is_some() && value.starts_with("--effort=") => {
                 (true, false)
             }
+            // Ghostex's Pi model is `provider/id`, so a pinned `--provider` goes with the old model.
+            ("pi", "--model" | "--provider") if model.is_some() => (true, true),
+            ("pi", value)
+                if model.is_some()
+                    && (value.starts_with("--model=") || value.starts_with("--provider=")) =>
+            {
+                (true, false)
+            }
+            ("pi", "--thinking") if effort.is_some() => (true, true),
+            ("pi", value) if effort.is_some() && value.starts_with("--thinking=") => (true, false),
             ("codex", "-c" | "--config")
                 if effort.is_some() && next_value.is_some_and(codex_effort) =>
             {
@@ -255,6 +294,7 @@ pub(crate) fn with_agent_model_options(
                 " -c {}",
                 shell_word(&format!("model_reasoning_effort={effort}"))
             )),
+            "pi" => result.push_str(&format!(" --thinking {}", shell_word(effort))),
             _ => result.push_str(&format!(" --effort {}", shell_word(effort))),
         }
     }

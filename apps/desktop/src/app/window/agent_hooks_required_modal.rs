@@ -1,8 +1,8 @@
 //! Native GPUI Install Hooks prompt, the desktop twin of the React
 //! `AgentHooksRequiredModal` in packages/core-ui/agent-hooks-required-modal.tsx (deleted 2026-10-01).
 //!
-//! CDXC:AgentHooks 2026-09-15 DECISION:
-//! User: the React app modals are being rebuilt in native GPUI one at a time, and each native modal must be EXACTLY 1 to 1 with its React twin: the same layout, copy, colors, radii, spacing, states, keyboard behaviour and bridge messages in both appearances. The hero tile, benefit chips and top glow take the agent's logo color; white-logo agents fall back to the foreground so the tint follows the theme.
+//! CDXC:AgentHooks 2026-10-06 DECISION:
+//! User: the native modal matches its deleted React twin 1 to 1 (layout, copy, colors, radii, spacing, states, keyboard behaviour and bridge messages in both appearances), with one approved exception: for Pi, OMP and Amp the description says "It installs in seconds and takes effect the next time {agent} starts." instead of "Just approve it when {agent} asks.", because those agents load Ghostex's extension file on their next start and never ask. The user chose this over the 1-to-1 rule. Supersedes the 2026-09-15 rule that the copy stays identical for every agent. The hero tile, benefit chips and top glow take the agent's logo color; white-logo agents fall back to the foreground so the tint follows the theme.
 //! CDXC:AgentHooks 2026-09-15 DECISION:
 //! User: the missing-hooks prompt is a friendly, short invitation that shows the agent's logo, not a technical notice. The agent's brand color tints the hero tile and benefit icons; copy names the agent and stays to one sentence per idea.
 //! SEE-ALSO: packages/core-ui/agent-hooks-required-modal.tsx (deleted 2026-10-01) and packages/core-ui/agent-hook-benefits.tsx (deleted 2026-10-01) (the React twin), the `.agent-hooks-required-*` rules in packages/core-ui/styles/modals.css and modals-light.css, packages/core-ui/agent-logos.ts (deleted 2026-10-01) and packages/shared/sidebar-agents.ts (deleted 2026-10-01) (the agent id, logo file and brand color table mirrored below), apps/desktop/src/app/agent_hooks_required_modal_lifecycle.rs (open, close, sidebar bridge).
@@ -144,6 +144,8 @@ pub(crate) struct GpuiAgentHooksRequiredModalWindow {
     host: AgentHooksRequiredModalHost,
     palette: ModalPalette,
     agent_name: String,
+    /// Pi, OMP and Amp load the hook as an extension on their next start rather than asking.
+    loads_on_next_start: bool,
     logo: Option<AgentHooksLogo>,
     /// `--agent-hooks-brand`: the logo color, or the foreground for white logos and unknown agents.
     brand: Rgba,
@@ -180,6 +182,7 @@ impl GpuiAgentHooksRequiredModalWindow {
             host,
             palette: p,
             agent_name: config.agent_name,
+            loads_on_next_start: matches!(config.hook_agent_id.as_str(), "pi" | "omp" | "amp"),
             logo,
             brand,
             logo_color,
@@ -276,10 +279,17 @@ impl GpuiAgentHooksRequiredModalWindow {
                     .text_size(px(13.0))
                     .line_height(px(20.15))
                     .text_color(hsla(p.muted))
-                    .child(format!(
-                        "A small helper called a hook lets Ghostex follow what {0} is doing. It installs in seconds. Just approve it when {0} asks.",
-                        self.agent_name
-                    )),
+                    .child(if self.loads_on_next_start {
+                        format!(
+                            "A small helper called a hook lets Ghostex follow what {0} is doing. It installs in seconds and takes effect the next time {0} starts.",
+                            self.agent_name
+                        )
+                    } else {
+                        format!(
+                            "A small helper called a hook lets Ghostex follow what {0} is doing. It installs in seconds. Just approve it when {0} asks.",
+                            self.agent_name
+                        )
+                    }),
             )
             .into_any_element()
     }

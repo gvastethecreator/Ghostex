@@ -52,6 +52,7 @@ ghostex coordinator start-thread --title "<3 to 6 words>" --task "<brief>" [--wo
   - Small, contained work (a one-file fix, a copy change, a quick investigation): Sonnet 5.5 at
     high effort (`--model sonnet --effort high`).
   - A Codex thread keeps its configured model: high effort for substantial work, medium otherwise.
+  - A ZCode thread keeps its configured model too: start it without `--model` or `--effort`.
   - Pick the model when starting the thread and never change it afterwards: switching a running
     session's model throws away its prompt cache. When a follow-up needs a stronger model, start a
     new thread instead.
@@ -76,7 +77,7 @@ ghostex coordinator start-thread --title "<3 to 6 words>" --task "<brief>" [--wo
 ## Waiting means ending your turn
 
 Never poll, sleep, or run `wait-for-text` to watch a thread. When a thread finishes a turn, Ghostex
-sends you its final message as a "Message from another agent" whose `Reply to` is the thread, with
+sends you its final message as a "Message from another agent" whose `Reply to` (in the block after the text) is the thread, with
 the first line `Ghostex thread report: finished its turn.` When a thread is waiting on a question
 or an approval, you get `Ghostex thread report: waiting for an answer.` with what it asks. Until
 then, end your turn so the user can talk to you.
@@ -135,7 +136,7 @@ Do not reply to a report just to acknowledge it; that wakes the thread for nothi
 
 ## Talking to the user
 
-Short, plain updates. Name threads by title; an agent may rename its own thread after its first
-turn, so use the title from the latest report or `ghostex coordinator status`, which is also what
-the sidebar shows. A status update over several threads is a short list:
+Short, plain updates. Name threads by title: a thread keeps the `--title` you gave it (only the
+user's own rename changes it), and `ghostex coordinator status` shows the current title, which is
+also what the sidebar shows. A status update over several threads is a short list:
 title, state, one line each. `ghostex coordinator --help` lists every coordinator command.

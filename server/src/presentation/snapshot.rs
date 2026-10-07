@@ -21,6 +21,7 @@ pub fn read_presentation_snapshot(
     server_id: &str,
     auto_settle_after_days: Option<f64>,
     sidebar_v2_selected: bool,
+    sidebar_spaces_enabled: bool,
     sessions: Vec<Value>,
 ) -> Result<Value, DomainStateError> {
     let repository = DomainRepository::new(db, server_id);
@@ -51,6 +52,7 @@ pub fn read_presentation_snapshot(
     insert_workspace_groups_presentation_payload(&mut snapshot, db)?;
     insert_sidebar_project_collections_presentation_payload(&mut snapshot, db)?;
     insert_sidebar_spaces_presentation_payload(&mut snapshot, db)?;
+    insert_sidebar_spaces_enabled_presentation_payload(&mut snapshot, sidebar_spaces_enabled);
     insert_custom_session_tags_presentation_payload(&mut snapshot, db)?;
     Ok(snapshot)
 }

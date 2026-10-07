@@ -553,6 +553,27 @@ fn full_menu(
             ..MenuItem::default()
         });
     }
+    // CDXC:Coordinators 2026-10-04 SEE-ALSO: promote_session_to_coordinator in server/src/coordinators/promote.rs (the user's decision that Make Coordinator lives here and never disturbs the running session); gxserver refuses the same sessions this row is hidden on. The phone's session menu (apps/mobile/app/src/screens/sessions-screen/sidebar-menus.ts) offers it too.
+    if !caps.is_browser_session
+        && !group.is_stale
+        && !group.is_remote
+        && !in_box
+        && !row.is_draft
+        && !row.is_coordinator
+        && row.coordinator_parent.is_none()
+        && matches!(
+            row.agent_icon
+                .as_deref()
+                .or(row.menu_facts.agent_name.as_deref()),
+            Some("claude" | "codex" | "zcode")
+        )
+    {
+        advanced.push(MenuItem::row(
+            "Make Coordinator",
+            "users-group",
+            MenuCommand::session_action(id, "makeCoordinator"),
+        ));
+    }
     if caps.can_export_transcript && !in_box {
         advanced.push(MenuItem::row(
             "Handoff / Export",

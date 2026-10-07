@@ -74,6 +74,8 @@ pub async fn run(args: Vec<String>) -> Result<()> {
     let build_identity = read_current_build_identity(&version)?;
     match command {
         None | Some("--foreground") => {
+            #[cfg(windows)]
+            crate::platform::process::suppress_helper_error_dialogs();
             let result = run_gxserver_foreground(GxserverForegroundOptions {
                 build_identity: Some(build_identity),
                 home_dir: None,
@@ -117,7 +119,11 @@ pub async fn run(args: Vec<String>) -> Result<()> {
             crate::agent_hooks::windows::notify(args.iter().skip(1).cloned().collect())?;
         }
         Some("agent-hook-notify") => {
-            run_notify_hook(args.iter().skip(1).cloned().collect())?;
+            // A ZCode coordinator's SessionStart answer reaches the bash wrapper through this
+            // stdout; the wrapper forwards it in place of its canned response.
+            if let Some(answer) = run_notify_hook(args.iter().skip(1).cloned().collect())? {
+                println!("{answer}");
+            }
         }
         #[cfg(windows)]
         Some("agent-statusline-native") => {

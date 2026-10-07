@@ -58,7 +58,27 @@ pub(crate) fn resolve_session_chat_send_target(
     })
 }
 
+/// Every chat send, including gxserver's own (coordinator reports), passes the send ledger, so a
+/// repeated `sendRequestId` answers with the first attempt's result instead of typing again.
 pub(crate) async fn handle_send_session_chat_message_http(
+    state: &AppState,
+    endpoint_path: String,
+    request_id: String,
+    body: &Value,
+) -> RoutedResponse {
+    crate::session_chat_send_requests::send_once(
+        state,
+        endpoint_path,
+        request_id,
+        body,
+        |state, endpoint_path, request_id, body| async move {
+            send_session_chat_message_attempt(&state, endpoint_path, request_id, &body).await
+        },
+    )
+    .await
+}
+
+async fn send_session_chat_message_attempt(
     state: &AppState,
     endpoint_path: String,
     request_id: String,
@@ -199,7 +219,7 @@ pub(crate) async fn handle_send_session_chat_message_http(
         && image_paths.is_empty()
         && crate::agentbox::pending_session_agentbox(&target.session).is_none()
     {
-        return crate::session_chat_send_wake::queue_startup_send(
+        let queued = crate::session_chat_send_wake::queue_startup_send(
             state,
             endpoint_path,
             request_id,
@@ -207,6 +227,10 @@ pub(crate) async fn handle_send_session_chat_message_http(
             &target,
             &text,
         );
+        if queued.response.status().is_success() {
+            crate::session_chat_send_wake::start_draft_agent_if_missing(state, &target);
+        }
+        return queued;
     }
     // A message never reaches the agent ahead of the model change the user picked before it
     // (2026-09-27 decision in session_chat_model_selection_alert.rs): it waits behind the change in
@@ -290,6 +314,32 @@ pub(crate) async fn handle_interrupt_session_chat_http(
         Ok(target) => target,
         Err(error) => return domain_error_response(endpoint_path, request_id, error),
     };
+    // An interrupt that precedes a send (`ghostex agents send --interrupt`) names that send; when
+    // the send already went out, this is its retry, and a second Escape would stop the turn the
+    // message started.
+    match crate::session_chat_send_requests::read_send_request_id(&params) {
+        Ok(Some(id))
+            if crate::session_chat_send_requests::was_attempted(
+                &state.paths,
+                &crate::session_chat_send_requests::SendRequestKey::new(
+                    &target.project_id,
+                    &target.session_id,
+                    &id,
+                ),
+            ) =>
+        {
+            return routed_json(
+                Some(endpoint_path),
+                StatusCode::OK,
+                rpc_success(
+                    request_id,
+                    json!({ "interrupted": false, "duplicate": true, "sendRequestId": id }),
+                ),
+            );
+        }
+        Err(error) => return domain_error_response(endpoint_path, request_id, error),
+        _ => {}
+    }
     // Cancel first so queued sends (and an in-flight sequence's remaining
     // steps) drop, then deliver ESC through the queue's new generation.
     crate::session_chat_send::cancel_session_chat_sends(&target.project_id, &target.session_id);

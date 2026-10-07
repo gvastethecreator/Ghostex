@@ -58,7 +58,8 @@ impl GhostexGpuiApp {
         cx: &mut Context<Self>,
         activate: impl FnOnce(&mut Self, &mut Context<Self>) + 'static,
     ) {
-        if let Some((handle, app)) = workspace_window_showing_session(row_id, cx)
+        let caller = (cx.entity_id(), self.gx_store_shows_session_row(row_id));
+        if let Some((handle, app)) = workspace_window_showing_session(row_id, caller, cx)
             && app.entity_id() != cx.entity_id()
         {
             cx.defer(move |cx| {

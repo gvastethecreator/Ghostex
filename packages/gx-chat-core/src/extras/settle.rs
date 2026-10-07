@@ -13,7 +13,8 @@ use crate::effect::Effect;
 use crate::event::Event;
 use crate::extras::panels::FLEET_CLOCK_TICK_MS;
 use crate::extras::{
-    panels, save_markdown, search, subagent, subagent_rows, terminal_tail, working_strip,
+    coordinator_threads, panels, save_markdown, search, subagent, subagent_rows, terminal_tail,
+    working_strip,
 };
 use crate::session::timers::TimerTable;
 use crate::state::{
@@ -69,6 +70,11 @@ fn settle_with_ids(
                 next_request_id(),
             ) {
                 effects.extend(more);
+            } else if coordinator_threads::settle_read(
+                &mut state.extras.panels,
+                *request_id,
+                answer.clone(),
+            ) {
             } else if let Some(more) = settle_terminal_tail_rpc(state, *request_id, answer) {
                 effects.extend(more);
             }
@@ -102,6 +108,12 @@ fn settle_with_ids(
         }
         _ => {}
     }
+    // The open "N more" list follows the threads: a new revision on a frame reads it again.
+    effects.extend(coordinator_threads::read_all_threads(
+        &mut state.extras.panels,
+        state.session.coordinator_threads.as_ref(),
+        &mut next_request_id,
+    ));
     // `project()` runs at the two moments the page, the agent path or the working flag can move
     // (a restart, a finished read), both of which have already happened by the time this line
     // runs.

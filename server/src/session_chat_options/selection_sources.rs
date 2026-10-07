@@ -187,6 +187,7 @@ pub(super) fn detect_session_chat_transcript_selection(
                     codex_status: None,
                     cursor_status: None,
                     hermes_status: None,
+                    pi_status: None,
                     checkout_status: None,
                     model_catalog: None,
                 }
@@ -314,6 +315,7 @@ fn read_session_chat_statusline_selection(
         codex_status: None,
         cursor_status: None,
         hermes_status: None,
+        pi_status: None,
         checkout_status: None,
         model_catalog: None,
     };
@@ -620,6 +622,9 @@ fn overlay_session_chat_option_selection(
     if layer.hermes_status.is_some() {
         merged.hermes_status = layer.hermes_status;
     }
+    if layer.pi_status.is_some() {
+        merged.pi_status = layer.pi_status;
+    }
     if layer.model_catalog.is_some() {
         merged.model_catalog = layer.model_catalog;
     }
@@ -684,7 +689,8 @@ pub(super) fn merge_session_chat_option_selections(
         || merged.context_usage.is_some()
         || merged.claude_status.is_some()
         || merged.cursor_status.is_some()
-        || merged.hermes_status.is_some())
+        || merged.hermes_status.is_some()
+        || merged.pi_status.is_some())
     .then_some(merged)
 }
 

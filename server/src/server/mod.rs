@@ -132,6 +132,7 @@ mod bot_sync;
 mod browser_tcp;
 mod close_after_done_runtime;
 mod coordinator_runtime;
+mod empty_session_cleanup_runtime;
 pub mod commit_message_generation;
 pub mod http_endpoints;
 pub mod http_infra;
@@ -141,6 +142,7 @@ mod project_docs_http;
 pub mod project_paths;
 mod session_auto_sleep_sweep;
 pub mod session_state_sync;
+mod sidebar_spaces_switch;
 pub mod telemetry_http;
 pub mod telemetry_tasks;
 #[cfg(test)]

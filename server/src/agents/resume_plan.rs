@@ -146,7 +146,11 @@ pub(crate) fn account_switch_resume_command(
         "claude" => {
             let reference = get_claude_session_reference(&input)?;
             let id = get_claude_session_id(Some(&reference))?;
-            build_claude_resume_invocation(command, &quote_shell_arg(&id))
+            if claude_transcript_written(&input, &id) {
+                build_claude_resume_invocation(command, &quote_shell_arg(&id))
+            } else {
+                build_claude_fresh_invocation(command, &quote_shell_arg(&id))
+            }
         }
         "codex" => {
             let id = get_codex_session_reference(&input)?;
@@ -159,6 +163,21 @@ pub(crate) fn account_switch_resume_command(
     };
     // A raw shell write must be one input line, including custom command arguments.
     (!resume.chars().any(char::is_control)).then_some(resume)
+}
+
+/// CDXC:AgentProviders 2026-10-04 WHY:
+/// Claude writes no transcript until the first prompt, so switching the account of a session nobody has typed into resumed a conversation that does not exist: Claude printed "No conversation found with session ID" and exited, and the switch failed. Such a session starts fresh under the same id, which keeps the session's conversation identity, title and draft, and lets its hooks report the id Ghostex already stores.
+fn claude_transcript_written(input: &AgentResumeInput, id: &str) -> bool {
+    input
+        .agent_session_path
+        .as_deref()
+        .map(crate::resume_lookup::expand_home)
+        .is_some_and(|path| path.is_file())
+        || crate::agent_transcripts::find_claude_transcript(id).is_some()
+}
+
+fn build_claude_fresh_invocation(agent_command: &str, shell_reference: &str) -> String {
+    format!("{agent_command} --session-id {shell_reference}")
 }
 
 #[derive(Clone)]
@@ -530,12 +549,7 @@ pub(crate) fn build_agent_resume_command(
                 ))
             }
         }
-        "pi" => pi_reference.map(|reference| {
-            format!(
-                "{agent_command} --session {}",
-                quote_shell_double_arg(&reference)
-            )
-        }),
+        "pi" => pi_reference.and_then(|_| build_pi_resume_command(agent_command, input)),
         "rovodev" => {
             exact_reference.map(|reference| build_rovodev_resume_command(agent_command, &reference))
         }
@@ -606,12 +620,7 @@ pub(crate) fn build_agent_resume_copy_command(input: &AgentResumeInput) -> Optio
                 quote_shell_double_arg(&reference)
             )
         }),
-        "pi" => get_pi_session_reference(input).map(|reference| {
-            format!(
-                "{agent_command} --session {}",
-                quote_shell_double_arg(&reference)
-            )
-        }),
+        "pi" => build_pi_resume_command(agent_command, input),
         "rovodev" => {
             exact_reference.map(|reference| build_rovodev_resume_command(agent_command, &reference))
         }
@@ -737,6 +746,49 @@ pub(crate) fn get_pi_session_reference(input: &AgentResumeInput) -> Option<Strin
         .agent_session_path
         .clone()
         .or_else(|| input.agent_session_id.clone())
+}
+
+/// CDXC:SessionIdentity 2026-10-06 WHY:
+/// Pi writes its session file only once the first message exists, while Ghostex knows the session's id from launch (`--session-id`, see agents/pi_session_id.rs) and its future path from the SessionStart hook. Waking a session that slept before its first message with `--session <path>` asked Pi for a file that was never written, so a written file resumes by path and anything else reopens the same id with `--session-id`, which Pi creates when it is missing.
+fn build_pi_resume_command(agent_command: &str, input: &AgentResumeInput) -> Option<String> {
+    let written = |path: &str| crate::resume_lookup::expand_home(path).is_file();
+    if let Some(path) = input
+        .agent_session_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| written(path))
+    {
+        return Some(format!(
+            "{agent_command} --session {}",
+            quote_shell_double_arg(path)
+        ));
+    }
+    let id = input
+        .agent_session_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| !id.is_empty());
+    match id {
+        Some(id) if super::pi_session_id::is_pi_session_id(id) => {
+            match crate::session_chat::resolve_session_chat_transcript_path(
+                crate::session_chat::SessionChatTranscriptAgent::Pi,
+                Some(id),
+                None,
+            ) {
+                Some(path) => Some(format!(
+                    "{agent_command} --session {}",
+                    quote_shell_double_arg(&path.to_string_lossy())
+                )),
+                None => Some(format!("{agent_command} --session-id {id}")),
+            }
+        }
+        _ => get_pi_session_reference(input).map(|reference| {
+            format!(
+                "{agent_command} --session {}",
+                quote_shell_double_arg(&reference)
+            )
+        }),
+    }
 }
 
 /// CDXC:SessionIdentity 2026-09-14 WHY:

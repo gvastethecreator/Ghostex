@@ -757,6 +757,117 @@ fn has_image_evidence(markdown: &str) -> bool {
     false
 }
 
+/// The root a link destination keeps its backslashes under: a drive (`C:\` with one separator,
+/// or `C:/`) or a `\\server` UNC leader. A destination whose separators are already doubled is
+/// ordinary escaped Markdown and is left alone, the same test the composer's `linked_destination`
+/// makes.
+fn is_literal_windows_destination(destination: &[u8]) -> bool {
+    let drive = destination.first().is_some_and(u8::is_ascii_alphabetic)
+        && destination.get(1) == Some(&b':');
+    if drive && destination.get(2) == Some(&b'\\') {
+        return destination.get(3) != Some(&b'\\');
+    }
+    if drive && destination.get(2) == Some(&b'/') {
+        return !destination.windows(2).any(|pair| pair == b"\\\\");
+    }
+    destination.starts_with(b"\\\\") && destination.get(2) != Some(&b'\\')
+}
+
+/// Where an inline link destination starting at `start` ends (exclusive), reading backslashes
+/// literally: at the `>` of a `<…>` destination, else at whitespace or the `)` that closes it.
+fn literal_destination_end(line: &[u8], start: usize, bracketed: bool) -> Option<usize> {
+    if bracketed {
+        return line[start..]
+            .iter()
+            .position(|byte| *byte == b'>')
+            .map(|offset| start + offset);
+    }
+    let mut depth = 0usize;
+    for (offset, byte) in line[start..].iter().enumerate() {
+        match byte {
+            b'(' => depth += 1,
+            b')' if depth == 0 => return Some(start + offset),
+            b')' => depth -= 1,
+            b' ' | b'\t' | b'\r' | b'\n' => return Some(start + offset),
+            _ => {}
+        }
+    }
+    Some(line.len())
+}
+
+/// CDXC:SessionChat 2026-10-06 DECISION:
+/// User: keep backslashes literally whenever a link destination is a Windows absolute path (a drive
+/// letter followed by `:\` or `:/`, or a `\\server\share` path), so a link to
+/// `C:\Users\me\.claude\x.md` opens that file; paths under `.claude` are common on Windows.
+/// CommonMark would read `\.` as an escaped dot and open `C:\Users\me.claude\x.md`. Both clients
+/// parse this Markdown with plain CommonMark (markdown-rs in the desktop's `TextView`, `parse.ts` on
+/// the phone), so the rule is applied once here by doubling the destination's backslashes, which
+/// every parser reads back as the literal path; the reference pills are keyed on the same text.
+/// SEE-ALSO: apps/mobile/app/src/chat/native/transcript/markdown/parse.ts (`isLiteralWindowsDestination`),
+/// composer/reference_pills.rs (`linked_destination`).
+fn literal_windows_link_destinations(markdown: &str) -> String {
+    let mut result: Vec<String> = Vec::new();
+    let mut fence: Option<(u8, usize)> = None;
+    for line in split_lf(markdown) {
+        if let Some((character, length)) = fence {
+            if fence_close(line).is_some_and(|(closing, run)| closing == character && run >= length)
+            {
+                fence = None;
+            }
+            result.push(line.to_string());
+            continue;
+        }
+        if let Some((character, run, _)) = fence_open(line) {
+            fence = Some((character, run));
+            result.push(line.to_string());
+            continue;
+        }
+        result.push(literal_windows_line(line));
+    }
+    result.join("\n")
+}
+
+fn literal_windows_line(line: &str) -> String {
+    if !line.contains("](") {
+        return line.to_string();
+    }
+    let bytes = line.as_bytes();
+    let spans = code_spans(line);
+    let mut out = String::with_capacity(line.len() + 8);
+    let mut copied = 0;
+    let mut cursor = 0;
+    while let Some(at) = line[cursor..].find("](") {
+        let open = cursor + at;
+        cursor = open + 2;
+        if spans
+            .iter()
+            .any(|(start, end)| *start <= open && open < *end)
+        {
+            continue;
+        }
+        let mut start = open + 2;
+        while matches!(bytes.get(start), Some(b' ' | b'\t')) {
+            start += 1;
+        }
+        let bracketed = bytes.get(start) == Some(&b'<');
+        if bracketed {
+            start += 1;
+        }
+        let Some(end) = literal_destination_end(bytes, start, bracketed) else {
+            continue;
+        };
+        if !is_literal_windows_destination(&bytes[start..end]) {
+            continue;
+        }
+        out.push_str(&line[copied..start]);
+        out.push_str(&line[start..end].replace('\\', "\\\\"));
+        copied = end;
+        cursor = end;
+    }
+    out.push_str(&line[copied..]);
+    out
+}
+
 /// The Markdown the GPUI transcript renders for one message.
 ///
 /// Inline-code file references are promoted in every message, the way React promotes them wherever
@@ -769,6 +880,8 @@ pub fn native_markdown(markdown: &str, bare_paths: bool) -> String {
     }
     let escaped = crate::transcript::raw_html::escape_raw_html(markdown);
     let markdown = escaped.as_str();
+    let windows_links_wanted = markdown.contains("](")
+        && (markdown.contains(":\\") || markdown.contains(":/") || markdown.contains("\\\\"));
     let bare_wanted = bare_paths && has_path_evidence(markdown);
     let paths_wanted = bare_wanted || has_inline_code_path_evidence(markdown);
     let blocks_wanted = markdown.contains("```")
@@ -776,13 +889,19 @@ pub fn native_markdown(markdown: &str, bare_paths: bool) -> String {
         || markdown.contains('>')
         || markdown.contains('|')
         || has_image_evidence(markdown);
-    if !paths_wanted && !blocks_wanted {
+    if !paths_wanted && !blocks_wanted && !windows_links_wanted {
         return markdown.to_string();
     }
     let linked = if paths_wanted {
         link_file_references(markdown, bare_wanted)
     } else {
         markdown.to_string()
+    };
+    // After the inline-code references become links, so theirs keep their backslashes too.
+    let linked = if windows_links_wanted || paths_wanted {
+        literal_windows_link_destinations(&linked)
+    } else {
+        linked
     };
     if blocks_wanted {
         mark_blocks(&linked)

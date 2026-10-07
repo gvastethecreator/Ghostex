@@ -45,11 +45,14 @@ struct GroupKey {
     active_project_matches: bool,
     selected_rows: Vec<usize>,
     tag_filters: Vec<String>,
+    group_working_sessions: bool,
     collapsed: bool,
     expanded: bool,
     hover_actions_expanded: bool,
     /// The group's coordinator rows whose threads the user folded, by position.
     collapsed_coordinators: Vec<usize>,
+    /// The group's coordinator rows whose older threads the user listed, by position.
+    coordinators_showing_older: Vec<usize>,
     /// The threads of the group's coordinators, which may sit in other groups, by position.
     coordinator_threads: Vec<(usize, ThreadTally)>,
     section_collapse: SectionCollapse,
@@ -657,6 +660,7 @@ impl SidebarViewModel {
             plans
                 .iter()
                 .flat_map(|plan| plan.rows.iter().map(|row| &row.row)),
+            now_ms,
         );
         let mut builds: BTreeMap<String, GroupBuild> = BTreeMap::new();
         for plan in &plans {
@@ -718,6 +722,7 @@ impl SidebarViewModel {
             spaces: side_state
                 .and_then(|side| side.spaces.as_ref())
                 .map(SpacesState::from_wire),
+            spaces_enabled: super::machine_spaces::spaces_enabled_on(store, effective, &machine),
             collections: match side_state.and_then(|side| side.project_collections.as_ref()) {
                 // A document has arrived for this machine, so the daemon is authoritative from
                 // here on, an empty one included: after the user deletes their last collection
@@ -954,6 +959,7 @@ fn group_key(
             .map(|(index, _)| index)
             .collect(),
         tag_filters: inputs.ui.selected_tag_filters.clone(),
+        group_working_sessions: inputs.settings.group_working_sessions,
         collapsed: inputs.ui.collapse.collapsed_groups.contains(&plan.group_id),
         expanded: inputs
             .ui
@@ -975,6 +981,20 @@ fn group_key(
                         .ui
                         .collapse
                         .collapsed_coordinators
+                        .contains(&row.row.sidebar_session_id)
+            })
+            .map(|(index, _)| index)
+            .collect(),
+        coordinators_showing_older: plan
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| {
+                row.row.is_coordinator
+                    && inputs
+                        .ui
+                        .collapse
+                        .expanded_coordinator_older_threads
                         .contains(&row.row.sidebar_session_id)
             })
             .map(|(index, _)| index)

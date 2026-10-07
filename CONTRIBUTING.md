@@ -52,14 +52,28 @@ is not required. Set `GHOSTEX_ZIG` to use an existing Zig 0.16.0 executable.
 existing checkouts. It checks the build tools before downloading the WSL runtime components.
 Use `cargo xtask start-web` for the browser build, and `cargo xtask help` to list every command.
 
-Windows normally installs the build in `C:\Program Files\Ghostex`. To keep a development
-installation inside the checkout, set `$env:GHOSTEX_INSTALL_DIR = "$PWD\build\local"` before
-`cargo xtask start` (Windows ignores the generic `INSTALL_DIR`, so a toolchain's value cannot move
-the app). The app will run from `build/local/Ghostex`, with a current-user Start Menu
-shortcut. Keep this directory separate from `apps/desktop/build/windows/Ghostex`, which
-is the staging output replaced by the next build. To persist the choice for later starts,
-put `GHOSTEX_INSTALL_DIR=D:/Ghostex/build/local` (using your checkout path) in an untracked
-`.env.local` and exclude that file in `.git/info/exclude`.
+On Windows, `cargo xtask start` (and `bun run start`) installs the build the way the release
+installer does: per user, without an administrator prompt, into `%LOCALAPPDATA%\Ghostex\current`,
+with the `Ghostex` shortcut at the top of your Start Menu and the same app identity
+(`velopack.Ghostex`) a release install has, so notifications, taskbar pins and the processes
+(`current\resources\native\gxserver.exe`, `wmx.exe`, `ghostex.exe`) match what users run. It does not
+install Velopack's `Update.exe`, so a development build never updates itself from the release
+feed. `cargo xtask start --machine` installs to `C:\Program Files\Ghostex` instead (with an
+administrator prompt) for testing a machine-wide install.
+
+The first per-user start on a computer that used the older Program Files install closes that app,
+stops its gxserver, and points your Desktop shortcut, taskbar pin and login item at the new copy.
+Running terminal sessions keep going. It leaves `C:\Program Files\Ghostex` and the machine-wide
+`Ghostex` Start Menu folder in place and names them in its output: delete them yourself once
+no session started before the switch is still running.
+
+To keep a development installation inside the checkout, set
+`$env:GHOSTEX_INSTALL_DIR = "$PWD\build\local"` before `cargo xtask start` (Windows ignores the
+generic `INSTALL_DIR`, so a toolchain's value cannot move the app). The app will run from
+`build/local/Ghostex`, with a current-user Start Menu shortcut. Keep this directory separate from
+`apps/desktop/build/windows/Ghostex`, which is the staging output replaced by the next build. To
+persist the choice for later starts, put `GHOSTEX_INSTALL_DIR=D:/Ghostex/build/local` (using your
+checkout path) in an untracked `.env.local` and exclude that file in `.git/info/exclude`.
 
 Windows builds also prepare the native Code editor. A clean editor checkout can reuse its
 published component when an authenticated GitHub CLI is available. To build it from source, initialize

@@ -1,6 +1,7 @@
-//! `AgentSettingsEditor`: Agent type (the searchable select with each agent's logo,
-//! `AgentTypeSelectOption`), Name, Command, Agent approvals, Cancel and Save. Picking a known
-//! agent type fills the name and command while they are empty or still the previous type's.
+//! The "Add custom agent" form at the end of the Agents list: Works like (the searchable select
+//! with each agent's logo; "Nothing (plain command)" is a plain custom command), Name, Command,
+//! Permission mode, Cancel and Add agent. Picking a built-in fills the name and command while
+//! they are empty or still the previous choice's. Existing agents are edited in their own row.
 use super::super::super::fields::{
     ButtonVariant, CONTROL_LANE_WIDTH, FieldStates, RowSpec, SELECT_WIDTH, card_inset, setting_row,
     settings_button, settings_select, settings_text_input, settings_textarea,
@@ -33,7 +34,25 @@ pub(super) struct AgentEditor {
 }
 
 impl AgentsTab {
-    /// Opens the editor on `agent` (Edit agent) or a blank draft (Add Agent).
+    /// Opens the form prefilled from `agent` (Duplicate as custom agent).
+    pub(super) fn open_editor_from(
+        &mut self,
+        agent: &AgentButton,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let copy = AgentButton {
+            agent_id: String::new(),
+            name: format!("{} (copy)", agent.name),
+            ..agent.clone()
+        };
+        self.open_editor(Some(copy), window, cx);
+        if let Some(editor) = self.editor.as_mut() {
+            editor.agent_id = None;
+        }
+    }
+
+    /// Opens the form blank, or prefilled from `agent`.
     pub(super) fn open_editor(
         &mut self,
         agent: Option<AgentButton>,
@@ -178,7 +197,7 @@ impl AgentsTab {
         let mut rows = Vec::new();
         let mut type_options = vec![DropdownOption {
             value: "custom".to_string(),
-            label: "Custom".to_string(),
+            label: "Nothing (plain command)".to_string(),
             icon: Some("custom".to_string()),
         }];
         type_options.extend(default_agents().iter().map(|agent| DropdownOption {
@@ -203,7 +222,9 @@ impl AgentsTab {
         rows.push(setting_row(
             p,
             "agent-editor-type-row",
-            RowSpec::new("Agent type"),
+            RowSpec::new("Works like").description(
+                "Its logo, chat view, resume hook and permission handling. Picking a built-in agent that is off turns that agent back on instead.",
+            ),
             None,
             type_select,
             cx,
@@ -263,7 +284,7 @@ impl AgentsTab {
         rows.push(setting_row(
             p,
             "agent-editor-approvals-row",
-            RowSpec::new("Agent approvals").description(if accept_supported {
+            RowSpec::new("Permission mode").description(if accept_supported {
                 "Use app default follows the global Agents setting. Skip permissions applies this agent's permission-bypass mode at launch without changing the stored command."
             } else {
                 "This agent does not expose a supported approval policy in Ghostex."
@@ -303,7 +324,7 @@ impl AgentsTab {
                 .child(settings_button(
                     p,
                     "agent-editor-save",
-                    "Save",
+                    "Add agent",
                     None,
                     ButtonVariant::Default,
                     name_empty || command_empty,

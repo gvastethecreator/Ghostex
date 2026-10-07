@@ -62,7 +62,7 @@ pub(crate) fn gpui_create_local_project_workspace_agent_record(
     }
     let result = gpui_gxserver_rpc_result(
         "/api/createAgentSession",
-        &serde_json::json!({
+        &ghostex_gx_core::replacing_empty_sessions(serde_json::json!({
             "agentId": agent_id,
             "runtimeSettings": account_id.map(|id| serde_json::json!({"accountId": id})).unwrap_or_else(|| serde_json::json!({})),
             /*
@@ -77,7 +77,7 @@ pub(crate) fn gpui_create_local_project_workspace_agent_record(
             "projectId": project_id,
             "requireLaunchCommand": true,
             "surface": "workspace",
-        }),
+        })),
         Duration::from_secs(15),
     )?;
     let session = result

@@ -257,6 +257,14 @@ export interface GxserverSendSessionChatMessageParams {
    * trailing Enter.
    */
   key?: SessionChatSendKey;
+  /**
+   * Client-made id (a UUID) naming this send. gxserver delivers one id at
+   * most once per session: a retry with the same id answers with the first
+   * attempt's result plus `duplicate: true` instead of sending again. Omitted
+   * by older clients; gxserver then names the send itself and cannot match
+   * that client's retries. The result echoes it as `sendRequestId`.
+   */
+  sendRequestId?: string;
 }
 
 export interface GxserverSendSessionChatMessageResult {
@@ -337,6 +345,8 @@ export interface GxserverReadSessionChatImageResult {
 export interface GxserverAnswerSessionChatPromptParams {
   projectId: string;
   sessionId: string;
+  /** See `GxserverSendSessionChatMessageParams.sendRequestId`. */
+  sendRequestId?: string;
   kind:
     | "question"
     | "approval"

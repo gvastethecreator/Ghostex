@@ -77,6 +77,7 @@ pub fn begin(
         return vec![submission_failed(mode, text)];
     }
     let version = version.map(|version| unconsumed_version(state, context, version));
+    let send_request_id = submission_send_request_id(state, context, mode, text);
     let capabilities = crate::composer::document::queue(state).capabilities;
     let steps = match submission_steps(
         text,
@@ -124,8 +125,46 @@ pub fn begin(
         refresh_after_send: state.session.available_agents.is_some(),
         handoff: false,
         awaiting_gate: false,
+        send_request_id,
     });
     run_head(state, context)
+}
+
+/// CDXC:SessionChat 2026-10-05 WHY:
+/// gxserver delivers one `sendRequestId` at most once (server session_chat_send_requests.rs). Each Enter names its submission with a fresh id, except Enter on the same text right after that submission's call failed: a timed-out call may still have been delivered (a phone's SSH call gives up after 75 seconds while gxserver keeps typing), so the retry reuses the id and gxserver answers from the first attempt instead of typing the message twice. A refusal gxserver could not settle (`sendOutcomeUnknown`) is not reused, or the same text could never be sent again. Without host entropy the id is left to gxserver: a constant id would make every later send a duplicate.
+fn submission_send_request_id(
+    state: &mut ChatState,
+    context: &ChatContext,
+    mode: SubmissionMode,
+    text: &str,
+) -> Option<String> {
+    let retried = state
+        .composer
+        .failed_send
+        .take()
+        .filter(|failed| failed.mode == mode && failed.text == text)
+        .map(|failed| failed.send_request_id);
+    retried.or_else(|| (context.random_ids[0] != 0).then(|| context.random_id(0)))
+}
+
+/// Remembers a submission whose send or queue call failed, for [`submission_send_request_id`].
+fn remember_failed_send(state: &mut ChatState, code: Option<&str>) {
+    let Some(submission) = state.composer.submitting.as_ref() else {
+        return;
+    };
+    let delivering = matches!(
+        submission.phases.first(),
+        Some(SendPhase::SendCompact | SendPhase::SendText | SendPhase::QueueText)
+    );
+    state.composer.failed_send = submission
+        .send_request_id
+        .clone()
+        .filter(|_| delivering && code != Some("sendOutcomeUnknown"))
+        .map(|send_request_id| crate::state::FailedSend {
+            text: submission.text.clone(),
+            mode: submission.mode,
+            send_request_id,
+        });
 }
 
 /// Whether gxserver's receipts say this revision (or a later one of the same draft) was already sent.
@@ -228,9 +267,22 @@ fn run_head(state: &mut ChatState, context: &ChatContext) -> Vec<Effect> {
             }]
         }
         SendPhase::SendCompact | SendPhase::SendText => {
-            let (body, version, images) = match phase {
-                SendPhase::SendCompact => ("/compact".to_string(), None, Vec::new()),
-                _ => (text, version, submission.image_paths.clone()),
+            let (body, version, images, send_request_id) = match phase {
+                SendPhase::SendCompact => (
+                    "/compact".to_string(),
+                    None,
+                    Vec::new(),
+                    submission
+                        .send_request_id
+                        .as_ref()
+                        .map(|id| format!("{id}-compact")),
+                ),
+                _ => (
+                    text,
+                    version,
+                    submission.image_paths.clone(),
+                    submission.send_request_id.clone(),
+                ),
             };
             if !submission.awaiting_gate {
                 let drawn = draw_agent_send(state, context, &body, &images);
@@ -241,18 +293,29 @@ fn run_head(state: &mut ChatState, context: &ChatContext) -> Vec<Effect> {
             }
             let request_id = state.core.allocate_request_id();
             wait_request(state, request_id);
-            vec![agent_send_rpc(request_id, &body, version, &images)]
+            vec![agent_send_rpc(
+                request_id,
+                &body,
+                version,
+                &images,
+                send_request_id.as_deref(),
+            )]
         }
         SendPhase::QueueText => {
+            let send_request_id = submission.send_request_id.clone();
             if hold_for_gate(state, context) {
                 return Vec::new();
             }
             let request_id = state.core.allocate_request_id();
             wait_request(state, request_id);
+            let mut params = json!({ "text": queued_text, "draftVersion": version });
+            if let Some(id) = send_request_id {
+                params["sendRequestId"] = json!(id);
+            }
             vec![Effect::SendRpc {
                 request_id,
                 method: ChatRpcMethod::QueueSessionChatPrompt,
-                params: Box::new(json!({ "text": queued_text, "draftVersion": version })),
+                params: Box::new(params),
             }]
         }
         SendPhase::MarkSubmitted => {
@@ -305,7 +368,7 @@ pub fn send_to_agent(
 ) -> (AgentSend, Vec<Effect>) {
     let mut sent = draw_agent_send(state, context, text, image_paths);
     sent.request_id = state.core.allocate_request_id();
-    let effect = agent_send_rpc(sent.request_id, text, version, image_paths);
+    let effect = agent_send_rpc(sent.request_id, text, version, image_paths, None);
     (sent, vec![effect])
 }
 
@@ -362,15 +425,20 @@ fn agent_send_rpc(
     text: &str,
     version: Option<crate::composer::queue::DraftVersion>,
     image_paths: &[String],
+    send_request_id: Option<&str>,
 ) -> Effect {
+    let mut params = json!({
+        "text": text,
+        "imagePaths": if image_paths.is_empty() { Value::Null } else { json!(image_paths) },
+        "draftVersion": version,
+    });
+    if let Some(id) = send_request_id {
+        params["sendRequestId"] = json!(id);
+    }
     Effect::SendRpc {
         request_id,
         method: ChatRpcMethod::SendSessionChatMessage,
-        params: Box::new(json!({
-            "text": text,
-            "imagePaths": if image_paths.is_empty() { Value::Null } else { json!(image_paths) },
-            "draftVersion": version,
-        })),
+        params: Box::new(params),
     }
 }
 
@@ -492,7 +560,8 @@ pub fn settle_request(
             }
             effects.extend(run_head(state, context));
         }
-        crate::wire::RpcOutcome::Err { message, .. } => {
+        crate::wire::RpcOutcome::Err { message, code, .. } => {
+            remember_failed_send(state, code.as_deref());
             undo_optimistic(state);
             effects.extend(fail(state, message));
         }
@@ -678,6 +747,7 @@ pub fn handoff(
         refresh_after_send: false,
         handoff: true,
         awaiting_gate: false,
+        send_request_id: None,
     });
     let key = draft_key(state);
     wait_storage(state, key.clone());

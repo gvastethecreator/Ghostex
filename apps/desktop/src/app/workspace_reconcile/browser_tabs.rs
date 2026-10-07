@@ -182,6 +182,9 @@ impl GhostexGpuiApp {
             cef::BrowserPageMetadataEvent::CloseRequested => {
                 self.close_browser_tab(tab_id, window, cx);
             }
+            cef::BrowserPageMetadataEvent::CopyToClipboard(item) => {
+                gpui_copy_to_clipboard(item, cx);
+            }
             cef::BrowserPageMetadataEvent::TitleChanged(title) => {
                 /*
                 CDXC:Browser 2026-06-22-07:23:

@@ -40,13 +40,20 @@ pub fn bundled_executable(executable: &Path) -> Option<PathBuf> {
 
 /// CDXC:PromptEditor 2026-09-23 WHY:
 /// Session CLIs run from the separately staged gxserver package, outside the desktop bundle, so ancestor lookup cannot find the editor shipped by the Windows installer.
+/// The per-user install (release installer and local start, `%LOCALAPPDATA%\Ghostex\current`) comes before a Program Files one.
 pub fn installed_executable() -> Option<PathBuf> {
-    env::var_os("ProgramW6432")
+    let per_user = env::var_os("LOCALAPPDATA")
+        .filter(|value| !value.is_empty())
+        .map(|dir| PathBuf::from(dir).join("Ghostex/current"));
+    let machine = env::var_os("ProgramW6432")
         .filter(|value| !value.is_empty())
         .or_else(|| env::var_os("ProgramFiles").filter(|value| !value.is_empty()))
-        .map(PathBuf::from)
-        .map(|dir| dir.join("Ghostex/resources/GhostexEditor/GhostexEditor.exe"))
-        .filter(|candidate| candidate.is_file())
+        .map(|dir| PathBuf::from(dir).join("Ghostex"));
+    [per_user, machine]
+        .into_iter()
+        .flatten()
+        .map(|dir| dir.join("resources/GhostexEditor/GhostexEditor.exe"))
+        .find(|candidate| candidate.is_file())
 }
 
 /// CDXC:PromptEditor 2026-09-16 WHY:

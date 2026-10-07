@@ -261,9 +261,11 @@ fn parse(block: &Value, now: chrono::DateTime<chrono::Utc>) -> Status {
         if left == 0 || ends.is_some_and(|date| date <= now) {
             continue;
         }
-        let note = if grant["paused"] == true {
+        let paused = grant["paused"] == true;
+        let requires_limit = grant["use_requires_limit"] == true;
+        let note = if paused {
             Some("Paused by Anthropic for now.".to_string())
-        } else if grant["use_requires_limit"] == true {
+        } else if requires_limit {
             Some("Only works once you reach a usage limit.".to_string())
         } else {
             None
@@ -273,6 +275,8 @@ fn parse(block: &Value, now: chrono::DateTime<chrono::Utc>) -> Status {
                 id: id.to_string(),
                 expires_at: ends.map(|date| date.to_rfc3339()),
                 note: note.clone(),
+                paused,
+                requires_limit,
             });
         }
     }

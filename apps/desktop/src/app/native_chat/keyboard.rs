@@ -293,6 +293,7 @@ impl NativeChatView {
                     && (matches!(key.key.as_str(), "up" | "down" | "tab")
                         || key.key == "enter" && !key.modifiers.shift))
         {
+            this.suggestions.clear_hover();
             if key.key == "enter" && suggestions["sendOnEnter"] == true {
                 this.send(false, window, cx);
             } else {

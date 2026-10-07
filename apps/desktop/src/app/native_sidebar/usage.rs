@@ -157,7 +157,7 @@ impl GhostexGpuiApp {
             return None;
         }
         let scale = appearance.scale;
-        let columns = self.native_sidebar_usage_columns(scale);
+        let columns = self.native_sidebar_usage_columns(count, scale);
         let rows = count.div_ceil(columns);
         let height = (SIDEBAR_USAGE_TOP_PADDING + SIDEBAR_USAGE_BOTTOM_PADDING) * scale
             + rows as f32 * SIDEBAR_USAGE_METER_HEIGHT * scale
@@ -242,8 +242,23 @@ impl GhostexGpuiApp {
             .into_any_element()
     }
 
+    /// How many meters each row holds for `count` meters at the sidebar's current width. The rows
+    /// are balanced: the fewest rows that fit, then the smallest per-row count that still needs no
+    /// more rows, so the last row is never a lone card.
+    ///
+    /// CDXC:Sidebar 2026-10-05 DECISION:
+    /// User: "make the accounts at the bottom fill up the available space, not show empty space in
+    /// the row". The cards of every row share that row's full width equally, including a last row
+    /// with fewer cards, which no longer keeps empty columns. This supersedes the 2026-09-20 rule
+    /// that kept the last row's empty columns so its cards stayed aligned with the rows above.
+    fn native_sidebar_usage_columns(&self, count: usize, scale: f32) -> usize {
+        let fitting = self.native_sidebar_usage_fitting_columns(scale);
+        let rows = count.div_ceil(fitting).max(1);
+        count.div_ceil(rows).max(1)
+    }
+
     /// How many meters fit in a row at the sidebar's current width.
-    fn native_sidebar_usage_columns(&self, scale: f32) -> usize {
+    fn native_sidebar_usage_fitting_columns(&self, scale: f32) -> usize {
         let gap = SIDEBAR_USAGE_GAP * scale;
         // Every column but the last carries a gap, so the row fits one more card than
         // the plain division would allow.
@@ -267,7 +282,7 @@ impl GhostexGpuiApp {
             return None;
         }
         let scale = appearance.scale;
-        let columns = self.native_sidebar_usage_columns(scale);
+        let columns = self.native_sidebar_usage_columns(meters.len(), scale);
 
         /*
         CDXC:Sidebar 2026-09-20 WHY:
@@ -308,7 +323,7 @@ impl GhostexGpuiApp {
 
         let rows = meters
             .chunks(columns)
-            .map(|row| self.render_native_sidebar_usage_row(row, columns, &host, scale, window, cx))
+            .map(|row| self.render_native_sidebar_usage_row(row, &host, scale, window, cx))
             .collect::<Vec<_>>();
 
         // In the frosted panel the panel's 1px border takes the first pixel of its padding.
@@ -343,7 +358,6 @@ impl GhostexGpuiApp {
     fn render_native_sidebar_usage_row(
         &self,
         row: &[GpuiAccountUsageMeter],
-        columns: usize,
         host: &GpuiAccountUsageMeterHost,
         scale: f32,
         window: &mut Window,
@@ -359,8 +373,6 @@ impl GhostexGpuiApp {
                     .flex()
                     .child(self.render_account_usage_meter(meter, host, window, cx))
             }))
-            // The last row keeps its empty columns so the cards above them stay aligned.
-            .children((row.len()..columns).map(|_| div().flex_1().min_w_0().h(px(host.height))))
             .into_any_element()
     }
 

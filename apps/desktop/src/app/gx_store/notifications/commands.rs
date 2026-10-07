@@ -28,6 +28,8 @@ struct OpenTarget {
     notification_id: String,
     project_id: String,
     session_id: String,
+    /// Set on account rows (banked reset warnings): open the account, not a session.
+    account_id: Option<String>,
 }
 
 impl OpenTarget {
@@ -36,6 +38,7 @@ impl OpenTarget {
             notification_id: item["id"].as_str()?.to_string(),
             project_id: item["projectId"].as_str()?.to_string(),
             session_id: item["sessionId"].as_str()?.to_string(),
+            account_id: item["accountId"].as_str().map(str::to_string),
         })
     }
 }
@@ -77,6 +80,7 @@ impl GhostexGpuiApp {
                         notification_id: item.id.clone(),
                         project_id: item.project_id.clone(),
                         session_id: item.session_id.clone(),
+                        account_id: item.account_id.clone(),
                     });
                 if let Some(target) = target {
                     self.gx_store_open_notification(target, cx);
@@ -178,11 +182,30 @@ impl GhostexGpuiApp {
                 notification_id: item.id.clone(),
                 project_id: item.project_id.clone(),
                 session_id: item.session_id.clone(),
+                account_id: item.account_id.clone(),
             })
     }
 
-    /// Marks the row read, then focuses its session and reveals it in the sidebar.
+    /// Marks the row read, then focuses its session and reveals it in the sidebar; an account row
+    /// opens its account instead.
     fn gx_store_open_notification(&mut self, target: OpenTarget, cx: &mut gpui::Context<Self>) {
+        if let Some(account_id) = target.account_id {
+            cx.spawn(async move |this, cx| {
+                let marked = update_notification_feed(json!({
+                    "action": "markRead",
+                    "notificationId": target.notification_id,
+                }))
+                .await;
+                let _ = this.update(cx, |this, cx| {
+                    if let Some(message) = marked {
+                        this.receive_notification_feed_state_message(&message, cx);
+                    }
+                    this.open_account_notification(&account_id, cx);
+                });
+            })
+            .detach();
+            return;
+        }
         // The raw ids become the sidebar's session id: the session's CURRENT project when the
         // daemon lists it, else the row's own, so a session the list does not draw still resolves.
         let session = self

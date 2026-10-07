@@ -37,8 +37,8 @@ fn icon_path(icon: &str) -> &'static str {
     }
 }
 
-fn action(
-    id: &'static str,
+pub(super) fn action(
+    id: impl Into<gpui::ElementId>,
     icon: &'static str,
     p: &ChatAppearance,
     click: impl Fn(&mut App) + 'static,

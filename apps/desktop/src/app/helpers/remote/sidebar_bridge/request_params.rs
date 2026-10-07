@@ -350,12 +350,22 @@ pub(crate) fn gpui_remote_sidebar_send_session_message_params(
         .filter(|value| {
             !value.is_empty() && value.len() <= MAX_MESSAGE_BYTES && !value.contains('\0')
         })?;
-    Some(serde_json::json!({
+    let mut shaped = serde_json::json!({
         "projectId": project_id,
         "sessionId": session_id,
         "submit": true,
         "text": text,
-    }))
+    });
+    // The send's id (gxserver session_chat_send_requests.rs) rides along when the page named it.
+    if let Some(id) = object
+        .get("sendRequestId")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty() && id.len() <= 128 && id.chars().all(|c| c.is_ascii_graphic()))
+    {
+        shaped["sendRequestId"] = serde_json::json!(id);
+    }
+    Some(shaped)
 }
 
 pub(crate) fn gpui_remote_sidebar_request_session_rename_params(

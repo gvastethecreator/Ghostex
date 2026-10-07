@@ -38,6 +38,9 @@ pub(crate) fn dispatch(
     if operation == "redeemReset" {
         return super::reset_claim::redeem(state, params);
     }
+    if operation == "resetWatch" {
+        return super::reset_watch::endpoint(state, params);
+    }
     let titlebar_has_accounts = if operation == "titlebar" {
         let db = crate::storage::open_gxserver_database(&state.paths).map_err(store::error)?;
         store::read(&db)?
@@ -60,7 +63,7 @@ pub(crate) fn dispatch(
     let cached_list = operation == "list"
         && params.get("cachedOnly").and_then(Value::as_bool) == Some(true)
         && state.accounts.snapshot().fetched_at.is_some();
-    let mut snapshot = if matches!(operation, "select" | "setTitlebar")
+    let mut snapshot = if matches!(operation, "select" | "setTitlebar" | "dismissSwitch")
         || !titlebar_has_accounts
         || cached_titlebar
         || cached_list
@@ -374,6 +377,24 @@ pub(crate) fn dispatch(
                     .map_err(|_| DomainStateError::bad_request("Invalid continuation settings."))?;
             registry.defaults.insert(provider, policy);
             store::write(&db, &registry)?;
+        }
+        // CDXC:AgentProviders 2026-10-04 DECISION:
+        // User: the "Couldn't complete the switch" card stuck on screen needs "a close button top right of the modal". Closing a failed switch marks it `cancelled` in the session itself, so it stays closed on reload, on every client and after a restart; Retry and later switches are untouched.
+        "dismissSwitch" => {
+            let session = get_session(&repository, params)?;
+            if session
+                .pointer("/runtimeSettings/accountSwitch/phase")
+                .and_then(Value::as_str)
+                == Some("failed")
+            {
+                let mut runtime = session["runtimeSettings"]
+                    .as_object()
+                    .cloned()
+                    .unwrap_or_default();
+                super::switch_progress::set_phase(&mut runtime, "cancelled", None);
+                update_session(&repository, &session, runtime)?;
+                changed_sessions.push(session);
+            }
         }
         "sessionPolicy" | "select" | "stopRecovery" => {
             let session = get_session(&repository, params)?;

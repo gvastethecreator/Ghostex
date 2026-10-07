@@ -43,6 +43,10 @@ pub struct PresentationSnapshot {
     pub sidebar_project_collections: Option<SidebarProjectCollectionsState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sidebar_spaces: Option<SidebarSpacesState>,
+    /// Whether this daemon's own machine has Spaces turned on (`sidebarSpacesEnabled`). Absent on
+    /// an older daemon.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sidebar_spaces_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_session_tags: Option<CustomSessionTagsState>,
 }

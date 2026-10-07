@@ -1724,9 +1724,10 @@ static NSEvent *GhostexGpuiNormalizedNavigationKeyEvent(NSEvent *event) {
   // keyboard layout, so matching by keycode alone is safe. Cleanliness is
   // judged by the CGEvent unicode payload — the field TSM reads — because
   // the NSEvent-level characters always look correct for these keys.
-  // Dirty events are copied from their CGEvent with the payload removed:
-  // the shape TSM treats as a normal function key (doCommand dispatch)
-  // instead of committable text.
+  // Dirty events are copied from their CGEvent with the payload replaced by
+  // the canonical function-key character (removed for Backspace): the shape
+  // TSM treats as a normal function key (doCommand dispatch) instead of
+  // committable text.
   static const GhostexGpuiNavigationKeyNormalization normalizations[] = {
       {123, NSLeftArrowFunctionKey, YES, YES},
       {124, NSRightArrowFunctionKey, YES, YES},
@@ -1811,7 +1812,16 @@ static NSEvent *GhostexGpuiNormalizedNavigationKeyEvent(NSEvent *event) {
     if (!stripped) {
       return event;
     }
-    CGEventKeyboardSetUnicodeString(stripped, 0, NULL);
+    /*
+     CDXC:Hotkeys 2026-10-05 WHY:
+     An arrow, Home/End, PageUp/PageDown, Forward Delete or F-key copy with an empty payload got its characters from the keyboard layout again (0x1C-0x1F for the arrows), so Chromium inserted them as text and VS Code showed red FS/GS/RS/US marks instead of moving the cursor. Those keys get their canonical F700-range character, the hardware shape the clean check above accepts; only Backspace keeps the empty payload the Pinyin fix needs.
+     */
+    if (entry.functionModifier) {
+      UniChar canonicalPayload = (UniChar)canonicalCharacter;
+      CGEventKeyboardSetUnicodeString(stripped, 1, &canonicalPayload);
+    } else {
+      CGEventKeyboardSetUnicodeString(stripped, 0, NULL);
+    }
     CGEventFlags flags = CGEventGetFlags(stripped);
     if (entry.functionModifier) {
       flags |= kCGEventFlagMaskSecondaryFn;

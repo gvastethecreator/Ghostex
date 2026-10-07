@@ -495,6 +495,7 @@ pub(super) fn match_grok_segment(segment: &str) -> Option<SessionChatDetectedSel
         codex_status: None,
         cursor_status: None,
         hermes_status: None,
+        pi_status: None,
         checkout_status: None,
         model_catalog: None,
     })
@@ -622,6 +623,7 @@ pub(super) fn match_antigravity_statusline(line: &str) -> Option<SessionChatDete
         codex_status: None,
         cursor_status: None,
         hermes_status: None,
+        pi_status: None,
         checkout_status: None,
         model_catalog: None,
     })

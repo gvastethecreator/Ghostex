@@ -35,6 +35,51 @@ pub(crate) fn run_startup_hooks() {
     // Velopack owns install/update lifecycle command-line invocations. This
     // must run before GPUI, CEF, logging, or any background threads start.
     VelopackApp::build().set_auto_apply_on_startup(false).run();
+    adopt_release_app_user_model_id();
+}
+
+/// The id `VelopackApp::run` gives a release install (`velopack.<packId>`, packId Ghostex), which its Start Menu shortcut carries.
+const RELEASE_APP_USER_MODEL_ID: &str = "velopack.Ghostex";
+
+/// CDXC:Build 2026-10-07 WHY:
+/// The local start installs into the release's per-user folder (`%LOCALAPPDATA%\Ghostex\current`) without Velopack's update manifest, so a dev build never updates itself from the release feed; Velopack then leaves the process without an AppUserModelID. A process in that folder takes the release's id itself, so its taskbar button, pins and toasts match the shortcut the install script writes and what users get. A `--machine` or portable copy keeps the fallback id in windows_notifications.rs.
+/// SEE-ALSO: tooling/install-windows-gpui.ps1, tooling/xtask/src/start/windows.rs (resolve_install_paths).
+fn adopt_release_app_user_model_id() {
+    let Ok(executable) = std::env::current_exe() else {
+        return;
+    };
+    let Some(app_dir) = executable.parent() else {
+        return;
+    };
+    // A real Velopack install has its manifest here and already got the id from VelopackApp::run.
+    if app_dir.join("sq.version").is_file() {
+        return;
+    }
+    let Some(per_user_app_dir) = std::env::var_os("LOCALAPPDATA")
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            std::path::PathBuf::from(value)
+                .join("Ghostex")
+                .join("current")
+        })
+    else {
+        return;
+    };
+    let same_folder = app_dir
+        .to_string_lossy()
+        .trim_end_matches('\\')
+        .eq_ignore_ascii_case(per_user_app_dir.to_string_lossy().trim_end_matches('\\'));
+    if !same_folder {
+        return;
+    }
+    let id: Vec<u16> = RELEASE_APP_USER_MODEL_ID
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    // SAFETY: `id` is a NUL-terminated UTF-16 string that outlives the call.
+    unsafe {
+        windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID(id.as_ptr());
+    }
 }
 
 impl WindowsUpdater {

@@ -16,7 +16,7 @@ mod session;
 mod transcript_view;
 
 pub use crate::state::chat::{ChatState, CoreState, PublishAwait};
-pub use crate::state::composer::{ComposerState, Submission};
+pub use crate::state::composer::{ComposerState, FailedSend, Submission};
 pub use crate::state::context::{ChatContext, FormattedTime, FormattedTimeStyle};
 pub use crate::state::extras::{
     ExtrasState, PanelsState, SaveMarkdownRequest, SaveMarkdownSheet, SaveMarkdownStage,

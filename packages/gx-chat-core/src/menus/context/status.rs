@@ -20,6 +20,7 @@ pub enum ContextDetailsAgent {
     Codex,
     Cursor,
     Hermes,
+    Pi,
     /// Every other chat agent: the checkout's repository and branch, which gxserver reads for any
     /// session, plus the folder, model and session title.
     Basic,
@@ -27,11 +28,12 @@ pub enum ContextDetailsAgent {
 
 impl ContextDetailsAgent {
     /// Every agent with its own catalog and saved record.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Claude,
         Self::Codex,
         Self::Cursor,
         Self::Hermes,
+        Self::Pi,
         Self::Basic,
     ];
 
@@ -41,6 +43,7 @@ impl ContextDetailsAgent {
             Self::Codex => "codex",
             Self::Cursor => "cursor",
             Self::Hermes => "hermes",
+            Self::Pi => "pi",
             Self::Basic => "basic",
         }
     }
@@ -56,15 +59,19 @@ impl ContextDetailsAgent {
     ///
     /// CDXC:AgentProviders 2026-10-04 DECISION:
     /// User: "for freebuff just show the repo and branch in the status line (do the same for ALL agents that we have chat support for but we don't actually show anything useful for their status line". Every other chat agent gets the Basic catalog, with repository and branch in its status line.
+    ///
+    /// CDXC:AgentProviders 2026-10-06 DECISION:
+    /// User: Pi gets "Ghostex's own status line for Pi (model, usage, context, like Claude's)". Pi leaves the Basic catalog for its own, saved separately, built from what gxserver reads from the session's Pi transcript (`piStatus`) plus the checkout's repository and branch.
     pub fn for_icon(icon: Option<&str>) -> Option<Self> {
         match icon.map(|icon| icon.trim().to_lowercase()).as_deref() {
             Some("claude") => Some(Self::Claude),
             Some("codex") => Some(Self::Codex),
             Some("cursor" | "cursor-cli" | "cursor cli" | "cursor-agent") => Some(Self::Cursor),
             Some("hermes" | "hermes-agent") => Some(Self::Hermes),
+            Some("pi") => Some(Self::Pi),
             Some(
                 "antigravity" | "antigravity-cli" | "agy" | "freebuff" | "grok" | "grok-build"
-                | "omp" | "opencode" | "openclaude" | "pi" | "zcode" | "zcode-cli",
+                | "omp" | "opencode" | "openclaude" | "zcode" | "zcode-cli",
             ) => Some(Self::Basic),
             _ => None,
         }
@@ -85,7 +92,7 @@ impl ContextDetailsAgent {
     pub fn other(&self) -> Self {
         match self {
             Self::Claude => Self::Codex,
-            Self::Codex | Self::Cursor | Self::Hermes | Self::Basic => Self::Claude,
+            Self::Codex | Self::Cursor | Self::Hermes | Self::Pi | Self::Basic => Self::Claude,
         }
     }
 
@@ -96,6 +103,7 @@ impl ContextDetailsAgent {
             Self::Codex => "Codex",
             Self::Cursor => "Cursor",
             Self::Hermes => "Hermes",
+            Self::Pi => "Pi",
             Self::Basic => "This agent",
         }
     }
@@ -258,6 +266,27 @@ pub struct HermesStatus {
     pub cost_usd: Option<f64>,
 }
 
+/// `piStatus`: what the Pi session's own transcript reports
+/// (`server/src/session_chat_pi_status.rs`). Token and cost figures are the whole session's.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PiStatus {
+    /// `provider/id`.
+    pub model: Option<String>,
+    /// The model's name in Pi's lineup.
+    pub model_name: Option<String>,
+    pub thinking_level: Option<String>,
+    /// Epoch milliseconds.
+    pub started_at: Option<f64>,
+    pub input_tokens: Option<f64>,
+    pub output_tokens: Option<f64>,
+    pub cache_read_tokens: Option<f64>,
+    pub cache_write_tokens: Option<f64>,
+    pub cost_usd: Option<f64>,
+    pub context_tokens: Option<f64>,
+    pub context_window: Option<f64>,
+}
+
 /// One usage window of a saved account.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -319,6 +348,7 @@ pub struct ContextDetailStatus {
     pub codex: Option<CodexStatus>,
     pub cursor: Option<CursorStatus>,
     pub hermes: Option<HermesStatus>,
+    pub pi: Option<PiStatus>,
     pub account: Option<AgentAccount>,
     /// The context meter's used share (42%).
     pub context_used_percent: Option<String>,
@@ -362,6 +392,7 @@ pub struct DetectedOptions {
     pub codex_status: Option<CodexStatus>,
     pub cursor_status: Option<CursorStatus>,
     pub hermes_status: Option<HermesStatus>,
+    pub pi_status: Option<PiStatus>,
     pub checkout_status: Option<CheckoutStatus>,
 }
 
@@ -424,6 +455,10 @@ pub fn resolve_context_detail_status(
         ContextDetailsAgent::Hermes => options.and_then(|options| options.hermes_status.clone()),
         _ => None,
     };
+    let pi = match agent {
+        ContextDetailsAgent::Pi => options.and_then(|options| options.pi_status.clone()),
+        _ => None,
+    };
     let usage = resolve_context_meter_usage(
         options.and_then(|options| options.context_usage.as_ref()),
         agent.prefers_reported_percentage(),
@@ -466,6 +501,28 @@ pub fn resolve_context_detail_status(
                 ..ContextDetailStatus::default()
             })
             .unwrap_or_default(),
+        ContextDetailsAgent::Pi => {
+            let checkout = options.and_then(|options| options.checkout_status.as_ref());
+            ContextDetailStatus {
+                cost: pi
+                    .as_ref()
+                    .and_then(|pi| pi.cost_usd)
+                    .map(|total_usd| ClaudeCost {
+                        total_usd: Some(total_usd),
+                        ..ClaudeCost::default()
+                    }),
+                total_output_tokens: pi.as_ref().and_then(|pi| pi.output_tokens),
+                repo: checkout
+                    .and_then(|checkout| checkout.repo.clone())
+                    .map(|name| RepoInfo {
+                        name: Some(name),
+                        ..RepoInfo::default()
+                    }),
+                current_dir: checkout.and_then(|checkout| checkout.current_dir.clone()),
+                branch: checkout.and_then(|checkout| checkout.branch.clone()),
+                ..ContextDetailStatus::default()
+            }
+        }
         ContextDetailsAgent::Hermes => ContextDetailStatus {
             cost: hermes
                 .as_ref()
@@ -503,6 +560,7 @@ pub fn resolve_context_detail_status(
         _ => None,
     };
     status.hermes = hermes;
+    status.pi = pi;
     status.account = account
         .filter(|account| account.provider == agent.as_str())
         .cloned();
@@ -515,11 +573,16 @@ pub fn resolve_context_detail_status(
                 .hermes
                 .as_ref()
                 .and_then(|hermes| hermes.model.clone())
+        })
+        .or_else(|| {
+            let pi = status.pi.as_ref()?;
+            pi.model_name.clone().or_else(|| pi.model.clone())
         });
     status.effort_name = options
         .and_then(|options| options.effort.as_ref())
         .and_then(|effort| effort.label.clone())
-        .or_else(|| codex.as_ref().and_then(|codex| codex.effort.clone()));
+        .or_else(|| codex.as_ref().and_then(|codex| codex.effort.clone()))
+        .or_else(|| status.pi.as_ref().and_then(|pi| pi.thinking_level.clone()));
     status.context_used_percent =
         usage.and_then(|usage| format_context_percentage(usage.used_percentage));
     status.context_tokens = usage.and_then(|usage| {

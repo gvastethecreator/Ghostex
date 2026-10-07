@@ -32,6 +32,8 @@ pub(crate) struct AssembleInput<'a> {
     pub(crate) settings: &'a SidebarSettings,
     pub(crate) host: &'a SidebarHostInputs,
     pub(crate) spaces: Option<SpacesState>,
+    /// The section's machine shows Spaces (`machine_spaces::spaces_enabled_on`).
+    pub(crate) spaces_enabled: bool,
     pub(crate) collections: CollectionsState,
     /// THIS COMPUTER's first snapshot has arrived, which is what `ready` and the loading and error
     /// branches of the empty state are about on every tab.
@@ -113,12 +115,9 @@ pub(crate) fn assemble(input: AssembleInput<'_>) -> SidebarView {
     let bots_mode = effective_sidebar_mode(input.settings, input.ui) == SidebarMode::Bots;
     let is_bot_group = |group_id: &str| bot_groups.contains(group_id);
 
-    // A section has a Space row only when the setting is on and its daemon published a Space
-    // document at all; an older daemon has no Spaces and is never filtered.
-    let spaces_document = input
-        .spaces
-        .clone()
-        .filter(|_| input.settings.sidebar_spaces_enabled);
+    // A section has a Space row only when its machine has Spaces on and its daemon published a
+    // Space document at all; an older daemon has no Spaces and is never filtered.
+    let spaces_document = input.spaces.clone().filter(|_| input.spaces_enabled);
     let spaces_state = spaces_document.clone().unwrap_or_default();
     let selection = spaces_document.as_ref().map(|state| {
         resolve_selected_space(

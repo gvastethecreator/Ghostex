@@ -89,6 +89,20 @@ fn with_paste_watch_of_at_least(
     steps
 }
 
+/// CDXC:SessionChat 2026-10-05 WHY:
+/// The clear-and-retype attempt only runs when two paste checks found no message in the input box, so nothing was submitted; but an agent that takes a paste without the Return (or a screen read that missed a submitted turn) would get the message twice from it. The retype first asks the agent's transcript whether a user turn since this send already carries the message, and settles the send as delivered when it does.
+async fn paste_already_recorded(session: &Value, text: &str, since_ms: i64) -> bool {
+    let needles = crate::coordinators::delivery_needles(text);
+    let session = session.clone();
+    tokio::task::spawn_blocking(move || {
+        crate::coordinators::transcript_records_message(&session, &needles, since_ms, &mut None)
+    })
+    .await
+    .ok()
+    .flatten()
+        == Some(true)
+}
+
 pub(crate) async fn send_session_chat_message_with_draft(
     state: &AppState,
     project_id: &str,
@@ -475,6 +489,7 @@ pub(crate) async fn send_session_chat_message_with_draft(
         image_paths,
     );
     let retry_steps = (image_paths.is_empty() && !capture_local_output).then(|| steps.clone());
+    let send_started_ms = chrono::Utc::now().timestamp_millis();
     let mut sent = crate::session_chat_send::execute_session_chat_send(
         &target.project_id,
         &target.session_id,
@@ -503,6 +518,18 @@ pub(crate) async fn send_session_chat_message_with_draft(
                         &[],
                     );
                 }
+            }
+            if sent.as_ref().err().is_some_and(paste_not_accepted)
+                && paste_already_recorded(&target.session, text, send_started_ms).await
+            {
+                crate::session_chat_send_diagnostics::record_send_recovery_from_worker(
+                    "sessionChatSendPasteAlreadyRecorded",
+                    &target.project_id,
+                    &target.session_id,
+                    "The input box never showed the pasted message, but the agent's transcript already records it; it was not typed again.",
+                    &[],
+                );
+                sent = Ok(());
             }
             if sent.as_ref().err().is_some_and(paste_not_accepted) {
                 crate::session_chat_send_diagnostics::record_send_recovery_from_worker(

@@ -65,20 +65,61 @@ fn header_field(line: &str) -> Option<(&str, &str)> {
 /// prompt bubble, and the sender header must never show as a heading. Accepts the current header (a
 /// blank line before the body) and the pre-2026-09-18 `MESSAGE FROM` header that ended in a dashed
 /// line, so transcripts recorded before the format change render the same way.
-/// SEE-ALSO: server/src/ghostex_cli/agents/identity.rs writes the header.
+/// CDXC:SessionChat 2026-10-05 DECISION:
+/// User: the sender block moved BELOW the message body so Claude and Codex title a session from the task text; the chat card must look exactly as before. The block is recognised at the end of the text as well as at the start, because transcripts recorded earlier have it first.
+/// SEE-ALSO: server/src/ghostex_cli/agents/identity.rs and server/src/coordinators/brief.rs write the block; server/src/coordinators/brief.rs `split_agent_message` reads it on the server.
 pub fn parse_inter_agent_message(text: &str) -> Option<InterAgentMessage> {
     if let Some(message) = parse_cross_session_message(text) {
         return Some(message);
     }
     let lines = split_newlines(text);
+    if let Some(message) = parse_header_first(&lines) {
+        return Some(message);
+    }
+    parse_footer(&lines)
+}
+
+/// The block above the body: the opener (or the old `MESSAGE FROM`), the labelled lines, then a
+/// blank or dashed separator line.
+fn parse_header_first(lines: &[&str]) -> Option<InterAgentMessage> {
     let opener = js_trim(lines.first().copied().unwrap_or_default());
     if opener != "Message from another agent" && opener != "MESSAGE FROM" {
         return None;
     }
+    let (mut message, index) = parse_header_fields(lines, 1)?;
+    let separator = js_trim(lines.get(index).copied().unwrap_or_default());
+    let dashed = separator.len() >= 3 && separator.bytes().all(|byte| byte == b'-');
+    if !separator.is_empty() && !dashed {
+        return None;
+    }
+    message.body = js_trim(&lines[(index + 1).min(lines.len())..].join("\n")).to_string();
+    Some(message)
+}
+
+/// The block below the body: the last `Message from another agent` line that follows a blank line,
+/// then labelled lines up to the end of the text (trailing blank lines allowed).
+fn parse_footer(lines: &[&str]) -> Option<InterAgentMessage> {
+    let at = (1..lines.len()).rev().find(|&at| {
+        js_trim(lines[at]) == "Message from another agent" && js_trim(lines[at - 1]).is_empty()
+    })?;
+    let (mut message, index) = parse_header_fields(lines, at + 1)?;
+    if lines[index.min(lines.len())..]
+        .iter()
+        .any(|line| !js_trim(line).is_empty())
+    {
+        return None;
+    }
+    message.body = js_trim(&lines[..at].join("\n")).to_string();
+    Some(message)
+}
+
+/// The labelled lines from `start`; the message they describe and the index of the first line that
+/// is not one of them. `None` unless they name an agent and a `Reply to`.
+fn parse_header_fields(lines: &[&str], start: usize) -> Option<(InterAgentMessage, usize)> {
     let mut message = InterAgentMessage::default();
     let mut seen_agent_name = false;
     let mut seen_reply_to = false;
-    let mut index = 1;
+    let mut index = start;
     while index < lines.len() {
         let Some((name, raw)) = header_field(lines[index]) else {
             break;
@@ -103,13 +144,7 @@ pub fn parse_inter_agent_message(text: &str) -> Option<InterAgentMessage> {
         }
         index += 1;
     }
-    let separator = js_trim(lines.get(index).copied().unwrap_or_default());
-    let dashed = separator.len() >= 3 && separator.bytes().all(|byte| byte == b'-');
-    if !seen_agent_name || !seen_reply_to || (!separator.is_empty() && !dashed) {
-        return None;
-    }
-    message.body = js_trim(&lines[(index + 1).min(lines.len())..].join("\n")).to_string();
-    Some(message)
+    (seen_agent_name && seen_reply_to).then_some((message, index))
 }
 
 /// CDXC:SessionChat 2026-09-25 DECISION:

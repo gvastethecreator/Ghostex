@@ -9,6 +9,7 @@ pub mod fork;
 pub mod helpers;
 pub mod identity;
 pub mod launch_plan;
+pub(crate) mod pi_session_id;
 pub mod resume_plan;
 mod session_command;
 pub mod session_state_ingest;

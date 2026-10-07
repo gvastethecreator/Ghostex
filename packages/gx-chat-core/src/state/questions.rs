@@ -21,6 +21,9 @@ pub struct QuestionsState {
     /// The prompt key the user answered or cancelled, which hides the card until a new one
     /// arrives.
     pub dismissed_prompt: Option<String>,
+    /// The asking call's `toolUseId` of the dismissed prompt, when the prompt carried one, so the
+    /// same question asked again by a new call still shows.
+    pub dismissed_tool_use_id: Option<String>,
     /// Which question of the set the card is showing.
     pub question_index: usize,
     /// The whole prompt's identity, which is what the saved answers are keyed by. A changed
@@ -82,6 +85,8 @@ pub struct AnswerRequest {
     pub submitted: AnswerDrafts,
     /// The content key the clear belongs to.
     pub content_key: Option<String>,
+    /// The dismissal this send replaced when it hid the card at once, put back if it fails.
+    pub restore_dismissed: Option<(Option<String>, Option<String>)>,
 }
 
 /// Async question selection, explicit submission, retirement and draft persistence.

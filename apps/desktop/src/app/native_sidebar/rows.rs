@@ -105,7 +105,7 @@ impl GhostexGpuiApp {
                                             .iter()
                                             .map(|session| (session.session_id.as_str(), session))
                                             .collect::<std::collections::HashMap<_, _>>();
-                                        let rows = self.render_native_session_list(
+                                        let rows = self.render_native_session_rows(
                                             group,
                                             ids.iter()
                                                 .filter_map(|id| {
@@ -199,7 +199,13 @@ impl GhostexGpuiApp {
             .flex_shrink_0()
             .child(block)
             .when_some(drop_line, |row, position| {
-                row.child(super::drag::drop_line(position, scale))
+                // The project header's box reaches left over its chevron slot, so the line spans the box.
+                row.child(super::drag::drop_line_spanning(
+                    position,
+                    scale,
+                    px(-super::project_header::PROJECT_HEADER_CHEVRON_INSET * scale),
+                    px(3.0 * scale),
+                ))
             })
             .into_any_element()
     }

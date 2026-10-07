@@ -44,7 +44,25 @@ pub fn sync(state: &mut ChatState) -> Vec<Effect> {
     let next_prompt_key = prompt_key(prompt.as_ref());
     if state.questions.prompt_key != next_prompt_key {
         state.questions.prompt_key = next_prompt_key;
-        state.questions.dismissed_prompt = None;
+    }
+    // See CDXC:SessionChat 2026-10-06 in questions/actions.rs: a prompt that only went away keeps
+    // its dismissal, so a stale frame or read that re-reports the answered prompt cannot bring the
+    // card back. A different prompt, or the same one from another asking call, ends it.
+    {
+        let questions = &mut state.questions;
+        let other_prompt =
+            questions.prompt_key.is_some() && questions.prompt_key != questions.dismissed_prompt;
+        let new_call = matches!(
+            (
+                questions.dismissed_tool_use_id.as_deref(),
+                prompt.as_ref().and_then(InteractivePrompt::tool_use_id),
+            ),
+            (Some(dismissed), Some(current)) if dismissed != current
+        );
+        if other_prompt || new_call {
+            questions.dismissed_prompt = None;
+            questions.dismissed_tool_use_id = None;
+        }
     }
 
     let next_content_key = content_key(state);
@@ -54,7 +72,7 @@ pub fn sync(state: &mut ChatState) -> Vec<Effect> {
         questions.question_index = 0;
         questions.question_transition = false;
         questions.answering = false;
-        questions.answer_request = None;
+        // CDXC:SessionChat 2026-10-06 WHY: the answer in flight stays tracked across a new content key. The same question re-reported with other fields (a `toolUseId` gained or lost between hooks) used to drop it, so a refused answer never brought the hidden card back or showed its error.
         questions.draft_write_content_key = None;
         questions.advance_after_write = false;
         questions.question_drafts = blank_drafts(prompt.as_ref());

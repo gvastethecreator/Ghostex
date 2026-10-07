@@ -28,6 +28,7 @@ pub(crate) fn run(args: &[String]) -> CliResult<()> {
             Ok(())
         }
         "create" => create(&parsed),
+        "promote" => promote(&parsed),
         "options" => options(&parsed),
         "list" => list(&parsed),
         "status" => status(&parsed),
@@ -135,19 +136,19 @@ fn create(parsed: &ParsedArgs) -> CliResult<()> {
         Some(agent) => {
             if !agent_rows.iter().any(|row| agents::text(row, "agentId") == agent) {
                 return Err(CliError::Other(format!(
-                    "Unknown or hidden agent type: {agent}. Run ghostex agents types and use a Claude or Codex agentId."
+                    "Unknown or hidden agent type: {agent}. Run ghostex agents types and use a Claude, Codex or ZCode agentId."
                 )));
             }
             agent
         }
         None => default_coordinator_agent(&agent_rows).ok_or_else(|| {
             CliError::Other(
-                "No Claude or Codex agent is configured. Pass --agent <agent-id> from ghostex agents types.".into(),
+                "No Claude, Codex or ZCode agent is configured. Pass --agent <agent-id> from ghostex agents types.".into(),
             )
         })?,
     };
     let named = flag_text(&parsed.flags, "title");
-    // CDXC:Coordinators 2026-10-03 SEE-ALSO: coordinator_keeps_its_title in server/src/coordinators/title.rs; an unnamed coordinator's "Coordinator" is a placeholder the agent's first name may replace.
+    // CDXC:Coordinators 2026-10-03 SEE-ALSO: keeps_its_given_title in server/src/coordinators/title.rs; an unnamed coordinator's "Coordinator" is a placeholder the agent's first name may replace.
     let title_source = if named.is_some() {
         "user"
     } else {
@@ -155,6 +156,15 @@ fn create(parsed: &ParsedArgs) -> CliResult<()> {
     };
     let title = named.unwrap_or_else(|| "Coordinator".to_string());
     let goal = flag_text(&parsed.flags, "goal").unwrap_or_default();
+    let family = agent_rows
+        .iter()
+        .find(|row| agents::text(row, "agentId") == agent_id)
+        .and_then(agent_family);
+    if family == Some("zcode") && flag_text(&parsed.flags, "effort").is_some() {
+        return Err(CliError::Other(
+            "ZCode agents take no effort choice; drop --effort.".into(),
+        ));
+    }
     let created = call_gxserver_rpc(
         "/api/createAgentSession",
         &json!({
@@ -164,18 +174,21 @@ fn create(parsed: &ParsedArgs) -> CliResult<()> {
             "title": title,
             "runtimeSettings": { "titleSource": title_source },
             "coordinator": { "goal": goal },
-            // CDXC:Coordinators 2026-09-30 SEE-ALSO: DEFAULT_COORDINATOR_EFFORT in apps/desktop/src/app/window/new_coordinator_modal.rs (the user's medium-effort decision); the CLI keeps the same default.
-            "agentEffort": flag_text(&parsed.flags, "effort").unwrap_or_else(|| "medium".to_string()),
         })
         .as_object()
         .map(|object| {
             let mut object = object.clone();
+            // CDXC:Coordinators 2026-09-30 SEE-ALSO: DEFAULT_COORDINATOR_EFFORT in apps/desktop/src/app/window/new_coordinator_modal.rs (the user's medium-effort decision); the CLI keeps the same default. ZCode takes no effort choice, so it is sent no default; its --model rides agentModel and reaches the session as a queued `/model` line.
+            if family != Some("zcode") {
+                object.insert(
+                    "agentEffort".to_string(),
+                    json!(
+                        flag_text(&parsed.flags, "effort").unwrap_or_else(|| "medium".to_string())
+                    ),
+                );
+            }
             let model = flag_text(&parsed.flags, "model").or_else(|| {
-                agent_rows
-                    .iter()
-                    .find(|row| agents::text(row, "agentId") == agent_id)
-                    .filter(|row| agent_family(row) == Some("claude"))
-                    .map(|_| DEFAULT_CLAUDE_COORDINATOR_MODEL.to_string())
+                (family == Some("claude")).then(|| DEFAULT_CLAUDE_COORDINATOR_MODEL.to_string())
             });
             if let Some(model) = model {
                 object.insert("agentModel".to_string(), json!(model));
@@ -206,15 +219,30 @@ fn create(parsed: &ParsedArgs) -> CliResult<()> {
         "globalRef": reference,
         "session": agents::summary(&session),
     });
+    // A ZCode coordinator's chosen model reaches the session as a `/model` line queued ahead of
+    // the first request; ZCode has no launch model flag for it to ride (see launch_plan.rs).
+    let mut startup_prompts: Vec<String> = Vec::new();
+    if family == Some("zcode") {
+        if let Some(model) = flag_text(&parsed.flags, "model").filter(|model| !model.is_empty()) {
+            startup_prompts.push(format!("/model {model}"));
+        }
+    }
+    let mut task_queued = false;
     if let Some(task) = flag_text(&parsed.flags, "task") {
+        startup_prompts.push(task);
+        task_queued = true;
+    }
+    for prompt in &startup_prompts {
         call_gxserver_rpc(
             "/api/queueSessionChatPrompt",
             &json!({
                 "globalRef": reference, "projectId": session["projectId"], "sessionId": session["sessionId"],
-                "text": task, "startupSend": true,
+                "text": prompt, "startupSend": true, "sendRequestId": uuid::Uuid::new_v4().to_string(),
             }),
             &flags,
         )?;
+    }
+    if task_queued {
         result["taskStatus"] = json!("queued");
     }
     if parsed.flags.truthy("json") {
@@ -226,7 +254,53 @@ fn create(parsed: &ParsedArgs) -> CliResult<()> {
     Ok(())
 }
 
-/// What a New Coordinator form offers: the Claude and Codex launchers (Claude first, in launcher
+/// `promote [<session-ref>]`: makes an existing Claude, Codex or ZCode session (the calling session when
+/// no ref is given) a coordinator without restarting or interrupting it; see
+/// `promote_session_to_coordinator` in server/src/coordinators/promote.rs.
+fn promote(parsed: &ParsedArgs) -> CliResult<()> {
+    let base = server_flags(&parsed.flags);
+    let (session, flags) = match parsed.rest.first().map(String::as_str) {
+        Some(reference) => resolve_session(reference, &base)?,
+        None => {
+            let caller = agents::caller().map_err(|error| {
+                CliError::Other(format!(
+                    "{error} Outside an agent session, pass the session to promote: ghostex coordinator promote <session-ref>."
+                ))
+            })?;
+            let flags = agents::inventory_flags(&base, agents::text(&caller, "globalRef"))?;
+            (caller, flags)
+        }
+    };
+    let mut params = json!({
+        "projectId": session["projectId"],
+        "sessionId": session["sessionId"],
+    });
+    if let Some(goal) = flag_text(&parsed.flags, "goal") {
+        params["goal"] = json!(goal);
+    }
+    let result = call_gxserver_rpc("/api/promoteCoordinator", &params, &flags)?;
+    if parsed.flags.truthy("json") {
+        print_json(&result);
+        return Ok(());
+    }
+    let reference = agents::text(&result, "globalRef");
+    println!(
+        "\"{}\" ({reference}) is now a coordinator. Its running turn was not interrupted.",
+        agents::text(&result, "title")
+    );
+    if result["playbookQueued"].as_bool() == Some(true) {
+        println!("Its playbook is queued and reaches it once it is idle; its next resume loads the role as a system prompt.");
+    } else {
+        println!(
+            "Its playbook could not be queued ({}). Send it with: ghostex agents send {reference} \"Run ghostex coordinator guide and follow it from now on.\"",
+            agents::text(&result, "playbookError")
+        );
+    }
+    println!("Sessions it started earlier are not its threads yet; adopt each with: ghostex coordinator link <session-ref> --coordinator {reference}");
+    Ok(())
+}
+
+/// What a New Coordinator form offers: the Claude, Codex and ZCode launchers (Claude first, in launcher
 /// order), each with its model lineup from the catalog gxserver serves, the model it starts on, and
 /// the efforts each model accepts.
 ///
@@ -350,11 +424,11 @@ pub(super) fn launch_settings_for(rows: &[Value], agent_id: &str) -> Value {
     Value::Object(settings)
 }
 
-/// The first configured agent whose command runs Claude, else Codex.
+/// The first configured agent: Claude, else Codex, else ZCode.
 /// CDXC:Coordinators 2026-10-01 SEE-ALSO: DEFAULT_CLAUDE_COORDINATOR_MODEL in apps/desktop/src/app/window/new_coordinator_modal.rs (the user's Opus 5.5 decision); `create` on a Claude agent without `--model` uses the same, a Codex agent keeps its configured model.
 const DEFAULT_CLAUDE_COORDINATOR_MODEL: &str = "opus[1m]";
 
-/// `claude` or `codex` when a launcher row runs that executable or has that agent id.
+/// `claude`, `codex` or `zcode` when a launcher row runs that executable or has that agent id.
 fn agent_family(row: &Value) -> Option<&'static str> {
     let executable = agents::text(row, "command")
         .split_whitespace()
@@ -367,13 +441,13 @@ fn agent_family(row: &Value) -> Option<&'static str> {
                 .to_string()
         })
         .unwrap_or_default();
-    ["claude", "codex"]
+    ["claude", "codex", "zcode"]
         .into_iter()
         .find(|family| executable == *family || agents::text(row, "agentId") == *family)
 }
 
 fn default_coordinator_agent(rows: &[Value]) -> Option<String> {
-    ["claude", "codex"].iter().find_map(|family| {
+    ["claude", "codex", "zcode"].iter().find_map(|family| {
         rows.iter()
             .find(|row| agent_family(row) == Some(*family))
             .map(|row| agents::text(row, "agentId").to_string())

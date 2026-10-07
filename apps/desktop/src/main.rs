@@ -267,6 +267,11 @@ fn main() {
         #[cfg(target_os = "windows")]
         cef::register_windows_shutdown(cx);
         gpui_component::init(cx);
+        cx.bind_keys([KeyBinding::new(
+            "shift-insert",
+            gpui_component::input::Paste,
+            Some("Input"),
+        )]);
         ui_fonts::register(cx);
         crate::app::window::frosted_host::register_frosted_tooltip_root_plugin(cx);
         crate::app::window::modal_popover_host::install_frosted_modal_popover_host();
@@ -309,6 +314,11 @@ fn main() {
                 Some(BROWSER_KEY_CONTEXT),
             ),
             gpui_key_binding_from_shared_hotkey("cmd+v", PasteIntoFocusedTerminal, None),
+            KeyBinding::new(
+                "shift-insert",
+                PasteIntoFocusedTerminal,
+                Some(terminal_element::TERMINAL_KEY_CONTEXT),
+            ),
             gpui_key_binding_from_shared_hotkey("cmd+f", FindInFocusedTerminal, None),
             gpui_key_binding_from_shared_hotkey("cmd+g", FindNextInFocusedBrowser, None),
             gpui_key_binding_from_shared_hotkey("cmd+shift+g", FindPreviousInFocusedBrowser, None),

@@ -196,7 +196,7 @@ fn settings_tooltip_bubble(
         .font_weight(FontWeight::MEDIUM)
         .px(px(12.0))
         .py(px(6.0))
-        .rounded(px(5.0))
+        .rounded(px(gpui_component::tooltip::TOOLTIP_RADIUS))
         .border_1()
         .border_color(hsla(border))
         .bg(hsla(background))

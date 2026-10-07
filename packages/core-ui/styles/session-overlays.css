@@ -213,7 +213,7 @@
 .session-local-tooltip-popup {
   background: var(--ghostex-tooltip-background, rgba(24, 24, 24, 0.98));
   border: 1px solid var(--ghostex-tooltip-border, rgba(255, 255, 255, 0.12));
-  border-radius: var(--ghostex-tooltip-radius, 5px);
+  border-radius: var(--ghostex-tooltip-radius, 8px);
   box-sizing: border-box;
   box-shadow: var(--ghostex-tooltip-shadow, 0 12px 30px rgba(0, 0, 0, 0.35));
   color: var(--ghostex-tooltip-foreground, rgba(255, 255, 255, 0.78));
@@ -258,7 +258,7 @@
   padding: 5px 8px;
   max-width: 90vw;
   border: 1px solid var(--ghostex-tooltip-border, rgba(255, 255, 255, 0.12));
-  border-radius: var(--ghostex-tooltip-radius, 5px);
+  border-radius: var(--ghostex-tooltip-radius, 8px);
   background: var(--ghostex-tooltip-background, rgba(24, 24, 24, 0.98));
   color: var(--ghostex-tooltip-foreground, rgba(255, 255, 255, 0.78));
   font: var(--ghostex-tooltip-font, 500 12px/1.35 -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif);

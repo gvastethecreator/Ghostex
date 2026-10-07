@@ -95,6 +95,28 @@ impl GhostexGpuiApp {
         }
     }
 
+    /// A click on a system notification (a macOS banner or a Windows toast): a banked reset warning
+    /// opens its account (notification_feed/reset_banners.rs), anything else focuses its session in
+    /// the window already showing it (app/workspace_windows/).
+    pub(crate) fn activate_system_notification(
+        &mut self,
+        session_id: String,
+        window: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        cx.activate(true);
+        if let Some(account_id) = session_id
+            .strip_prefix(crate::notification_feed::reset_banners::ACCOUNT_RESET_BANNER_PREFIX)
+        {
+            self.open_account_notification(account_id, cx);
+            return;
+        }
+        let row_id = session_id.clone();
+        self.activate_session_in_its_window(&row_id, window, cx, move |app, cx| {
+            app.dispatch_gpui_status_pet_activation(session_id.as_str(), cx);
+        });
+    }
+
     pub(crate) fn deliver_gpui_macos_session_attention_notification(
         &mut self,
         candidate: GpuiSessionAttentionNotificationCandidate,

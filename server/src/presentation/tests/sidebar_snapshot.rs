@@ -354,6 +354,7 @@ fn snapshot_publishes_the_auto_settle_window_this_daemon_sweeps_with() {
             "S7k",
             crate::session_lifecycle::read_sweep_auto_settle_after_days(&paths),
             crate::session_lifecycle::read_sidebar_v2_selected(&paths),
+            crate::sidebar_spaces::read_sidebar_spaces_enabled(&paths),
             sessions,
         )
         .expect("snapshot");
@@ -429,6 +430,7 @@ fn the_git_status_capability_follows_the_sidebar_version_gate() {
             "S7m",
             crate::session_lifecycle::read_sweep_auto_settle_after_days(&paths),
             crate::session_lifecycle::read_sidebar_v2_selected(&paths),
+            crate::sidebar_spaces::read_sidebar_spaces_enabled(&paths),
             sessions,
         )
         .expect("snapshot")

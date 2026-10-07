@@ -45,9 +45,18 @@ pub(super) fn send(args: &Arguments) -> CliResult<Value> {
     let waking =
         args.delivery != Delivery::Queue && text(&recipient, "lifecycleState") != "running";
     let mut payload = json!({"globalRef": recipient["globalRef"], "projectId": recipient["projectId"], "sessionId": recipient["sessionId"]});
+    // CDXC:Cli 2026-10-05 WHY: every send carries a `sendRequestId` (session_chat_send_requests.rs). A caller that retries a failed or uncertain send passes the id the first attempt printed back as `--request-id`, and gxserver answers from its record of that send instead of typing it a second time; without the flag each run is a new message.
+    let send_request_id = args
+        .request_id
+        .clone()
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let interrupted = args.delivery == Delivery::Interrupt && !waking;
     if interrupted {
-        call_gxserver_rpc("/api/interruptSessionChat", &payload, &flags)?;
+        // gxserver skips the Escape when this id was already sent, so a retry never interrupts
+        // the turn the first attempt started.
+        let mut interrupt = payload.clone();
+        interrupt["sendRequestId"] = json!(send_request_id);
+        call_gxserver_rpc("/api/interruptSessionChat", &interrupt, &flags)?;
     }
     let read_payload = payload.clone();
     let sent_at_ms = chrono::Utc::now().timestamp_millis();
@@ -57,6 +66,7 @@ pub(super) fn send(args: &Arguments) -> CliResult<Value> {
         transcript_rows_before_send(&read_payload, &flags)
     };
     payload["text"] = json!(message);
+    payload["sendRequestId"] = json!(send_request_id);
     let endpoint = if args.delivery == Delivery::Queue {
         "/api/queueSessionChatPrompt"
     } else {
@@ -68,6 +78,7 @@ pub(super) fn send(args: &Arguments) -> CliResult<Value> {
         } else {
             "Inspect chat and queue before retrying.".to_string()
         };
+        let next_step = format!("{next_step} To retry this same message, add --request-id {send_request_id} so it is never delivered twice.");
         CliError::Other(format!(
             "{}{} {}",
             if interrupted {
@@ -79,8 +90,10 @@ pub(super) fn send(args: &Arguments) -> CliResult<Value> {
             next_step
         ))
     })?;
+    let duplicate = result["duplicate"] == json!(true);
     // CDXC:Coordinators 2026-09-30 WHY: a coordinator's follow-up to a thread it already marked done reopens that thread, or its reply would go unsupervised and never be reported back.
-    let _ = call_gxserver_rpc(
+    // A repeated request id was linked by its first attempt; linking again would restart the delivery watch from now and miss the row the first attempt produced.
+    let _ = (!duplicate).then(|| call_gxserver_rpc(
         "/api/linkCoordinatorThread",
         &json!({
             "coordinatorProjectId": sender["projectId"], "coordinatorSessionId": sender["sessionId"],
@@ -89,13 +102,25 @@ pub(super) fn send(args: &Arguments) -> CliResult<Value> {
             "pendingMessage": body, "sentAtMs": sent_at_ms,
         }),
         &flags,
-    );
+    ));
     let receipt = receipt(&result);
     let (status, note) = if args.delivery == Delivery::Queue {
         (
             "queued",
-            "Held in the recipient's queue until its current turn finishes and its input is ready.",
+            if duplicate {
+                "This request id was already queued; Ghostex did not queue it again."
+            } else {
+                "Held in the recipient's queue until its current turn finishes and its input is ready."
+            },
         )
+    } else if duplicate {
+        if read_chat(&read_payload, DELIVERY_ROWS_BEFORE, &flags)
+            .is_some_and(|chat| chat_shows(&chat, &body, &TranscriptRows::Known(HashSet::new())))
+        {
+            ("delivered", "This request id was already sent and the recipient's transcript shows the message; Ghostex did not type it again.")
+        } else {
+            ("accepted", "This request id was already sent; Ghostex did not type it again. The recipient's transcript does not show it yet. Read its chat before sending a new message.")
+        }
     } else if transcript_shows(&read_payload, &body, &rows_before, &flags) {
         ("delivered", "The recipient's transcript shows the message.")
     } else if !receipt["queuedPromptId"].is_null() {
@@ -113,6 +138,8 @@ pub(super) fn send(args: &Arguments) -> CliResult<Value> {
         "mode": match args.delivery { Delivery::Normal => "normal", Delivery::Interrupt => "interrupt", Delivery::Queue => "queue" },
         "interruptRequested": interrupted,
         "wakingRecipient": waking,
+        "sendRequestId": send_request_id,
+        "duplicate": duplicate,
         "sender": identity::summary(&sender),
         "recipient": identity::summary(&recipient),
         "receipt": receipt,
@@ -216,6 +243,7 @@ pub(crate) fn chat_shows(chat: &Value, body: &str, before: &TranscriptRows) -> b
 pub(super) fn receipt(result: &Value) -> Value {
     json!({
         "requestId": result["requestId"],
+        "sendRequestId": result["sendRequestId"],
         "queuedPromptId": result.get("queuedPromptId").or_else(|| result.pointer("/prompt/id")),
     })
 }

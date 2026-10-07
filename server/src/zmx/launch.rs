@@ -527,14 +527,15 @@ fn run_zsh_script_blocking(
         ZmxShellProfileMode::Profileless => shell.profileless_script_args(script),
     };
     #[cfg(windows)]
-    let (mut process, native_environment) = match super::scripts_windows::process(script)? {
-        Some(invocation) => invocation,
-        None => {
-            let mut command = Command::new(&shell.executable);
-            command.args(shell_args);
-            (command, std::collections::HashMap::new())
-        }
-    };
+    let (mut process, native_environment, native_flags) =
+        match super::scripts_windows::process(script)? {
+            Some(invocation) => invocation,
+            None => {
+                let mut command = Command::new(&shell.executable);
+                command.args(shell_args);
+                (command, std::collections::HashMap::new(), 0)
+            }
+        };
     #[cfg(not(windows))]
     let mut process = {
         let mut command = Command::new(&shell.executable);
@@ -546,7 +547,7 @@ fn run_zsh_script_blocking(
         // CDXC:PlatformSupport 2026-09-14 WHY:
         // Session polling is background work. Without CREATE_NO_WINDOW, Windows Terminal opens a new window for every PowerShell probe.
         use std::os::windows::process::CommandExt;
-        process.creation_flags(0x0800_0000);
+        process.creation_flags(0x0800_0000 | native_flags);
     }
     let mut environment = build_gxserver_zmx_child_environment();
     #[cfg(windows)]

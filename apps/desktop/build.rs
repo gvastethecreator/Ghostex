@@ -438,10 +438,7 @@ fn build_windows_app_resource(manifest_dir: &Path) {
     fs::write(&icon_path, icon_bytes)
         .unwrap_or_else(|error| panic!("failed to write {}: {error}", icon_path.display()));
 
-    println!("cargo:rerun-if-env-changed=GHOSTEX_GPUI_MARKETING_VERSION");
-    let package_version = env::var("GHOSTEX_GPUI_MARKETING_VERSION")
-        .unwrap_or_else(|_| env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION"));
-    println!("cargo:rustc-env=GHOSTEX_BUILD_MARKETING_VERSION={package_version}");
+    let package_version = marketing_version();
     let mut numeric_version = [0_u16; 4];
     for (index, component) in package_version
         .split_once('-')
@@ -512,7 +509,19 @@ fn build_windows_app_resource(manifest_dir: &Path) {
     );
 }
 
+fn marketing_version() -> String {
+    env::var("GHOSTEX_GPUI_MARKETING_VERSION")
+        .unwrap_or_else(|_| env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION"))
+}
+
 fn main() {
+    // CDXC:Build 2026-10-07 WHY:
+    // The About page, telemetry and the Linux update check read GHOSTEX_BUILD_MARKETING_VERSION on every platform. It used to be emitted only from the Windows resource step, so Linux and macOS release builds showed the crate version (0.1.0) instead of the release version.
+    println!("cargo:rerun-if-env-changed=GHOSTEX_GPUI_MARKETING_VERSION");
+    println!(
+        "cargo:rustc-env=GHOSTEX_BUILD_MARKETING_VERSION={}",
+        marketing_version()
+    );
     // CDXC:Build 2026-10-02 WHY:
     // Cargo treats a rerun-if-changed path that does not exist as always changed, and GhosttyKit.xcframework only exists on macOS. Emitting these hints on Linux and Windows reran this build script on every build and recompiled the whole ghostex-gpui crate even when nothing had changed.
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {

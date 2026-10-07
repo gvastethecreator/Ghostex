@@ -14,6 +14,7 @@ use crate::core::Core;
 use crate::keys::ProjectKey;
 
 use super::inputs::{SidebarInputs, SidebarMode};
+use super::machine_spaces::section_spaces_enabled;
 use super::model::SidebarViewModel;
 use super::reveal::{machine_key, unfiltered};
 use super::space_sleep::push_project;
@@ -23,7 +24,7 @@ use super::view::GroupView;
 /// The workspace project id each Space other than the selected one would open on, once each, in
 /// Space order. Empty when Spaces are off or the selected machine has published no Spaces.
 pub fn space_landing_project_ids(core: &Core, inputs: &SidebarInputs, now_ms: u64) -> Vec<String> {
-    if !inputs.settings.sidebar_spaces_enabled {
+    if !section_spaces_enabled(core.presentation(), inputs) {
         return Vec::new();
     }
     let machine = machine_key(&inputs.ui.selected_machine_id);

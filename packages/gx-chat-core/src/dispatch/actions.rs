@@ -136,7 +136,7 @@ pub fn owner(kind: &ActionKind) -> Option<Family> {
         | ActionKind::ToggleAgentTasks
         | ActionKind::ToggleAgentTasksCompleted
         | ActionKind::ToggleCoordinatorThreads
-        | ActionKind::ToggleCoordinatorThreadsDone
+        | ActionKind::ToggleCoordinatorThreadsMore
         | ActionKind::OpenCoordinatorThread
         | ActionKind::SearchOpen
         | ActionKind::SearchClose
@@ -258,7 +258,7 @@ fn clears_error(kind: &ActionKind) -> bool {
             | ActionKind::ToggleAgentTasks
             | ActionKind::ToggleAgentTasksCompleted
             | ActionKind::ToggleCoordinatorThreads
-            | ActionKind::ToggleCoordinatorThreadsDone
+            | ActionKind::ToggleCoordinatorThreadsMore
             | ActionKind::OpenCoordinatorThread
             | ActionKind::SearchOpen
             | ActionKind::SearchClose
@@ -305,7 +305,7 @@ fn publishes_at_once(kind: &ActionKind) -> bool {
             | ActionKind::ToggleAgentTasks
             | ActionKind::ToggleAgentTasksCompleted
             | ActionKind::ToggleCoordinatorThreads
-            | ActionKind::ToggleCoordinatorThreadsDone
+            | ActionKind::ToggleCoordinatorThreadsMore
             | ActionKind::OpenCoordinatorThread
             | ActionKind::SearchOpen
             | ActionKind::SearchClose

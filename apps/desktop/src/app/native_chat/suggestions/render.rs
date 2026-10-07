@@ -27,11 +27,22 @@ impl Render for SuggestionPanel {
         let data = &state["suggestions"];
         let rows = data["rows"].as_array().cloned().unwrap_or_default();
         let selected = data["selected"].as_u64().unwrap_or(0) as usize;
+        let (hover, echo) = {
+            let list = &self.chat.read(cx).suggestions;
+            (list.hover, list.hovered.contains(&selected))
+        };
         if self.selected != Some(selected) {
             self.selected = Some(selected);
-            self.scroll
-                .scroll_to_item(selected + 1 + usize::from(data["status"].is_string()));
+            /*
+            CDXC:SessionChat 2026-10-06 WHY:
+            The core's answer to a hover arrives a frame or more after the pointer moved, and scrolling to every new selection pulled the list back to the row hovered before the wheel moved it on, so scrolling while hovering fought the wheel. Only a selection the keyboard or an edit made scrolls into view.
+            */
+            if !echo {
+                self.scroll
+                    .scroll_to_item(selected + 1 + usize::from(data["status"].is_string()));
+            }
         }
+        let selected = hover.filter(|row| *row < rows.len()).unwrap_or(selected);
         let files = data["kind"] == "file";
         /*
         CDXC:SessionChat 2026-09-23 DECISION:
@@ -203,10 +214,23 @@ impl Render for SuggestionPanel {
                             .child(detail),
                     )
                     .on_mouse_move(cx.listener(move |this, _, _, cx| {
-                        if this.selected != Some(index) {
-                            this.chat.update(cx, |chat, cx| {
-                                chat.invoke(json!({"type":"suggestionHighlight","index":index}), cx)
-                            });
+                        let core = this.selected;
+                        let moved = this.chat.update(cx, |chat, cx| {
+                            let list = &mut chat.suggestions;
+                            if list.hover == Some(index)
+                                || list.hover.is_none() && core == Some(index)
+                            {
+                                return false;
+                            }
+                            list.hover = Some(index);
+                            if !list.hovered.contains(&index) {
+                                list.hovered.push(index);
+                            }
+                            chat.invoke(json!({"type":"suggestionHighlight","index":index}), cx);
+                            true
+                        });
+                        if moved {
+                            cx.notify();
                         }
                     }))
                     .on_mouse_down(

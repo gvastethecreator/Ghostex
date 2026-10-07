@@ -456,6 +456,9 @@ pub(crate) const GPUI_MACOS_SCREEN_RECORDING_PREFERENCES_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
 pub(crate) const GPUI_MACOS_NOTIFICATION_SETTINGS_URL: &str =
     "x-apple.systempreferences:com.apple.Notifications-Settings.extension";
+/// Settings > System > Notifications, where Ghostex's toasts are allowed or blocked.
+#[cfg(target_os = "windows")]
+pub(crate) const GPUI_WINDOWS_NOTIFICATION_SETTINGS_URL: &str = "ms-settings:notifications";
 /// CDXC:Cli 2026-09-03 WHY:
 /// This value is the on-disk ownership stamp written into the public `ghostex`
 /// and `gx` wrappers and read back to tell a Ghostex wrapper from a foreign

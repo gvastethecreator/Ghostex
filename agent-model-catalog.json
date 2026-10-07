@@ -1,7 +1,7 @@
 {
   "_readme": "Do not edit blind. docs/important/agent-model-catalog.md explains the schema, how every Ghostex client loads this file from GitHub (with the bundled copy as the offline source), how to publish a change, and how to re-collect models, efforts and fast mode from the agent CLIs' own /model pickers.",
   "schemaVersion": 1,
-  "updatedAt": "2026-10-01T00:38:26Z",
+  "updatedAt": "2026-10-04T00:00:00Z",
   "effortLabels": {
     "none": "None",
     "minimal": "Minimal",
@@ -617,6 +617,34 @@
           "defaultEffort": "low",
           "fastMode": false,
           "group": "legacy"
+        }
+      ]
+    },
+    "zcode": {
+      "name": "ZCode CLI",
+      "cliVersion": "0.16.9",
+      "modelCommand": "/model <value>",
+      "effortCommand": null,
+      "efforts": [],
+      "models": [
+        {
+          "value": "zai/glm-5.3",
+          "label": "GLM 5.3",
+          "description": "The full GLM 5.3 model for the hardest work.",
+          "efforts": []
+        },
+        {
+          "value": "zai/GLM-5.3-Flash",
+          "label": "GLM 5.3 Flash",
+          "description": "Fast routing and everyday work; ZCode's own default.",
+          "default": true,
+          "efforts": []
+        },
+        {
+          "value": "zai/GLM-5.3-FlashX",
+          "label": "GLM 5.3 FlashX",
+          "description": "An even faster Flash tier.",
+          "efforts": []
         }
       ]
     }

@@ -185,6 +185,13 @@ export const storageCatalog = Object.freeze({
     'ghostex.chat.context-details.hermes.v1',
     objectCodec
   ),
+  piContext: define(
+    'piContext',
+    'Pi context display',
+    'packages/gx-chat-core/src/menus/context/preferences.rs',
+    'ghostex.chat.context-details.pi.v1',
+    objectCodec
+  ),
   basicContext: define(
     'basicContext',
     'Other agents context display',

@@ -76,14 +76,23 @@ pub(crate) fn notify(args: Vec<String>) -> anyhow::Result<()> {
     .into_iter()
     .find_map(|key| std::env::var(key).ok().filter(|value| !value.is_empty()))
     .unwrap_or_default();
-    if std::env::var("GHOSTEX_INTERNAL_PROMPT_GENERATION").as_deref() != Ok("1")
+    let answer = if std::env::var("GHOSTEX_INTERNAL_PROMPT_GENERATION").as_deref() != Ok("1")
         && std::env::var("GHOSTEX_INTERNAL_TITLE_GENERATION").as_deref() != Ok("1")
     {
-        let _ = super::run_notify_hook(vec![
+        super::run_notify_hook(vec![
             state,
             payload.to_string(),
             directory.to_string_lossy().into_owned(),
-        ]);
+        ])
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
+    if let Some(answer) = answer {
+        // A ZCode coordinator's SessionStart answer replaces the canned response.
+        println!("{answer}");
+        return Ok(());
     }
     if agent != "antigravity" {
         if payload["hook_event_name"] == "Interrupt" {

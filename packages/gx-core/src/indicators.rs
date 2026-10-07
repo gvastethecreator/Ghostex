@@ -83,7 +83,7 @@ pub fn neutral_indicator_inputs(list_inputs: &SidebarInputs, machine: &MachineId
             .to_string(),
         ..Default::default()
     };
-    inputs.settings.sidebar_spaces_enabled = false;
+    inputs.spaces_lifted = true;
     inputs
 }
 

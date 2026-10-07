@@ -280,6 +280,7 @@ pub fn merge_options_detail(
         "claudeStatus",
         "cursorStatus",
         "hermesStatus",
+        "piStatus",
         "contextUsage",
     ] {
         let value = present(chosen.get(key))

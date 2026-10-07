@@ -89,6 +89,10 @@ impl SessionChatQueueComposerHolds {
 /// The `Reply to:` global ref of a `ghostex agents send` header, if `text` carries one.
 /// SEE-ALSO: server/src/ghostex_cli/agents/identity.rs writes the header; packages/gx-chat-core/src/transcript/agent_message.rs parses it for display.
 fn agent_message_reply_to(text: &str) -> Option<(&str, &str)> {
+    if let Some(parts) = crate::coordinators::split_agent_message(text) {
+        return Some((parts.reply_to, parts.body.trim()));
+    }
+    // The pre-2026-09-18 `MESSAGE FROM` header, which `split_agent_message` does not read.
     let mut lines = text.lines();
     let opener = lines.next()?.trim();
     if opener != "Message from another agent" && opener != "MESSAGE FROM" {

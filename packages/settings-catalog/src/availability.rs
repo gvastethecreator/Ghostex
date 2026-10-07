@@ -77,6 +77,9 @@ pub fn platform_defaults(key: &str) -> Vec<(Platform, &'static J)> {
 /// Whether the row of setting `key` is left out on `platform`. `read` gives the saved value of another
 /// setting as text; a setting it does not know falls back to the platform's default.
 pub fn row_hidden(platform: Platform, key: &str, read: impl Fn(&str) -> Option<String>) -> bool {
+    if crate::built_in_extensions::key_unavailable_on(platform, key) {
+        return true;
+    }
     let Some(row) = ROWS.iter().find(|row| row.key == key) else {
         return false;
     };
@@ -110,6 +113,11 @@ pub fn hidden_row_keys(
 
 /// One sentence for the generated files when a row is not available everywhere.
 pub fn availability_note(key: &str) -> Option<String> {
+    if let Some(id) = crate::built_in_extensions::feature_switched_by(key) {
+        if let Some(note) = crate::built_in_extensions::availability_note(id) {
+            return Some(note);
+        }
+    }
     let row = ROWS.iter().find(|row| row.key == key)?;
     if !row.only_on.is_empty() {
         let names: Vec<&str> = row.only_on.iter().map(|p| platform_name(*p)).collect();

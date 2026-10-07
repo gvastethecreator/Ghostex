@@ -1,27 +1,50 @@
 use super::{model::Provider, session_identity::login_identity};
 use std::path::{Path, PathBuf};
 
+/// CDXC:AgentProviders 2026-10-04 WHY:
+/// A process without the config variable runs on the provider's default login: cswap launches plain `claude` when the selected account is already the default, so treating a missing variable as unverifiable failed every switch to that account. Only an environment that cannot be read stays unverified.
 pub(crate) fn identity(process_id: i64, agent: &str, home: &Path) -> Option<String> {
-    let (provider, key) = match agent {
-        "claude" => (Provider::Claude, "CLAUDE_CONFIG_DIR"),
-        "codex" => (Provider::Codex, "CODEX_HOME"),
+    let (provider, key, default_root) = match agent {
+        "claude" => (Provider::Claude, "CLAUDE_CONFIG_DIR", home.join(".claude")),
+        "codex" => (Provider::Codex, "CODEX_HOME", home.join(".codex")),
         _ => return None,
     };
-    let root = configured_home(process_id, key)?;
+    let root = match environment_value(process_id, key)? {
+        Some(value) => absolute_root(value)?,
+        None => default_root,
+    };
     login_identity(provider, &root, home)
 }
 
 pub(super) fn configured_home(process_id: i64, key: &str) -> Option<PathBuf> {
+    absolute_root(environment_value(process_id, key)??)
+}
+
+/// `None` when the environment cannot be read, `Some(None)` when the variable is unset or empty.
+fn environment_value(process_id: i64, key: &str) -> Option<Option<String>> {
     let environment = process_environment(process_id)?;
-    let prefix = format!("{key}=");
-    let value = environment
-        .split(|byte| *byte == 0)
-        .find_map(|entry| entry.strip_prefix(prefix.as_bytes()))?;
-    let root = PathBuf::from(std::str::from_utf8(value).ok()?);
-    if !root.is_absolute() {
-        return None;
-    }
-    Some(root)
+    let value = environment.split(|byte| *byte == 0).find_map(|entry| {
+        let split = entry.iter().position(|byte| *byte == b'=')?;
+        let (name, value) = (&entry[..split], &entry[split + 1..]);
+        // Windows environment names are case-insensitive.
+        let matches = if cfg!(windows) {
+            name.eq_ignore_ascii_case(key.as_bytes())
+        } else {
+            name == key.as_bytes()
+        };
+        matches.then_some(value)
+    });
+    Some(
+        value
+            .filter(|value| !value.is_empty())
+            .and_then(|value| std::str::from_utf8(value).ok())
+            .map(str::to_string),
+    )
+}
+
+fn absolute_root(value: String) -> Option<PathBuf> {
+    let root = PathBuf::from(value);
+    root.is_absolute().then_some(root)
 }
 
 #[cfg(target_os = "linux")]
@@ -89,7 +112,105 @@ fn process_environment(process_id: i64) -> Option<Vec<u8>> {
     Some(bytes.get(offset..)?.to_vec())
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+/// CDXC:AgentProviders 2026-10-04 WHY:
+/// Windows has no public API for another process's environment, so it is read from the target's PEB: ProcessParameters at PEB+0x20, then Environment (+0x80) and EnvironmentSize (+0x3F0) in RTL_USER_PROCESS_PARAMETERS (x64 layout). Without it every native Windows account switch ended in "Could not verify the new agent process's account login."
+#[cfg(all(windows, target_pointer_width = "64"))]
+fn process_environment(process_id: i64) -> Option<Vec<u8>> {
+    use std::{ffi::c_void, mem::size_of};
+    use windows_sys::{
+        Wdk::System::Threading::{NtQueryInformationProcess, ProcessBasicInformation},
+        Win32::{
+            Foundation::{CloseHandle, HANDLE},
+            System::{
+                Diagnostics::Debug::ReadProcessMemory,
+                Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ},
+            },
+        },
+    };
+    // PROCESS_BASIC_INFORMATION; windows-sys gates it behind the unrelated Win32_System_Kernel feature.
+    #[repr(C)]
+    #[allow(dead_code)]
+    struct BasicInformation {
+        exit_status: i32,
+        peb_base_address: usize,
+        affinity_mask: usize,
+        base_priority: i32,
+        unique_process_id: usize,
+        inherited_from_unique_process_id: usize,
+    }
+    struct Process(HANDLE);
+    impl Drop for Process {
+        fn drop(&mut self) {
+            unsafe { CloseHandle(self.0) };
+        }
+    }
+    let pid = u32::try_from(process_id).ok().filter(|pid| *pid > 0)?;
+    let raw = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, 0, pid) };
+    if raw.is_null() {
+        return None;
+    }
+    let process = Process(raw);
+    let read = |address: usize, buffer: &mut [u8]| {
+        let mut read = 0usize;
+        let ok = unsafe {
+            ReadProcessMemory(
+                process.0,
+                address as *const c_void,
+                buffer.as_mut_ptr().cast(),
+                buffer.len(),
+                &mut read,
+            )
+        };
+        ok != 0 && read == buffer.len()
+    };
+    let read_pointer = |address: usize| {
+        let mut bytes = [0_u8; size_of::<usize>()];
+        read(address, &mut bytes).then(|| usize::from_ne_bytes(bytes))
+    };
+    let mut info: BasicInformation = unsafe { std::mem::zeroed() };
+    let mut length = 0_u32;
+    let status = unsafe {
+        NtQueryInformationProcess(
+            process.0,
+            ProcessBasicInformation,
+            (&mut info as *mut BasicInformation).cast(),
+            size_of::<BasicInformation>() as u32,
+            &mut length,
+        )
+    };
+    if status < 0 || info.peb_base_address == 0 {
+        return None;
+    }
+    let parameters = read_pointer(info.peb_base_address + 0x20)?;
+    let environment = read_pointer(parameters + 0x80)?;
+    let size = read_pointer(parameters + 0x3F0)?.min(4 * 1024 * 1024);
+    if environment == 0 || size == 0 {
+        return None;
+    }
+    let mut block = vec![0_u8; size & !1];
+    if !read(environment, &mut block) {
+        return None;
+    }
+    let units: Vec<u16> = block
+        .chunks_exact(2)
+        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .collect();
+    let mut bytes = Vec::new();
+    for entry in units
+        .split(|unit| *unit == 0)
+        .take_while(|entry| !entry.is_empty())
+    {
+        bytes.extend_from_slice(String::from_utf16_lossy(entry).as_bytes());
+        bytes.push(0);
+    }
+    Some(bytes)
+}
+
+#[cfg(not(any(
+    target_os = "macos",
+    target_os = "linux",
+    all(windows, target_pointer_width = "64")
+)))]
 fn process_environment(_process_id: i64) -> Option<Vec<u8>> {
     None
 }

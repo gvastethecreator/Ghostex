@@ -520,9 +520,10 @@ fn resume_plan_extracts_provider_exact_identity_hints() {
         "title": "Pi thread",
     });
     let pi_plan = build_agent_resume_plan(&project, &pi, &settings);
+    // Pi has not written that path yet, so the session reopens on its id.
     assert_eq!(
         pi_plan.get("primaryCommand"),
-        Some(&json!("pi --session \"/tmp/pi/session/path\""))
+        Some(&json!("pi --session-id pi-id"))
     );
 }
 

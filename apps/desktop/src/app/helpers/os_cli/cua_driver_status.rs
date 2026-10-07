@@ -19,6 +19,17 @@ pub(crate) fn gpui_cua_driver_executable_path() -> Option<PathBuf> {
     None
 }
 
+/// Where an agent finds the cua-driver skill pack: `cua-driver skills install` keeps the pack in
+/// `~/.cua-driver/skills/cua-driver` and links it into each detected agent's skills folder, so
+/// the skill counts as installed once one of those links resolves to its SKILL.md.
+pub(crate) fn gpui_cua_driver_skill_path() -> Option<PathBuf> {
+    let home = gpui_home_dir();
+    [".agents", ".claude"]
+        .into_iter()
+        .map(|root| home.join(root).join("skills").join("cua-driver"))
+        .find(|path| gpui_is_file(&path.join("SKILL.md")))
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct GpuiCuaDriverUpdateStatus {
     pub(crate) current_version: Option<String>,
@@ -113,25 +124,25 @@ pub(crate) fn gpui_cua_driver_update_check_toast(
     {
         Some(true) => (
             "info",
-            "Fast Computer Use update available",
+            "Fast Computer & Browser Use update available",
             match (installed, latest) {
                 (Some(installed), Some(latest)) => {
                     format!("Version {latest} is available; {installed} is installed.")
                 }
-                _ => "A newer Fast Computer Use release is available.".to_string(),
+                _ => "A newer Fast Computer & Browser Use release is available.".to_string(),
             },
         ),
         Some(false) => (
             "success",
-            "Fast Computer Use is up to date",
+            "Fast Computer & Browser Use is up to date",
             match installed.or(latest) {
                 Some(version) => format!("Version {version} is the latest release."),
-                None => "You have the latest Fast Computer Use release.".to_string(),
+                None => "You have the latest Fast Computer & Browser Use release.".to_string(),
             },
         ),
         None => (
             "warning",
-            "Couldn't check for Fast Computer Use updates",
+            "Couldn't check for Fast Computer & Browser Use updates",
             "The update check did not answer. Check your connection and try again.".to_string(),
         ),
     }
@@ -184,10 +195,10 @@ pub(crate) fn gpui_cua_driver_permission_status(
         return GpuiCuaDriverPermissionStatus {
             accessibility_granted: None,
             detail: if cua_app_installed {
-                "Fast Computer Use is installed, but the cua-driver CLI was not found on PATH, so GPUI cannot run the read-only permission check."
+                "Fast Computer & Browser Use is installed, but the cua-driver CLI was not found on PATH, so GPUI cannot run the read-only permission check."
                     .to_string()
             } else {
-                "Fast Computer Use is not installed.".to_string()
+                "Fast Computer & Browser Use is not installed.".to_string()
             },
             screen_recording_granted: None,
         };
@@ -209,7 +220,8 @@ pub(crate) fn gpui_cua_driver_permission_status(
         }
         Err(_) => GpuiCuaDriverPermissionStatus {
             accessibility_granted: None,
-            detail: "Unable to check Fast Computer Use permissions without prompting.".to_string(),
+            detail: "Unable to check Fast Computer & Browser Use permissions without prompting."
+                .to_string(),
             screen_recording_granted: None,
         },
     }
@@ -266,15 +278,15 @@ pub(crate) fn gpui_cua_driver_permission_detail(
 ) -> String {
     match (accessibility_granted, screen_recording_granted) {
         (Some(true), Some(true)) => {
-            "Fast Computer Use reports Accessibility and Screen Recording permissions are granted.".to_string()
+            "Fast Computer & Browser Use reports Accessibility and Screen Recording permissions are granted.".to_string()
         }
-        (Some(false), Some(false)) => "Fast Computer Use permissions need attention.".to_string(),
-        (Some(false), _) => "Fast Computer Use Accessibility permission needs attention.".to_string(),
-        (_, Some(false)) => "Fast Computer Use Screen Recording permission needs attention.".to_string(),
+        (Some(false), Some(false)) => "Fast Computer & Browser Use permissions need attention.".to_string(),
+        (Some(false), _) => "Fast Computer & Browser Use Accessibility permission needs attention.".to_string(),
+        (_, Some(false)) => "Fast Computer & Browser Use Screen Recording permission needs attention.".to_string(),
         _ if command_success => {
-            "Fast Computer Use permission check completed, but GPUI could not recognize the permission state."
+            "Fast Computer & Browser Use permission check completed, but GPUI could not recognize the permission state."
                 .to_string()
         }
-        _ => "Unable to check Fast Computer Use permissions without prompting.".to_string(),
+        _ => "Unable to check Fast Computer & Browser Use permissions without prompting.".to_string(),
     }
 }

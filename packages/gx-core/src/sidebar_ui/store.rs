@@ -167,6 +167,13 @@ impl SidebarUiStore {
                 );
                 changed(SidebarPersistSet::collapse())
             }
+            SidebarUiIntent::ToggleCoordinatorOlderThreads { sidebar_session_id } => {
+                toggle(
+                    &mut self.state.collapse.expanded_coordinator_older_threads,
+                    sidebar_session_id,
+                );
+                changed(SidebarPersistSet::collapse())
+            }
             SidebarUiIntent::SelectSpace { space_id } => {
                 let section_key = self.state.section_key();
                 // A Space shows projects, so picking one from Bots mode goes back to Projects.

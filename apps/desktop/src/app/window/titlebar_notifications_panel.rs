@@ -5,8 +5,7 @@
 use super::resources_style::*;
 use crate::app::helpers::*;
 use crate::notification_feed::{
-    GpuiNotificationFeedItem, GpuiNotificationFeedState, NOTIFICATION_ATTENTION_BLUE,
-    NOTIFICATION_ATTENTION_BLUE_TEXT_LIGHT, notification_feed_relative_time,
+    GpuiNotificationFeedItem, GpuiNotificationFeedState, notification_feed_relative_time,
 };
 use crate::*;
 
@@ -77,10 +76,11 @@ impl GpuiTitlebarReadingPanel {
                 item.read = true;
                 feed.unread_count = feed.unread_count.saturating_sub(1);
             }
-            reveal_session_id = Some(gpui_combined_presentation_session_id(
-                &item.project_id,
-                &item.session_id,
-            ));
+            // An account row has no session to reveal; the store opens the account instead.
+            reveal_session_id = item
+                .account_id
+                .is_none()
+                .then(|| gpui_combined_presentation_session_id(&item.project_id, &item.session_id));
         }
         self.send_notification_feed_command("open", Some(id), cx);
         // The store (gx_store/notifications/) focuses and reveals the session; this only makes sure a collapsed sidebar opens so the reveal is visible, the same as the titlebar's reveal-active-session button.
@@ -422,6 +422,8 @@ impl GpuiTitlebarReadingPanel {
         let dismiss_id = item.id.clone();
         let time_label = notification_feed_relative_time(item.created_at_epoch_secs);
         let unread = !item.read;
+        let accent = item.kind.accent();
+        let accent_text_light = item.kind.accent_text_light();
         let title = if item.title.is_empty() {
             "Session".to_string()
         } else {
@@ -450,18 +452,18 @@ impl GpuiTitlebarReadingPanel {
                 .rounded(px(RESOURCE_CONTROL_RADIUS))
                 .border_1()
                 .border_color(if unread {
-                    rgb(NOTIFICATION_ATTENTION_BLUE).opacity(0.45)
+                    rgb(accent).opacity(0.45)
                 } else {
                     chrome_ink().opacity(0.16)
                 })
                 .bg(if unread {
-                    rgb(NOTIFICATION_ATTENTION_BLUE).opacity(0.18)
+                    rgb(accent).opacity(0.18)
                 } else {
                     chrome_ink().opacity(0.12)
                 })
                 .hover(move |this| {
                     this.bg(if unread {
-                        rgb(NOTIFICATION_ATTENTION_BLUE).opacity(0.32)
+                        rgb(accent).opacity(0.32)
                     } else {
                         chrome_ink().opacity(0.22)
                     })
@@ -534,7 +536,7 @@ impl GpuiTitlebarReadingPanel {
                     .justify_center()
                     .rounded(px(RESOURCE_CARD_RADIUS))
                     .bg(if unread {
-                        rgb(NOTIFICATION_ATTENTION_BLUE).opacity(0.16)
+                        rgb(accent).opacity(0.16)
                     } else {
                         chrome_ink().opacity(0.10)
                     })
@@ -591,9 +593,9 @@ impl GpuiTitlebarReadingPanel {
                                 if CHROME_LIGHT_APPEARANCE
                                     .load(std::sync::atomic::Ordering::Relaxed)
                                 {
-                                    rgb(NOTIFICATION_ATTENTION_BLUE_TEXT_LIGHT)
+                                    rgb(accent_text_light)
                                 } else {
-                                    rgb(NOTIFICATION_ATTENTION_BLUE).opacity(0.85)
+                                    rgb(accent).opacity(0.85)
                                 }
                             } else {
                                 chrome_ink().opacity(0.45)
@@ -612,12 +614,12 @@ impl GpuiTitlebarReadingPanel {
             .rounded(px(RESOURCE_CARD_RADIUS))
             .border_1()
             .border_color(if unread {
-                rgb(NOTIFICATION_ATTENTION_BLUE).opacity(0.30)
+                rgb(accent).opacity(0.30)
             } else {
                 chrome_ink().opacity(0.10)
             })
             .bg(if unread {
-                rgb(NOTIFICATION_ATTENTION_BLUE).opacity(0.05)
+                rgb(accent).opacity(0.05)
             } else {
                 chrome_ink().opacity(0.025)
             })
@@ -628,12 +630,12 @@ impl GpuiTitlebarReadingPanel {
             .when(hovered, |this| {
                 this.opacity(1.0)
                     .bg(if unread {
-                        rgb(NOTIFICATION_ATTENTION_BLUE).opacity(0.10)
+                        rgb(accent).opacity(0.10)
                     } else {
                         chrome_ink().opacity(0.05)
                     })
                     .border_color(if unread {
-                        rgb(NOTIFICATION_ATTENTION_BLUE).opacity(0.48)
+                        rgb(accent).opacity(0.48)
                     } else {
                         chrome_ink().opacity(0.18)
                     })

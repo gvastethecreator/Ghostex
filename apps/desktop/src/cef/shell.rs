@@ -14,14 +14,16 @@ use anyhow::{Context as _, Result};
 use cef::rc::Rc as _;
 use cef::wrapper::resource_manager::{get_mime_type, get_url_without_query_or_fragment};
 use cef::{
-    App, BrowserProcessHandler, BrowserSettings, Callback, CefString, Client, CommandLine,
-    ContentSettingTypes, ContentSettingValues, ContextMenuHandler, ContextMenuParams,
-    DictionaryValue, DisplayHandler, EventFlags, FindHandler, FocusHandler, FocusSource, Frame,
-    ImplApp, ImplBrowser as _, ImplBrowserHost as _, ImplBrowserProcessHandler, ImplClient,
-    ImplCommandLine as _, ImplContextMenuHandler, ImplContextMenuParams as _,
-    ImplDictionaryValue as _, ImplDisplayHandler, ImplFindHandler, ImplFocusHandler,
-    ImplFrame as _, ImplLifeSpanHandler, ImplListValue as _, ImplLoadHandler,
-    ImplMediaAccessCallback as _, ImplMenuModel as _, ImplPermissionHandler,
+    App, BeforeDownloadCallback, BrowserProcessHandler, BrowserSettings, Callback, CefString,
+    Client, CommandLine, ContentSettingTypes, ContentSettingValues, ContextMenuHandler,
+    ContextMenuMediaType, ContextMenuParams, DictionaryValue, DisplayHandler, DownloadHandler,
+    DownloadImageCallback, DownloadItem, EventFlags, FindHandler, FocusHandler, FocusSource, Frame,
+    ImplApp, ImplBeforeDownloadCallback as _, ImplBinaryValue as _, ImplBrowser as _,
+    ImplBrowserHost as _, ImplBrowserProcessHandler, ImplClient, ImplCommandLine as _,
+    ImplContextMenuHandler, ImplContextMenuParams as _, ImplDictionaryValue as _,
+    ImplDisplayHandler, ImplDownloadHandler, ImplDownloadImageCallback, ImplFindHandler,
+    ImplFocusHandler, ImplFrame as _, ImplImage as _, ImplLifeSpanHandler, ImplListValue as _,
+    ImplLoadHandler, ImplMediaAccessCallback as _, ImplMenuModel as _, ImplPermissionHandler,
     ImplPermissionPromptCallback as _, ImplProcessMessage as _, ImplRenderProcessHandler,
     ImplRequest as _, ImplRequestContext as _, ImplRequestHandler, ImplResourceHandler,
     ImplResourceRequestHandler, ImplResponse as _, ImplStreamReader as _, ImplTask,
@@ -32,13 +34,14 @@ use cef::{
     ResourceReadCallback, ResourceRequestHandler, Response, ReturnValue, State, StreamReader, Task,
     ThreadId, V8Handler, V8Propertyattribute, V8Value, ValueType, WindowInfo,
     WindowOpenDisposition, WrapApp, WrapBrowserProcessHandler, WrapClient, WrapContextMenuHandler,
-    WrapDisplayHandler, WrapFindHandler, WrapFocusHandler, WrapLifeSpanHandler, WrapLoadHandler,
-    WrapPermissionHandler, WrapRenderProcessHandler, WrapRequestHandler, WrapResourceHandler,
-    WrapResourceRequestHandler, WrapTask, WrapV8Handler, ZoomCommand, post_task,
-    stream_reader_create_for_file, string_multimap_alloc, string_multimap_append, wrap_app,
-    wrap_browser_process_handler, wrap_client, wrap_context_menu_handler, wrap_display_handler,
-    wrap_find_handler, wrap_focus_handler, wrap_life_span_handler, wrap_load_handler,
-    wrap_permission_handler, wrap_render_process_handler, wrap_request_handler,
+    WrapDisplayHandler, WrapDownloadHandler, WrapDownloadImageCallback, WrapFindHandler,
+    WrapFocusHandler, WrapLifeSpanHandler, WrapLoadHandler, WrapPermissionHandler,
+    WrapRenderProcessHandler, WrapRequestHandler, WrapResourceHandler, WrapResourceRequestHandler,
+    WrapTask, WrapV8Handler, ZoomCommand, post_task, stream_reader_create_for_file,
+    string_multimap_alloc, string_multimap_append, wrap_app, wrap_browser_process_handler,
+    wrap_client, wrap_context_menu_handler, wrap_display_handler, wrap_download_handler,
+    wrap_download_image_callback, wrap_find_handler, wrap_focus_handler, wrap_life_span_handler,
+    wrap_load_handler, wrap_permission_handler, wrap_render_process_handler, wrap_request_handler,
     wrap_resource_handler, wrap_resource_request_handler, wrap_task, wrap_v8_handler,
 };
 use cef::{
@@ -90,6 +93,14 @@ const CEF_CONTEXT_MENU_INSPECT_ELEMENT_COMMAND_ID: c_int = 26_001;
 // host (cef_command_ids.h).
 const CEF_CONTEXT_MENU_OPEN_LINK_NEW_TAB_COMMAND_ID: c_int = 50_100;
 const CEF_CONTEXT_MENU_OPEN_LINK_NEW_WINDOW_COMMAND_ID: c_int = 50_101;
+// App-owned Browser page commands, inside CEF's MENU_ID_USER_FIRST..LAST range.
+const CEF_CONTEXT_MENU_APP_OPEN_LINK_NEW_TAB_COMMAND_ID: c_int = 26_501;
+const CEF_CONTEXT_MENU_SAVE_LINK_AS_COMMAND_ID: c_int = 26_502;
+const CEF_CONTEXT_MENU_COPY_LINK_ADDRESS_COMMAND_ID: c_int = 26_503;
+const CEF_CONTEXT_MENU_OPEN_IMAGE_NEW_TAB_COMMAND_ID: c_int = 26_504;
+const CEF_CONTEXT_MENU_SAVE_IMAGE_AS_COMMAND_ID: c_int = 26_505;
+const CEF_CONTEXT_MENU_COPY_IMAGE_COMMAND_ID: c_int = 26_506;
+const CEF_CONTEXT_MENU_COPY_IMAGE_ADDRESS_COMMAND_ID: c_int = 26_507;
 const BROWSER_APP_OWNED_SCRIPT_URL: &str = "ghostex://gpui/browser-feedback";
 thread_local! {
     static CEF_BROWSERS_BY_NATIVE_VIEW: RefCell<HashMap<usize, cef::Browser>> = RefCell::new(HashMap::new());

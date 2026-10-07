@@ -20,6 +20,8 @@ SEE-ALSO: packages/shared/notification-feed/notification-feed-contract.ts,
 apps/desktop/src/app/gx_store/notifications/.
 */
 
+pub(crate) mod reset_banners;
+
 use std::cell::Cell;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -46,6 +48,11 @@ pub(crate) const NOTIFICATION_ATTENTION_BLUE: u32 = 0x95d7f6;
 /// User: make the "Project · Finished" meta line more visible in light mode.
 /// The fill/border accent stays #95d7f6; this darker same-hue ink is only for unread meta text on pale unread cards.
 pub(crate) const NOTIFICATION_ATTENTION_BLUE_TEXT_LIGHT: u32 = 0x0d7eab;
+/// CDXC:Notifications 2026-10-05 DECISION:
+/// User: banked reset expiry warnings are notified "using red color". Urgent rows swap the attention blue for this red on the card, and the bell's badge turns red while one is unread.
+pub(crate) const NOTIFICATION_URGENT_RED: u32 = 0xf87171;
+/// The same red, darkened for unread meta text on pale light-mode cards.
+pub(crate) const NOTIFICATION_URGENT_RED_TEXT_LIGHT: u32 = 0xc42b2b;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum GpuiNotificationFeedKind {
@@ -53,6 +60,10 @@ pub(crate) enum GpuiNotificationFeedKind {
     NeedsInput,
     Bell,
     Custom,
+    /// A saved account's banked usage reset expires soon (an account row, drawn red).
+    ResetExpiring,
+    /// Ghostex used an expiring banked reset on its own (an account row).
+    ResetRedeemed,
 }
 
 impl GpuiNotificationFeedKind {
@@ -62,6 +73,8 @@ impl GpuiNotificationFeedKind {
             "needsInput" => Some(Self::NeedsInput),
             "bell" => Some(Self::Bell),
             "custom" => Some(Self::Custom),
+            "resetExpiring" => Some(Self::ResetExpiring),
+            "resetRedeemed" => Some(Self::ResetRedeemed),
             _ => None,
         }
     }
@@ -72,6 +85,30 @@ impl GpuiNotificationFeedKind {
             Self::NeedsInput => "Needs input",
             Self::Bell => "Bell",
             Self::Custom => "Notification",
+            Self::ResetExpiring => "Reset expiring",
+            Self::ResetRedeemed => "Reset used",
+        }
+    }
+
+    pub(crate) fn urgent(self) -> bool {
+        self == Self::ResetExpiring
+    }
+
+    /// The card's accent: red for urgent rows, the attention blue otherwise.
+    pub(crate) fn accent(self) -> u32 {
+        if self.urgent() {
+            NOTIFICATION_URGENT_RED
+        } else {
+            NOTIFICATION_ATTENTION_BLUE
+        }
+    }
+
+    /// The accent as unread meta text on a pale light-mode card.
+    pub(crate) fn accent_text_light(self) -> u32 {
+        if self.urgent() {
+            NOTIFICATION_URGENT_RED_TEXT_LIGHT
+        } else {
+            NOTIFICATION_ATTENTION_BLUE_TEXT_LIGHT
         }
     }
 
@@ -81,7 +118,7 @@ impl GpuiNotificationFeedKind {
             Self::Finished => "titlebar/message-circle.svg",
             Self::NeedsInput => "titlebar/help-circle.svg",
             Self::Bell => "titlebar/bell.svg",
-            Self::Custom => "titlebar/info-circle.svg",
+            Self::Custom | Self::ResetExpiring | Self::ResetRedeemed => "titlebar/info-circle.svg",
         }
     }
 }
@@ -96,6 +133,8 @@ pub(crate) struct GpuiNotificationFeedItem {
     pub(crate) subtitle: String,
     pub(crate) body: String,
     pub(crate) agent_name: Option<String>,
+    /// Set on account rows: the saved account the row is about.
+    pub(crate) account_id: Option<String>,
     pub(crate) created_at: String,
     pub(crate) created_at_epoch_secs: Option<i64>,
     pub(crate) read: bool,
@@ -119,6 +158,7 @@ impl GpuiNotificationFeedItem {
             subtitle: text("subtitle").unwrap_or_default(),
             body: text("body").unwrap_or_default(),
             agent_name: text("agentName"),
+            account_id: text("accountId"),
             read: value.get("read")?.as_bool()?,
             id,
         })
@@ -302,6 +342,7 @@ impl GhostexGpuiApp {
             return;
         }
         self.notification_feed_state = state.clone();
+        self.deliver_reset_expiry_banners(&state, cx);
         if self.titlebar_popup_menu_open(GpuiTitlebarPopupKind::Notifications)
             && let Some(handle) = self.titlebar_popup_window.clone()
         {
@@ -373,6 +414,16 @@ impl GhostexGpuiApp {
         let scale = appearance.scale;
         let open = self.titlebar_popup_menu_open(GpuiTitlebarPopupKind::Notifications);
         let unread_count = self.notification_feed_state.unread_count;
+        let badge_color = if self
+            .notification_feed_state
+            .items
+            .iter()
+            .any(|item| !item.read && item.kind.urgent())
+        {
+            NOTIFICATION_URGENT_RED
+        } else {
+            NOTIFICATION_ATTENTION_BLUE
+        };
         let icon_color = if open {
             titlebar_active_text_color()
         } else {
@@ -443,7 +494,7 @@ impl GhostexGpuiApp {
                         .rounded_full()
                         .border_1()
                         .border_color(titlebar_background())
-                        .bg(rgb(NOTIFICATION_ATTENTION_BLUE))
+                        .bg(rgb(badge_color))
                         .text_size(px(9.0 * scale))
                         .line_height(px(12.0 * scale))
                         .font_weight(FontWeight::SEMIBOLD)

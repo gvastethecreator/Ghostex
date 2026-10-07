@@ -33,6 +33,7 @@ pub(crate) fn show_browser_dev_tools(
         None,
         Some(GhostexGpuiCefFocusHandler::new()),
         None,
+        None,
     ));
     host.show_dev_tools(
         Some(&window_info),
@@ -82,9 +83,176 @@ wrap_task! {
     }
 }
 
+fn context_menu_link_url(params: &ContextMenuParams) -> Option<String> {
+    let unfiltered = params.unfiltered_link_url();
+    let mut url = CefString::from(&unfiltered).to_string();
+    if url.trim().is_empty() {
+        let filtered = params.link_url();
+        url = CefString::from(&filtered).to_string();
+    }
+    let url = url.trim();
+    (!url.is_empty()).then(|| url.to_string())
+}
+
+fn context_menu_image_url(params: &ContextMenuParams) -> Option<String> {
+    if params.media_type() != ContextMenuMediaType::IMAGE {
+        return None;
+    }
+    let source = params.source_url();
+    let url = CefString::from(&source).to_string();
+    let url = url.trim();
+    (!url.is_empty()).then(|| url.to_string())
+}
+
+/*
+CDXC:ContextMenus 2026-10-05 WHY:
+Alloy-style CEF (the only style a child-view browser can use) builds a page menu of Back, Forward, Print and View page source, with no link or image entries, so Browser pages get the Chrome link/image commands here. They go at the top in Chrome's order and only on Browser pages (the surfaces with a page metadata handler), which also own the clipboard route and the download handler that Save needs.
+*/
+fn insert_browser_page_context_menu_items(
+    params: &ContextMenuParams,
+    model: &MenuModel,
+    can_open_tabs: bool,
+) {
+    let mut items: Vec<Option<(c_int, &str)>> = Vec::new();
+    if context_menu_link_url(params).is_some() {
+        if can_open_tabs {
+            items.push(Some((
+                CEF_CONTEXT_MENU_APP_OPEN_LINK_NEW_TAB_COMMAND_ID,
+                "Open link in new tab",
+            )));
+        }
+        items.push(Some((
+            CEF_CONTEXT_MENU_SAVE_LINK_AS_COMMAND_ID,
+            "Save link as...",
+        )));
+        items.push(Some((
+            CEF_CONTEXT_MENU_COPY_LINK_ADDRESS_COMMAND_ID,
+            "Copy link address",
+        )));
+    }
+    if context_menu_image_url(params).is_some() {
+        if !items.is_empty() {
+            items.push(None);
+        }
+        if can_open_tabs {
+            items.push(Some((
+                CEF_CONTEXT_MENU_OPEN_IMAGE_NEW_TAB_COMMAND_ID,
+                "Open image in new tab",
+            )));
+        }
+        items.push(Some((
+            CEF_CONTEXT_MENU_SAVE_IMAGE_AS_COMMAND_ID,
+            "Save image as...",
+        )));
+        items.push(Some((CEF_CONTEXT_MENU_COPY_IMAGE_COMMAND_ID, "Copy image")));
+        items.push(Some((
+            CEF_CONTEXT_MENU_COPY_IMAGE_ADDRESS_COMMAND_ID,
+            "Copy image address",
+        )));
+    }
+    if items.is_empty() {
+        return;
+    }
+    let had_default_items = model.count() > 0;
+    for (index, item) in items.iter().enumerate() {
+        match item {
+            Some((command_id, label)) => {
+                model.insert_item_at(index, *command_id, Some(&CefString::from(*label)));
+            }
+            None => {
+                model.insert_separator_at(index);
+            }
+        }
+    }
+    if had_default_items {
+        model.insert_separator_at(items.len());
+    }
+}
+
+fn start_browser_download(browser: Option<&mut cef::Browser>, url: &str) -> c_int {
+    let Some(host) = browser.and_then(|browser| browser.host()) else {
+        return 0;
+    };
+    host.start_download(Some(&CefString::from(url)));
+    1
+}
+
+wrap_download_image_callback! {
+    pub(crate) struct GhostexGpuiCopyImageCallback {
+        page_metadata_handler: BrowserPageMetadataHandler,
+    }
+
+    impl DownloadImageCallback {
+        fn on_download_image_finished(
+            &self,
+            _image_url: Option<&CefString>,
+            _http_status_code: c_int,
+            image: Option<&mut cef::Image>,
+        ) {
+            let Some(png) = image.and_then(|image| image.as_png(1.0, 1, None, None)) else {
+                return;
+            };
+            let mut bytes = vec![0; png.size()];
+            if bytes.is_empty() || png.data(Some(&mut bytes), 0) != bytes.len() {
+                return;
+            }
+            (self.page_metadata_handler)(BrowserPageMetadataEvent::CopyToClipboard(
+                gpui::ClipboardItem::new_image(&gpui::Image::from_bytes(
+                    gpui::ImageFormat::Png,
+                    bytes,
+                )),
+            ));
+        }
+    }
+}
+
+wrap_download_handler! {
+    pub(crate) struct GhostexGpuiDownloadHandler {}
+
+    impl DownloadHandler {
+        fn can_download(
+            &self,
+            _browser: Option<&mut cef::Browser>,
+            _url: Option<&CefString>,
+            _request_method: Option<&CefString>,
+        ) -> c_int {
+            1
+        }
+
+        fn on_before_download(
+            &self,
+            _browser: Option<&mut cef::Browser>,
+            _download_item: Option<&mut DownloadItem>,
+            suggested_name: Option<&CefString>,
+            callback: Option<&mut BeforeDownloadCallback>,
+        ) -> c_int {
+            let Some(callback) = callback else {
+                return 0;
+            };
+            /*
+            CDXC:Browser 2026-10-05 WHY:
+            Alloy-style CEF cancels every download when the client has no download handler, so Save image/link as... and page downloads never reached disk. Every download asks where to save, starting in the user's Downloads folder with the page's suggested name.
+            */
+            let suggested_name = suggested_name
+                .map(|name| name.to_string())
+                .filter(|name| !name.trim().is_empty())
+                .unwrap_or_else(|| "download".to_string());
+            let download_path = std::env::home_dir()
+                .map(|home| home.join("Downloads").join(&suggested_name))
+                .unwrap_or_else(|| PathBuf::from(&suggested_name));
+            callback.cont(
+                Some(&CefString::from(download_path.to_string_lossy().as_ref())),
+                1,
+            );
+            1
+        }
+    }
+}
+
 wrap_context_menu_handler! {
     pub(crate) struct GhostexGpuiContextMenuHandler {
         popup_open_handler: Option<BrowserPopupOpenHandler>,
+        page_metadata_handler: Option<BrowserPageMetadataHandler>,
     }
 
     impl ContextMenuHandler {
@@ -92,12 +260,21 @@ wrap_context_menu_handler! {
             &self,
             _browser: Option<&mut cef::Browser>,
             _frame: Option<&mut Frame>,
-            _params: Option<&mut ContextMenuParams>,
+            params: Option<&mut ContextMenuParams>,
             model: Option<&mut MenuModel>,
         ) {
             let Some(model) = model else {
                 return;
             };
+            if self.page_metadata_handler.is_some()
+                && let Some(params) = params.as_deref()
+            {
+                insert_browser_page_context_menu_items(
+                    params,
+                    model,
+                    self.popup_open_handler.is_some(),
+                );
+            }
             /*
             CDXC:ContextMenus 2026-07-10:
             Match the production macOS CEF browser menu by preserving CEF's
@@ -129,31 +306,66 @@ wrap_context_menu_handler! {
                 });
                 return show_browser_dev_tools(browser, inspect_point.as_ref()) as c_int;
             }
-
-            if !matches!(
-                command_id,
-                CEF_CONTEXT_MENU_OPEN_LINK_NEW_TAB_COMMAND_ID
-                    | CEF_CONTEXT_MENU_OPEN_LINK_NEW_WINDOW_COMMAND_ID
-            ) {
-                return 0;
-            }
-            let (Some(popup_open_handler), Some(params)) =
-                (self.popup_open_handler.as_ref(), params)
-            else {
+            let Some(params) = params.as_deref() else {
                 return 0;
             };
-            let unfiltered = params.unfiltered_link_url();
-            let mut requested_url = CefString::from(&unfiltered).to_string();
-            if requested_url.trim().is_empty() {
-                let filtered = params.link_url();
-                requested_url = CefString::from(&filtered).to_string();
+            let copy_text = |text: String| -> c_int {
+                let Some(handler) = self.page_metadata_handler.as_ref() else {
+                    return 0;
+                };
+                handler(BrowserPageMetadataEvent::CopyToClipboard(
+                    gpui::ClipboardItem::new_string(text),
+                ));
+                1
+            };
+            match command_id {
+                CEF_CONTEXT_MENU_OPEN_LINK_NEW_TAB_COMMAND_ID
+                | CEF_CONTEXT_MENU_OPEN_LINK_NEW_WINDOW_COMMAND_ID
+                | CEF_CONTEXT_MENU_APP_OPEN_LINK_NEW_TAB_COMMAND_ID
+                | CEF_CONTEXT_MENU_OPEN_IMAGE_NEW_TAB_COMMAND_ID => {
+                    let url = if command_id == CEF_CONTEXT_MENU_OPEN_IMAGE_NEW_TAB_COMMAND_ID {
+                        context_menu_image_url(params)
+                    } else {
+                        context_menu_link_url(params)
+                    };
+                    let (Some(popup_open_handler), Some(url)) =
+                        (self.popup_open_handler.as_ref(), url)
+                    else {
+                        return 0;
+                    };
+                    popup_open_handler(url, BrowserPopupPlacement::Selected);
+                    1
+                }
+                CEF_CONTEXT_MENU_SAVE_LINK_AS_COMMAND_ID => context_menu_link_url(params)
+                    .map_or(0, |url| start_browser_download(browser, &url)),
+                CEF_CONTEXT_MENU_SAVE_IMAGE_AS_COMMAND_ID => context_menu_image_url(params)
+                    .map_or(0, |url| start_browser_download(browser, &url)),
+                CEF_CONTEXT_MENU_COPY_LINK_ADDRESS_COMMAND_ID => {
+                    context_menu_link_url(params).map_or(0, copy_text)
+                }
+                CEF_CONTEXT_MENU_COPY_IMAGE_ADDRESS_COMMAND_ID => {
+                    context_menu_image_url(params).map_or(0, copy_text)
+                }
+                CEF_CONTEXT_MENU_COPY_IMAGE_COMMAND_ID => {
+                    let (Some(url), Some(handler), Some(host)) = (
+                        context_menu_image_url(params),
+                        self.page_metadata_handler.clone(),
+                        browser.and_then(|browser| browser.host()),
+                    ) else {
+                        return 0;
+                    };
+                    let mut callback = GhostexGpuiCopyImageCallback::new(handler);
+                    host.download_image(
+                        Some(&CefString::from(url.as_str())),
+                        0,
+                        0,
+                        0,
+                        Some(&mut callback),
+                    );
+                    1
+                }
+                _ => 0,
             }
-            let requested_url = requested_url.trim();
-            if requested_url.is_empty() {
-                return 0;
-            }
-            popup_open_handler(requested_url.to_string(), BrowserPopupPlacement::Selected);
-            1
         }
     }
 }

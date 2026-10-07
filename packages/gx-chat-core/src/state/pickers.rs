@@ -149,6 +149,7 @@ pub struct ContextPreferencesByAgent {
     pub codex: ContextDetailsPreferences,
     pub cursor: ContextDetailsPreferences,
     pub hermes: ContextDetailsPreferences,
+    pub pi: ContextDetailsPreferences,
     pub basic: ContextDetailsPreferences,
 }
 
@@ -161,6 +162,7 @@ impl Default for ContextPreferencesByAgent {
             codex: default_preferences(ContextDetailsAgent::Codex),
             cursor: default_preferences(ContextDetailsAgent::Cursor),
             hermes: default_preferences(ContextDetailsAgent::Hermes),
+            pi: default_preferences(ContextDetailsAgent::Pi),
             basic: default_preferences(ContextDetailsAgent::Basic),
         }
     }
@@ -174,6 +176,7 @@ impl ContextPreferencesByAgent {
             ContextDetailsAgent::Codex => &self.codex,
             ContextDetailsAgent::Cursor => &self.cursor,
             ContextDetailsAgent::Hermes => &self.hermes,
+            ContextDetailsAgent::Pi => &self.pi,
             ContextDetailsAgent::Basic => &self.basic,
         }
     }
@@ -185,6 +188,7 @@ impl ContextPreferencesByAgent {
             ContextDetailsAgent::Codex => &mut self.codex,
             ContextDetailsAgent::Cursor => &mut self.cursor,
             ContextDetailsAgent::Hermes => &mut self.hermes,
+            ContextDetailsAgent::Pi => &mut self.pi,
             ContextDetailsAgent::Basic => &mut self.basic,
         }
     }

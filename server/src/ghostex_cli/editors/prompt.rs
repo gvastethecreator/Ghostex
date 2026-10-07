@@ -265,8 +265,8 @@ pub(super) fn select_prompt_editor_command_with(
     }
 }
 
-/// CDXC:PromptEditor 2026-09-23 WHY:
-/// The managed Windows CLI lives under Data/gxserver, separate from the installed app's native Code payload. Prefer the folder the app recorded (a custom install directory), then the installer's Program Files payload, over legacy per-user copies, matching the remote Code launcher.
+/// CDXC:PromptEditor 2026-10-07 WHY:
+/// The managed Windows CLI lives under Data/gxserver, separate from the installed app's native Code payload. Prefer the folder the app recorded (the install that last ran), then the per-user install the release installer and the local start both use (`%LOCALAPPDATA%\Ghostex\current`), then a Program Files install, matching the remote Code launcher. Supersedes the 2026-09-23 order, which tried Program Files before the per-user install.
 /// SEE-ALSO: apps/desktop/src/app/helpers/remote/windows_code.rs, ghostex_paths::GhostexPaths::windows_app_dir_file.
 pub(super) fn code_server_prompt_editor_command(file_path: &str) -> Vec<String> {
     let code_root = rpc::ghostex_data_home().join("code-server");
@@ -277,6 +277,9 @@ pub(super) fn code_server_prompt_editor_command(file_path: &str) -> Vec<String> 
             .ok()
             .filter(|app_dir| !app_dir.trim().is_empty())
             .map(|app_dir| PathBuf::from(app_dir.trim()).join("code-server")),
+        std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .map(|root| root.join("Ghostex/current/code-server")),
         std::env::var_os("ProgramW6432")
             .filter(|root| !root.is_empty())
             .or_else(|| std::env::var_os("ProgramFiles"))
@@ -288,9 +291,6 @@ pub(super) fn code_server_prompt_editor_command(file_path: &str) -> Vec<String> 
                 .parent()
                 .map(|app| app.join("code-server"))
         }),
-        std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .map(|root| root.join("Ghostex/current/code-server")),
         Some(package.clone()),
     ]
     .into_iter()

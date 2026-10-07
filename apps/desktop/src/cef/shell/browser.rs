@@ -194,7 +194,14 @@ impl CefBrowser {
             trusted_clipboard_origin.clone(),
             media_access_handler,
         ));
-        let context_menu_handler = GhostexGpuiContextMenuHandler::new(popup_open_handler.clone());
+        let context_menu_handler = GhostexGpuiContextMenuHandler::new(
+            popup_open_handler.clone(),
+            page_metadata_handler.clone(),
+        );
+        // Browser pages only: other surfaces keep Alloy's cancel-every-download default.
+        let download_handler = page_metadata_handler
+            .as_ref()
+            .map(|_| GhostexGpuiDownloadHandler::new());
         let display_handler = page_metadata_handler.as_ref().map(|handler| {
             GhostexGpuiDisplayHandler::new(handler.clone(), Cell::new(uses_system_page_appearance))
         });
@@ -207,7 +214,10 @@ impl CefBrowser {
         let request_handler = manage_docs_resource_scope
             .as_ref()
             .map(|scope| {
-                scope.request_handler(&requested_url, project_workarea_bridge_event_handler.clone())
+                scope.request_handler(
+                    &requested_url,
+                    project_workarea_bridge_event_handler.clone(),
+                )
             })
             .or_else(|| {
                 // Browser panes and project website views use the same shell popup
@@ -272,6 +282,7 @@ impl CefBrowser {
             permission_handler,
             Some(GhostexGpuiCefFocusHandler::new()),
             keyboard_handler,
+            download_handler,
         ));
         let mut request_context = cef_request_context_for_profile(profile)
             .map_err(|error| format!("failed to create GPUI CEF request context: {error}"))?;

@@ -101,7 +101,11 @@ pub fn settle(
             provider,
             preferences,
         } => {
-            let agent = ContextDetailsAgent::from_icon(Some(provider.as_str()));
+            // The host names a record by its agent's `as_str` (`basic` has no icon of its own).
+            let agent = ContextDetailsAgent::ALL
+                .into_iter()
+                .find(|agent| agent.as_str() == provider.as_str())
+                .unwrap_or_else(|| ContextDetailsAgent::from_icon(Some(provider.as_str())));
             *state.pickers.context.preferences.get_mut(agent) =
                 crate::menus::context::preferences::normalize_preferences(Some(preferences), agent);
         }

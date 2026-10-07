@@ -91,6 +91,58 @@ pub fn project_drop_command(view: &SidebarView, command: &Value) -> Value {
     if members < 2 || (moved.0 == "group" && in_family(moved_id)) {
         return command.clone();
     }
+    let from_above = drawn_above(view, moved.0, moved_id, &parent.core.group_id).unwrap_or(false);
+    let mut command = command.clone();
+    command[target_key] = json!(parent.core.group_id);
+    command["position"] = json!(if from_above { "after" } else { "before" });
+    command
+}
+
+/// The project drop of a dragged project (`group`) or collection held over a row drawn under
+/// project `group_id`'s header (a session, a coordinator's thread, a section heading, the New
+/// Session row): before that project when the dragged row comes from below it, after its whole
+/// block when it comes from above. `None` over the dragged project's own rows or a row not drawn.
+///
+/// CDXC:Sidebar 2026-10-06 WHY:
+/// Only a project's header was a target for a project drag, so the drop line went away over the rows under it and a release there moved nothing. Those rows aim at the slot next to their project the way a worktree family's rows aim at its parent (`project_drop_command` above) and a coordinator's threads aim at the coordinator for a session drop.
+pub fn project_body_drop_command(
+    view: &SidebarView,
+    moved_kind: &str,
+    moved_id: &str,
+    group_id: &str,
+) -> Option<Value> {
+    if moved_kind == "group" && moved_id == group_id {
+        return None;
+    }
+    let position = match drawn_above(view, moved_kind, moved_id, group_id)? {
+        true => "after",
+        false => "before",
+    };
+    match moved_kind {
+        "group" => Some(json!({
+            "type": "moveGroup",
+            "groupId": moved_id,
+            "targetGroupId": group_id,
+            "position": position,
+        })),
+        "collection" => Some(json!({
+            "type": "moveCollection",
+            "sourceId": moved_id,
+            "targetKind": "group",
+            "targetId": group_id,
+            "position": position,
+        })),
+        _ => None,
+    }
+}
+
+/// Whether the dragged row is drawn above project `group_id`; `None` when either is not drawn.
+fn drawn_above(
+    view: &SidebarView,
+    moved_kind: &str,
+    moved_id: &str,
+    group_id: &str,
+) -> Option<bool> {
     // Every drawn row in order: a collection's row, then the projects inside it.
     let mut drawn: Vec<(&str, &str)> = Vec::new();
     for item in &view.order {
@@ -109,15 +161,5 @@ pub fn project_drop_command(view: &SidebarView, command: &Value) -> Value {
         }
     }
     let index = |row: (&str, &str)| drawn.iter().position(|drawn| *drawn == row);
-    let from_above = match (
-        index((moved.0, moved_id)),
-        index(("group", &parent.core.group_id)),
-    ) {
-        (Some(moved), Some(parent)) => moved < parent,
-        _ => false,
-    };
-    let mut command = command.clone();
-    command[target_key] = json!(parent.core.group_id);
-    command["position"] = json!(if from_above { "after" } else { "before" });
-    command
+    Some(index((moved_kind, moved_id))? < index(("group", group_id))?)
 }

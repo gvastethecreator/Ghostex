@@ -54,6 +54,7 @@ pub(crate) fn sidebar() -> Section {
             row("hideTabStripNewTerminalButton", "Hide New Terminal button", "Hide the New Terminal button from the tab strip."),
             row("hideTabStripNewBrowserButton", "Hide New Browser Tab button", "Hide the New Browser Tab button from the tab strip."),
             row("projectSessionListCollapsedCount", "Compact Session Rows", "Rows a project shows in Compact mode before its \"Show all\" row. Rows in collapsed sections do not count."),
+            row("groupWorkingSessions", "Group working sessions", "Move sessions into a collapsed Working section under their project while their agent works; they return to Sessions when it stops or needs you. Also in the sidebar's Sort & Filter menu."),
             row("agentManagerZoomPercent", "Sidebar Interface Size", "Scale the sidebar interface."),
             row("createSessionOnSidebarDoubleClick", "Double-click empty sidebar space to create a session", "Create a session from empty sidebar space."),
             row("enableSessionParking", "Enable session parking", "Move deferred sessions into a collapsible Parked section at the bottom of the sidebar."),

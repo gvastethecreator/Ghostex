@@ -1,4 +1,4 @@
-//! The Config card of Settings > Agents: Default Prompt Agent, Title Generation Agent (the exact
+//! The Defaults card of Settings > Agents: Default Prompt Agent, Title Generation Agent (the exact
 //! command in its info tooltip), Custom Title Command, and Agent approvals
 //! (`AgentApprovalPolicyControl`, packages/core-ui/agent-approval-policy-control.tsx (deleted 2026-10-01)) with its
 //! Skip permissions? confirmation.
@@ -167,6 +167,15 @@ impl AgentsTab {
         let options = title_generation_options();
         let allowed: Vec<String> = options.iter().map(|option| option.value.clone()).collect();
         let title_agent = values.choice(TITLE_AGENT, &allowed);
+        // Only agents that are on are offered (the saved choice stays listed so it still shows).
+        let options: Vec<SettingOption> = options
+            .into_iter()
+            .filter(|option| {
+                option.value == "custom"
+                    || option.value == title_agent
+                    || agents.iter().any(|agent| agent.agent_id == option.value)
+            })
+            .collect();
         if should_show_setting(&section, "titleGenerationAgent", true) {
             let custom = values.string(CUSTOM_TITLE_COMMAND);
             let command = resolve_title_generation_command(&title_agent, &agents, &custom);
@@ -251,7 +260,7 @@ impl AgentsTab {
                 cx,
             ));
         }
-        settings_section(p, "Config", None, None, rows)
+        settings_section(p, "Defaults", None, None, rows)
     }
 
     /// The Skip permissions? confirmation (`w-[25rem] gap-4 p-5`, nested).

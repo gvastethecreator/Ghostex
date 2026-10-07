@@ -3,203 +3,147 @@
 </h1>
 
 <p align="center">
+  <strong>The best all-in-one native agents workspace.</strong><br/>
+  Agent chats, a code editor and a browser for every agent CLI and subscription you have, in one fast native window.
+</p>
+
+<p align="center">
   <a href="https://github.com/maddada/Ghostex/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/stars/maddada/Ghostex.svg?variant=secondary&mode=dark" /><img src="https://shieldcn.dev/github/stars/maddada/Ghostex.svg?variant=secondary&mode=light" alt="GitHub stars" /></picture></a>
   <a href="https://github.com/maddada/Ghostex/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/release/maddada/Ghostex.svg?variant=secondary&mode=dark" /><img src="https://shieldcn.dev/github/release/maddada/Ghostex.svg?variant=secondary&mode=light" alt="Latest release" /></picture></a>
   <a href="LICENSE"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/license/maddada/Ghostex.svg?variant=secondary&mode=dark" /><img src="https://shieldcn.dev/github/license/maddada/Ghostex.svg?variant=secondary&mode=light" alt="License" /></picture></a>
   <br />
-  <picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20Android%20%C2%B7%20iOS.svg?variant=secondary&mode=dark" /><img src="https://shieldcn.dev/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20Android%20%C2%B7%20iOS.svg?variant=secondary&mode=light" alt="Supported platforms: macOS, Windows, Linux, Android, iOS" /></picture>
+  <a href="#install"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20Android%20%C2%B7%20iOS.svg?variant=secondary&mode=dark" /><img src="https://shieldcn.dev/badge/platforms-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20Android%20%C2%B7%20iOS.svg?variant=secondary&mode=light" alt="Supported platforms: macOS, Windows, Linux, Android, iOS" /></picture></a>
 </p>
-<p align="center">
-  <a href="https://discord.gg/df7b3G92CS"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/Discord-Join%20the%20community.svg?variant=branded&logo=discord&mode=dark" /><img src="https://shieldcn.dev/badge/Discord-Join%20the%20community.svg?variant=branded&logo=discord&mode=light" alt="Join the Discord" /></picture></a>
-</p>
-  
-<p align="center">
-  <strong>The native desktop app for Claude Code, Codex, OpenCode, and every other coding agent.</strong><br/>
-  Chat with several agents side by side, review their work as they go, and keep steering from your phone.
-</p>
-
-<h3 align="center"><a href="#install"><ins>Download Ghostex</ins></a> &nbsp;·&nbsp; <a href="https://ghostex.dev">Website</a></h3>
-
-<!-- &nbsp;·&nbsp; <a href="https://discord.gg/df7b3G92CS">Discord</a> -->
 
 <p align="center">
-  <img src="media/readme/ghostex-hero-chat-kanban.jpg" alt="Ghostex running a Claude session as a chat GUI next to the Kanban board, with local and remote projects in the sidebar" width="960" />
+<a href="https://discord.gg/df7b3G92CS"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/Discord-Join%20the%20community.svg?variant=branded&logo=discord&mode=dark" /><img src="https://shieldcn.dev/badge/Discord-Join%20the%20community.svg?variant=branded&logo=discord&mode=light" alt="Join the Discord" /></picture></a>
 </p>
 
-Ghostex is built for developers who keep many agents alive at once. A chat view for every agent, a native Rust/GPUI shell, embedded Chromium panes, and a mobile app share one workspace, and every session survives restarts.
+<h3 align="center"><a href="#install"><ins>Download Ghostex</ins></a> &nbsp;·&nbsp; <a href="https://ghostex.dev">Website</a> &nbsp;·&nbsp; <a href="https://youtu.be/QzjFB4J6-8E">Watch the 3-minute tour</a></h3>
+
+<div align="center">
+  <table>
+    <tr>
+      <td width="50%" align="center"><a href="#a-real-chat-for-every-agent"><img src="media/readme/gx-card-chat.gif" alt="Just like the ChatGPT and Claude apps, but much more customizable and powerful" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#coordinators-that-run-the-work"><img src="media/readme/gx-card-orchestrate.gif" alt="Let one agent orchestrate the others. Agents message each other, too." width="100%" /></a></td>
+    </tr>
+    <tr>
+      <td width="50%" align="center"><a href="#any-agent-swap-on-the-fly"><img src="media/readme/gx-card-handover.gif" alt="Hand any chat to any agent. The whole conversation comes along." width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#a-real-browser-next-to-your-agents"><img src="media/readme/gx-card-markup.gif" alt="Mark up any web page and send it to your agent" width="100%" /></a></td>
+    </tr>
+    <tr>
+      <td width="50%" align="center"><a href="#your-agents-in-your-pocket"><img src="media/readme/gx-card-phone.gif" alt="Every machine, every session, in your pocket" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#find-any-chat-you-ever-had"><img src="media/readme/gx-card-search.gif" alt="Instantly find any chat with smart search" width="100%" /></a></td>
+    </tr>
+    <tr>
+      <td width="50%" align="center"><a href="#accounts-and-usage"><img src="media/readme/gx-card-accounts.gif" alt="Add multiple Claude and Codex accounts and switch between them freely" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#plugins-you-install-only-when-you-want-them"><img src="media/readme/gx-card-plugins.gif" alt="Tons of powerful plugins. All optional." width="100%" /></a></td>
+    </tr>
+  </table>
+</div>
+
+Ghostex is for developers who keep many agents alive at once. Claude Code, Codex, OpenCode, Gemini and 20+ other agent CLIs run in real Ghostty terminals, and every one of them gets a proper chat view on top. The shell is native Rust and GPUI (no Electron, no Tauri), the browser is real Chromium, and every session survives restarts. Your phone and your other computers join the same workspace.
+
+<p align="center">
+  <img src="media/readme/gx-hero.jpg" alt="Ghostex with a Codex chat on the left showing a CSS fix as a diff, and the built-in browser on the right showing the fixed storefront grid" width="100%" />
+</p>
 
 ## Features
 
+### A real chat for every agent
+
+Talk to any agent in a chat that reads like the ChatGPT and Claude apps: thinking, tool calls and file edits fold into tidy cards, diffs are readable, images are clickable, prompts queue while the agent works, and sub-agents stay in view. It is still the agent's own CLI underneath, so nothing breaks when the CLI updates, and the raw terminal is one hotkey away with your draft intact.
+
+<p align="center">
+  <img src="media/readme/gx-chat-diff.jpg" alt="A Claude Code chat in Ghostex, showing the agent's two changed files as inline diffs under its reply" width="100%" />
+</p>
+
 <table>
 <tr>
-<td width="50%" valign="middle">
+<td width="50%" valign="top">
 
-<br/>
-
-### A real chat view for every agent
-
-Talk to Claude Code, Codex, or any other agent in a proper chat GUI: clickable images, readable diffs, queued prompts, sub-agents in view, and a full editor for long messages. If you ever need the raw CLI, it is one hotkey away and your draft comes with you.
-
-<br/>
+**Questions and approvals are cards, not terminal menus.** Pick an option, write your own answer, or skip, and the answer reaches the agent as if you had typed it in its terminal.
 
 </td>
-<td width="50%">
-  <img src="media/readme/ghostex-chat-view.jpg" alt="A Claude Code session in the chat view, with the usage card open" width="100%" />
+<td width="50%" valign="top">
+
+**Chat and terminal, side by side.** Drag any session onto a pane edge to split. Each pane can show the chat or the real Ghostty terminal underneath.
+
 </td>
 </tr>
 <tr>
-<td width="50%" valign="middle">
-
-<br/>
-
-### iOS and Android apps with Easy QR Connect or Tailscale
-
-Your agents in your pocket. Easy QR Connect pairs your phone with a single scan, no extra accounts needed, or join through your Tailscale tailnet if you already have one. The app reconnects on its own when your network changes. Read transcripts, send follow-ups, preview localhost pages, and get a push when an agent finishes.
-
-<br/>
-
-</td>
-<td width="50%">
-  <img src="media/readme/ghostex-mobile-apps.jpg" alt="The Ghostex mobile app on an iPhone showing a chat transcript and on a Galaxy showing projects connected through Easy QR Connect" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-<br/>
-
-### Any agent, swap on the fly
-
-Claude Code, Codex, OpenCode, Pi, Gemini, Grok, Cursor, and more. Pick the model and effort from a radial menu, or hand a session from one agent to another mid-task.
-
-<br/>
-
-</td>
-<td width="50%">
-  <img src="media/readme/ghostex-agent-handover.jpg" alt="Radial model picker showing Claude models and effort levels" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-<br/>
-
-### Embedded Chromium browser
-
-Click any element, type what should change, and the note lands in the agent's prompt. Comes with profiles, Chrome DevTools MCP, and a browser-use skill so agents can drive your tabs.
-
-<br/>
-
-</td>
-<td width="50%">
-  <img src="media/readme/ghostex-browser-annotations.jpg" alt="Embedded browser showing a Storybook page with an annotation popup next to a Codex session" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-<br/>
-
-### Kanban board on Beads
-
-Dump your thoughts on the board, then let an orchestrator agent farm the tickets out to sub-agents. Runs on the [Beads](https://github.com/gastownhall/beads) `bd` CLI, so agents and humans share one backlog.
-
-<br/>
-
-</td>
-<td width="50%">
-  <img src="media/readme/ghostex-kanban-board.jpg" alt="Kanban board backed by Beads" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-<br/>
-
-### Docs with annotations
-
-Open Markdown, HTML prototypes, and Excalidraw diagrams next to your agent. Select anything and leave a note; Ghostex turns your annotations into clear instructions the agent can act on.
-
-<br/>
-
-</td>
-<td width="50%">
-  <img src="media/readme/ghostex-docs-html-annotations.jpg" alt="Docs view showing an HTML page with annotations being turned into agent instructions" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-<br/>
-
-### Rich prompt editor
-
-Press Ctrl+G to edit any prompt in a full editor with hotkeys, image previews, and no more uneditable `[Pasted 50+ lines]` blocks. F1 lists every command.
-
-<br/>
-
-</td>
-<td width="50%">
-  <img src="media/readme/ghostex-prompt-editor.jpg" alt="Rich prompt editor opened with Ctrl+G" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-<br/>
-
-### Built-in IDE
-
-A VS Code editor that loads on demand for Markdown, code review, and PRs, supports all extensions, and sleeps when you are not using it.
-
-<br/>
-
-</td>
-<td width="50%">
-  <img src="media/readme/ghostex-built-in-ide.jpg" alt="Embedded VS Code editor inside Ghostex" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-<br/>
-
-### Find any past session
-
-Fuzzy search every prompt you ever sent, across all your agents, and press Enter to resume the conversation. Star favourites and filter by agent or project. Also available as `gx f` for command-line fans.
-
-<br/>
-
-</td>
-<td width="50%">
-  <img src="media/readme/ghostex-find-sessions.jpg" alt="Session search with a query typed and matching prompts from every agent listed" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
-<br/>
-
-### Agents that run agents
-
-Agents can open sessions, send prompts, and read replies from other agents through the `ghostex` command. Ask Claude Code to spin up Codex sub-agents and steer them, or script it all yourself.
-
-<br/>
-
-</td>
-<td width="50%">
-  <img src="media/readme/ghostex-agent-orchestration.jpg" alt="Claude Code orchestrating Codex sessions through the Ghostex CLI" width="100%" />
-</td>
+<td width="50%"><img src="media/readme/gx-question-card.jpg" alt="An agent asking which illustration style to use, shown as a multiple-choice card above the chat box" width="100%" /></td>
+<td width="50%"><img src="media/readme/gx-side-by-side.jpg" alt="A Codex chat and a Claude Code chat split side by side in one window" width="100%" /></td>
 </tr>
 </table>
 
-**Also in the box:**
+### Coordinators that run the work
 
-- **Remote machines**: install gxserver on another computer, connect with an Easy Connect code or SSH, and it shows up in the sidebar.
-- **Usage and accounts**: Claude and Codex limits at a glance, with automatic account switching.
-- **Worktrees, splits, and spaces**: create a worktree per task and merge it back, Cmd+D splits, Arc-style spaces.
-- **Automations**: scheduled prompts and hooks, plus menu bar and sound notifications.
-- **Optional extensions**: browser, Kanban, IDE, Docs, and automations load only when you use them. Or write your own.
+Tell a coordinator what needs doing and it hands each piece to a thread: an ordinary agent session it starts, briefs, and keeps track of, in its own git worktree when threads should run in parallel. Threads sit under the coordinator in the sidebar, their reports come back on their own, and the coordinator checks and commits the work, then tells you what needs you. Start one from any project's agent menu with **New Coordinator…**, or turn a running session into one with **Make Coordinator**.
+
+<p align="center">
+  <img src="media/readme/gx-coordinator.jpg" alt="A coordinator named Checkout redesign with a crown in the sidebar, one thread under it, thread reports in the chat and a Threads panel listing one working and five done" width="100%" />
+</p>
+
+### Any agent, swap on the fly
+
+Claude Code, Codex, OpenCode, Pi, Gemini, Grok, Cursor, Copilot, Antigravity, Hermes and more. Pick the model and effort from the chat box, hand a conversation from one agent to another mid-task, and let agents message each other through the `ghostex` CLI:
+
+```bash
+ghostex agents create codex --task "Run the checkout tests and report back"
+ghostex agents send "Checkout redesign" "Tests pass, ready for review"
+ghostex read-session-chat "Checkout redesign" --all --format text
+```
+
+### Real terminals when you want them
+
+Every session is a real Ghostty terminal, kept alive by its own session daemon, so agents keep running when you close the window, restart the app or update it. Split panes, a command terminal under your work, and `ghostex attach` from any shell, even over SSH.
+
+<p align="center">
+  <img src="media/readme/gx-terminals.jpg" alt="Two Ghostty terminals side by side: Codex on the left and Claude Code on the right, both showing their tool calls and results" width="100%" />
+</p>
+
+### A real browser next to your agents
+
+Open your dev server in an embedded Chromium tab beside the chat. Click any element, type what should change, and the note lands in the agent's prompt. Agents can drive the browser themselves through the built-in browser-use skill, and Markdown plans and HTML prototypes in the Files view get the same annotations.
+
+<p align="center">
+  <img src="media/readme/gx-browser.jpg" alt="A Codex chat with its CSS fix next to the built-in browser showing the storefront on localhost" width="100%" />
+</p>
+
+### Kanban board and automations
+
+A project board on the [Beads](https://github.com/gastownhall/beads) `bd` CLI, so agents and humans share one backlog: dump tickets on it, start an agent on a card, and the card shows who is working on it. Automate schedules agent work per project (daily, weekly, cron, or once) in your checkout, a fresh worktree or an existing thread.
+
+<p align="center">
+  <img src="media/readme/gx-kanban.jpg" alt="The Kanban board with Backlog, Todo, In Progress, Test, Review and Done lanes, with agent sessions linked to cards" width="100%" />
+</p>
+
+<p align="center">
+  <img src="media/readme/gx-automate.jpg" alt="The Automate view listing a weekday morning triage, a paused flaky test sweep and a weekly dependency audit" width="100%" />
+</p>
+
+### Your agents in your pocket
+
+The Android and iOS apps show every computer you connect, with their projects and sessions. Read transcripts, answer questions, send follow-ups, preview localhost pages and get a push when an agent finishes. **Easy Connect** pairs your phone with one QR scan and no extra accounts, or join through Tailscale if you already use it. Other computers join the same way and show up in the sidebar.
+
+<p align="center">
+  <img src="media/readme/gx-card-webpreview.gif" alt="Open any site running on your computer on your phone: the whole app, not a lite version" width="80%" />
+</p>
+
+### Find any chat you ever had
+
+Fuzzy-search every prompt you ever sent, across every agent and project, and press Enter to resume that conversation. Star favourites and filter by agent or project. Also in the terminal as `gx f`.
+
+### Accounts and usage
+
+Add several Claude and Codex accounts, see their limits in the status line, and let Ghostex move a session to another account automatically when one runs out.
+
+### Plugins you install only when you want them
+
+Browser, Files, Kanban, Automate, VS Code, Storybook, Linear, Jira, GitHub, Sentry, Figma, Vercel, Supabase, PostHog, Hermes bots and more. Every view is optional, sleeps when idle, and you can build your own extensions.
+
+**Also in the box:** the Ctrl+G rich prompt editor, worktrees per task, Spaces, Floating Capture for prompting from any app, Cloud Boxes for agents in a sandbox, window glass and themes, notifications and sounds, multiple windows, and Keep Awake.
 
 ---
 
@@ -236,14 +180,14 @@ Or download the app directly:
   <a href="https://maddada.com/download/macos-arm64"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/macOS-Apple%20Silicon%20DMG.svg?variant=secondary&logo=apple&mode=dark" /><img src="https://shieldcn.dev/badge/macOS-Apple%20Silicon%20DMG.svg?variant=secondary&logo=apple&mode=light" alt="macOS Apple Silicon DMG" /></picture></a>
 </p>
 
-### Windows (WSL2 beta)
+### Windows
 
 <p>
   <a href="https://maddada.com/download/windows-x64"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/Windows-x64%20Setup.svg?variant=secondary&logo=windows&mode=dark" /><img src="https://shieldcn.dev/badge/Windows-x64%20Setup.svg?variant=secondary&logo=windows&mode=light" alt="Windows x64 installer" /></picture></a>
   <a href="https://maddada.com/download/windows-arm64"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/Windows-ARM64%20Setup.svg?variant=secondary&logo=windows&mode=dark" /><img src="https://shieldcn.dev/badge/Windows-ARM64%20Setup.svg?variant=secondary&logo=windows&mode=light" alt="Windows ARM64 installer" /></picture></a>
 </p>
 
-The Windows app targets WSL2 workflows: agents, gxserver, and the editor run inside your WSL2 distribution. Native Windows shells are not the intended setup yet. Updates arrive automatically from GitHub Releases.
+Agents run in native PowerShell with your Windows folders by default. Prefer Linux? Switch to WSL in Settings > General > Terminal > Windows Environment. Portable ZIPs are on the [release page](https://github.com/maddada/Ghostex/releases/latest), and updates arrive automatically.
 
 ### Linux
 
@@ -262,7 +206,7 @@ yay -S ghostex-bin
 sudo tar -xpf ghostex-*-linux-x64.tar.zst -C /
 ```
 
-The first GUI launch downloads the Chromium runtime into your cache directory.
+The browser and code editor run on Chromium, which Ghostex offers to install the first time you open one of them.
 
 ### Mobile
 
@@ -271,28 +215,32 @@ The first GUI launch downloads the Chromium runtime into your cache directory.
   <a href="https://discord.gg/df7b3G92CS"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/iOS-TestFlight.svg?variant=secondary&logo=apple&mode=dark" /><img src="https://shieldcn.dev/badge/iOS-TestFlight.svg?variant=secondary&logo=apple&mode=light" alt="iOS TestFlight" /></picture></a>
 </p>
 
-The iOS TestFlight runs through the [Discord](https://discord.gg/df7b3G92CS). Post in the iOS channel to get in.
+The iOS TestFlight runs through the [Discord](https://discord.gg/df7b3G92CS). Post in the iOS channel to get in. Then open **Mobile & Remote** in the sidebar's More Options on your computer and scan the code.
+
+### Build from source
+
+See [CONTRIBUTING.md](CONTRIBUTING.md#building-from-source).
 
 ## Comparison
 
 | Feature                   | Ghostex | ChatGPT app | cmux |
-| ------------------------- | ------- | --------- | ---- |
-| macOS support             | Yes     | Yes       | Yes  |
-| Windows support           | Yes     | Yes       | No   |
-| Linux support             | Yes     | Yes       | No   |
-| Open source               | Yes     | -         | Yes  |
-| Ghostty terminal          | Yes     | -         | Yes  |
-| Chromium Browser          | Yes     | Yes       | No   |
-| Chat GUI view             | Yes     | Yes       | No   |
-| Fully featured IDE        | Yes     | -         | -    |
-| Built-in Computer use     | Yes     | Yes       | -    |
-| Built-in Browser use      | Yes     | Yes       | Yes  |
-| Use any model             | Yes     | -         | Yes  |
-| Cross Model Orchestration | Yes     | -         | Yes  |
-| Rich Prompt Editor        | Yes     | N/A       | -    |
-| iOS                       | Yes     | Yes       | Yes  |
-| Android                   | Yes     | Yes       | Yes  |
-| Automations               | Yes     | Yes       | -    |
+| ------------------------- | ------- | ----------- | ---- |
+| macOS support             | Yes     | Yes         | Yes  |
+| Windows support           | Yes     | Yes         | No   |
+| Linux support             | Yes     | Yes         | No   |
+| Open source               | Yes     | -           | Yes  |
+| Ghostty terminal          | Yes     | -           | Yes  |
+| Chromium Browser          | Yes     | Yes         | No   |
+| Chat GUI view             | Yes     | Yes         | No   |
+| Fully featured IDE        | Yes     | -           | -    |
+| Built-in Computer use     | Yes     | Yes         | -    |
+| Built-in Browser use      | Yes     | Yes         | Yes  |
+| Use any model             | Yes     | -           | Yes  |
+| Cross Model Orchestration | Yes     | -           | Yes  |
+| Rich Prompt Editor        | Yes     | N/A         | -    |
+| iOS                       | Yes     | Yes         | Yes  |
+| Android                   | Yes     | Yes         | Yes  |
+| Automations               | Yes     | Yes         | -    |
 
 ---
 
@@ -312,6 +260,7 @@ Ghostex builds on open source work from these projects and communities:
 
 - [Ghostty](https://github.com/ghostty-org/ghostty) and [Zed / GPUI](https://github.com/zed-industries/zed) for the terminal and the native shell
 - [CEF](https://github.com/chromiumembedded/cef) for embedded Chromium panes
+- [Trycua](https://github.com/trycua/cua) for built-in Computer Use
 - [VS Code](https://github.com/microsoft/vscode) and [code-server](https://github.com/coder/code-server) for the embedded IDE
 - [Beads](https://github.com/gastownhall/beads) by [Steve Yegge](https://github.com/steveyegge) and [Beads Viewer](https://github.com/Dicklesworthstone/beads_viewer) for the Kanban board
 - [OpenUsage](https://github.com/robinebers/openusage) for Claude and Codex usage stats
@@ -320,6 +269,8 @@ Ghostex builds on open source work from these projects and communities:
 - [zehn](https://github.com/al3rez/zehn) by [al3rez](https://github.com/al3rez) for prompt-history search
 - [vvterm](https://github.com/vivy-company/vvterm) and [Termux](https://github.com/termux/termux-app) for mobile terminal components
 - [Pierre](https://github.com/pierrecomputer/pierre) for diff and file rendering components
+
+Screenshot backdrops are public-domain paintings and prints: Claude Monet, *Cliff Walk at Pourville* (1882); Kawase Hasui, *Shinagawa Offshore* and *Lake Kugushi*; Yoshida Hiroshi, *Kumoi Cherry Trees* (1920); Frederic Edwin Church, *Heart of the Andes* (1859); Albert Bierstadt, *Canadian Rockies (Lake Louise)* and *Merced River, Yosemite Valley* (1866).
 
 ## License
 

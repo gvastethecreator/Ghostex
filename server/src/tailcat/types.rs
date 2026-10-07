@@ -26,10 +26,24 @@ pub fn default_tailcat_state() -> TailcatState {
     TailcatState {
         enabled: false,
         // 22 carries the phone's SSH sessions; the gxserver API port carries
-        // PC-to-PC connection profiles (the tailcat transport in rpc.rs).
-        ports: vec![22, crate::ghostex_cli::rpc::GXSERVER_LOCAL_API_PORT],
+        // Easy Connect pairing and PC-to-PC connection profiles (the tailcat
+        // transport in rpc.rs).
+        ports: vec![22, tailcat_gxserver_api_port()],
         allowed_client_keys: Vec::new(),
     }
+}
+
+/// The port this daemon's local API listens on, which the Easy Connect code advertises.
+pub fn tailcat_gxserver_api_port() -> u16 {
+    crate::config::read_selected_local_api_port()
+        .unwrap_or(crate::constants::GXSERVER_LOCAL_API_PORT)
+}
+
+/// CDXC:RemotePairing 2026-10-02 WHY: Native Windows gxserver listens on 58746, not 58744, and both the Easy Connect code and the stored port list hardcoded 58744, so the phone's tunnel reached a port nothing listened on and pairing failed with "unexpected end of stream". The API port is always served because the pairing code always points at it; a stored list written with the wrong port, or a user edit that drops it, must not break pairing.
+pub fn tailcat_served_ports(state: &TailcatState) -> Vec<u16> {
+    let mut ports = state.ports.clone();
+    ports.push(tailcat_gxserver_api_port());
+    super::repository::normalize_tailcat_ports(ports)
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]

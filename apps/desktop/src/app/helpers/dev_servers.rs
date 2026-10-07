@@ -121,12 +121,45 @@ fn local_dev_listeners() -> Result<Vec<DevListener>, String> {
     Ok(ports.into_values().collect())
 }
 
+/// CDXC:Browser 2026-10-05 WHY:
+/// Native PowerShell mode runs agents and their dev servers as Win32 processes and has no WSL distribution to ask, so Windows listeners always come from the system TCP table; the WSL scan is added only when the WSL environment is selected.
 #[cfg(target_os = "windows")]
 fn local_dev_listeners() -> Result<Vec<DevListener>, String> {
+    let mut ports = std::collections::BTreeMap::new();
+    if windows_terminal_backend::current_preference()
+        == windows_terminal_backend::WindowsTerminalBackendPreference::Wsl
+    {
+        local_wsl_dev_listeners(&mut ports)?;
+    }
+    let listeners = gpui_read_windows_resource_servers()?;
+    let names = gpui_read_windows_process_names(
+        &listeners
+            .iter()
+            .map(|listener| listener.pid)
+            .collect::<Vec<_>>(),
+    );
+    for listener in listeners {
+        let Some(command) = names.get(&listener.pid) else {
+            continue;
+        };
+        if is_dev_server_command(command) {
+            ports.entry(listener.port).or_insert_with(|| DevListener {
+                pid: listener.pid,
+                port: listener.port,
+                command: command.clone(),
+            });
+        }
+    }
+    Ok(ports.into_values().collect())
+}
+
+#[cfg(target_os = "windows")]
+fn local_wsl_dev_listeners(
+    ports: &mut std::collections::BTreeMap<u16, DevListener>,
+) -> Result<(), String> {
     let output = windows_terminal_backend::resource_server_snapshot()
         .ok_or_else(|| "Could not inspect local WSL listening ports.".to_string())?;
     let processes = gpui_read_native_resource_processes();
-    let mut ports = std::collections::BTreeMap::new();
     for listener in gpui_parse_native_resource_servers(&output) {
         let Some(process) = processes.iter().find(|process| process.pid == listener.pid) else {
             continue;
@@ -147,7 +180,7 @@ fn local_dev_listeners() -> Result<Vec<DevListener>, String> {
             });
         }
     }
-    Ok(ports.into_values().collect())
+    Ok(())
 }
 
 fn is_dev_server_command(command: &str) -> bool {

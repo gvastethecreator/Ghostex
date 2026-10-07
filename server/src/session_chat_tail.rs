@@ -10,7 +10,7 @@ use crate::session_chat_branch::{
     remember_session_chat_branch_boundary, session_chat_branch_boundary, ActiveBranchScan,
     BranchVerdict,
 };
-use crate::session_chat_decode_pi::decode_pi_transcript_line;
+use crate::session_chat_decode_pi::decode_pi_transcript_entry;
 
 // ---------------------------------------------------------------------------
 // Shared primitives (upstream chat spec §1)
@@ -504,18 +504,23 @@ pub(crate) fn read_pi_session_chat_transcript_tail_file(
             continue;
         }
         let fallback_id = transcript_fallback_id(file_path, entry.offset);
-        if let Some(mut message) = decode_pi_transcript_line(&entry.line, &fallback_id) {
+        for mut message in decode_pi_transcript_entry(&entry.line, &fallback_id) {
             message.byte_offset = Some(entry.offset);
             chronological.push((message, entry.offset));
         }
     }
     let selected: Vec<(SessionChatMessage, u64)> = if limit > 0 {
-        let skip = chronological.len().saturating_sub(limit);
+        let mut skip = chronological.len().saturating_sub(limit);
+        // One entry can decode to several rows (thinking, then the reply) at one offset. An older
+        // page ends before `before_offset`, so a page never starts in the middle of an entry.
+        while skip > 0 && chronological[skip - 1].1 == chronological[skip].1 {
+            skip -= 1;
+        }
         chronological.iter().skip(skip).cloned().collect()
     } else {
         Vec::new()
     };
-    let has_more = limit > 0 && chronological.len() > limit;
+    let has_more = limit > 0 && chronological.len() > selected.len();
     let before_offset = selected
         .first()
         .map(|(_, offset)| *offset)

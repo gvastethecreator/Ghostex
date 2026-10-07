@@ -1,4 +1,4 @@
-//! Rename and Note: the two sidebar actions that call nothing and only open a dialog.
+//! Rename, Note and Make Coordinator: the sidebar actions that call nothing and only open a dialog.
 //!
 //! CDXC:Sessions 2026-09-20 WHY:
 //! The boundary is the whole point and it is easy to get wrong in the other direction. A sidebar
@@ -105,6 +105,16 @@ pub fn plan_modal_action(view: &SidebarView, message: &Value) -> Option<ModalAct
                 "initialNote": row.session_note.clone().unwrap_or_default(),
             }),
         }),
+        // The Make Coordinator dialog: an optional goal, then `/api/promoteCoordinator`.
+        "makeCoordinator" => Some(ModalAction {
+            close_reason: "SettingsDismissal:sessionRowMakeCoordinator",
+            open: json!({
+                "type": "open",
+                "modal": "makeCoordinator",
+                "sessionId": sidebar_session_id,
+                "sessionTitle": title,
+            }),
+        }),
         _ => None,
     }
 }
@@ -134,5 +144,8 @@ pub fn rename_seed_title(
 /// Whether this payload is one this file answers, without building anything.
 pub fn owns_modal_message(message: &Value) -> bool {
     text_field(message, "type") == Some("sessionAction")
-        && matches!(text_field(message, "action"), Some("rename" | "note"))
+        && matches!(
+            text_field(message, "action"),
+            Some("rename" | "note" | "makeCoordinator")
+        )
 }

@@ -4,6 +4,7 @@
 //! `tooling/gx-core/sidebar-page-frozen/navigation.ts`; see git history).
 
 use crate::app_lifecycle::APP_LIFECYCLE_ACTIONS;
+use crate::sidebar_actions::GROUP_WORKING_SESSIONS_ACTION;
 use crate::sidebar_view::tags::{
     normalize_tag_list_items, tag_list_item_filter, tag_list_item_label, tag_presentation,
     TagCatalog, TagListItemKind,
@@ -44,8 +45,18 @@ pub fn more_menu(input: &MoreMenuInput<'_>) -> Vec<MenuItem> {
     let mut sort: Vec<MenuItem> = Vec::new();
     if is_local {
         sort.push(intent("Show Hidden", "eye", "showHidden").with_checked(ui.show_hidden));
-        sort.push(MenuItem::separator());
     }
+    // The Settings > Sidebar switch writes the same setting (CDXC:Sidebar 2026-10-05 in
+    // sidebar_view/ordering.rs `is_grouped_working`).
+    sort.push(
+        intent(
+            "Group Working Sessions",
+            "stack",
+            GROUP_WORKING_SESSIONS_ACTION,
+        )
+        .with_checked(input.settings.group_working_sessions),
+    );
+    sort.push(MenuItem::separator());
     for item in normalize_tag_list_items(&input.settings.tag_list_items, Some(input.filter_catalog))
     {
         if !item.visible {

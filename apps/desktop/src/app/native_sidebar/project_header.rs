@@ -15,6 +15,11 @@ use gpui_component::{ElementExt as _, h_flex};
 use serde_json::{Value, json};
 use std::{cell::Cell, rc::Rc};
 
+/// Width of the chevron slot at the header box's left edge: 16px glyph plus 2px, the 18px that used to hang outside the row.
+pub(super) const PROJECT_HEADER_CHEVRON_GUTTER: f32 = 18.0;
+/// How far the header box reaches left of where its parent places a row: the chevron slot minus the old 3px side margin, so the icon and name stay where they were.
+pub(super) const PROJECT_HEADER_CHEVRON_INSET: f32 = PROJECT_HEADER_CHEVRON_GUTTER - 3.0;
+
 impl GhostexGpuiApp {
     /// CDXC:Projects 2026-09-17 DECISION:
     /// User: expanded projects show the same right-facing chevron rotated down, shifted 2px left.
@@ -28,7 +33,6 @@ impl GhostexGpuiApp {
         let id = group.group_id.clone();
         let hover_id = id.clone();
         let drag_id = id.clone();
-        let chevron_id = id.clone();
         let menu = group.menu.clone();
         let scale = appearance.scale;
         let hovered = self.native_sidebar.hovered_group.as_ref() == Some(&id);
@@ -136,8 +140,9 @@ impl GhostexGpuiApp {
             .aria_expanded(!group.collapsed)
             .relative()
             .h(px(30.0 * scale))
-            .mx(px(3.0 * scale))
-            .pl(px(5.0 * scale))
+            .ml(px(-PROJECT_HEADER_CHEVRON_INSET * scale))
+            .mr(px(3.0 * scale))
+            .pl(px((5.0 + PROJECT_HEADER_CHEVRON_GUTTER) * scale))
             .pr(px(6.0 * scale))
             .gap(px(10.0 * scale))
             .rounded(px(5.0 * scale))
@@ -145,27 +150,13 @@ impl GhostexGpuiApp {
             .when(group.is_stale, |row| row.opacity(0.55))
             .hover(|row| row.bg(appearance.session_hover))
             .child(self.native_sidebar.header_hover.probe(hover_id))
-            // CDXC:Projects 2026-09-19 DECISION:
-            // User: clicking the chevron left of the project header expands/collapses the project, same as clicking the header.
+            // CDXC:Projects 2026-10-06 DECISION:
+            // User: "Make the chevron to the left of the project part of the button, not outside it". The chevron sits inside the header's hover/selected box at its left edge and is not a hit area of its own: a click on it is the row's click, which expands/collapses the project, and a drag from it moves the project. This supersedes the 2026-09-19 separate chevron button hanging outside the row.
             .child(
                 div()
-                    .id(format!("native-project-chevron-{id}"))
-                    .role(gpui::Role::Button)
-                    .aria_label(if group.collapsed {
-                        "Expand project"
-                    } else {
-                        "Collapse project"
-                    })
                     .absolute()
-                    .left(px(-18.0 * scale))
+                    .left_0()
                     .top(px(7.0 * scale))
-                    .on_click(cx.listener(move |app, _, _, cx| {
-                        cx.stop_propagation();
-                        app.dispatch_native_sidebar_ui(
-                            json!({"type": "toggleGroup", "groupId": chevron_id}),
-                            cx,
-                        );
-                    }))
                     .child(
                         gpui::svg()
                             .path(COMMAND_ICON_CHEVRON_RIGHT)

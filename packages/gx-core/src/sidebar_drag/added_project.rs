@@ -23,6 +23,7 @@ use crate::keys::MachineId;
 use crate::project_docs::{
     toggle_space_member, CollectionsDocument, SpaceMemberKind, SpacesDocument,
 };
+use crate::sidebar_view::machine_spaces::spaces_enabled_on;
 use crate::sidebar_view::spaces::{
     resolve_selected_space, selection_shows_project, SpaceSelection,
 };
@@ -65,8 +66,9 @@ pub fn plan_added_project_space_membership(
     if project_id.is_empty() {
         return None;
     }
-    // `nativeSidebarSettings().sidebarSpacesEnabled ? ui.metadata.spaces[machineId] : undefined`.
-    if !inputs.settings.sidebar_spaces_enabled {
+    // `nativeSidebarSettings().sidebarSpacesEnabled ? ui.metadata.spaces[machineId] : undefined`,
+    // with the switch read off the machine itself (`machine_spaces.rs`).
+    if !spaces_enabled_on(core.presentation(), inputs, machine) {
         return None;
     }
     let spaces = spaces?;

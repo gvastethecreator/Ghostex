@@ -12,9 +12,10 @@ use super::{
 use crate::app::native_chat::cursor::ChatCursor as _;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _, div, px,
+    AnyElement, ClipboardItem, Context, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, StyleRefinement, Styled as _, div, px,
 };
+use gpui_component::text::{TextView, TextViewStyle};
 use serde_json::Value;
 
 /// The spacing between the rows of a run, kept the same inside an expansion as
@@ -349,6 +350,8 @@ impl NativeChatView {
             let output = text(&detail, "output");
             let has_call = tool["hasCall"] == true;
             let command = tool["glyph"] == "terminal";
+            // The first block's label row carries the copy button, which copies the whole call.
+            let mut copy = Some(text(&detail, "copyText")).filter(|copy| !copy.is_empty());
             let mut detail: Vec<AnyElement> = Vec::new();
             if !input.is_empty() {
                 let label = if command {
@@ -358,11 +361,25 @@ impl NativeChatView {
                 } else {
                     None
                 };
-                detail.push(self.tool_body(format!("input:{key}"), label, input, false, p));
+                detail.push(self.tool_body(
+                    format!("input:{key}"),
+                    label,
+                    input,
+                    false,
+                    copy.take(),
+                    p,
+                ));
             }
             if !output.is_empty() {
                 let label = has_call.then_some("Result");
-                detail.push(self.tool_body(format!("output:{key}"), label, output, failed, p));
+                detail.push(self.tool_body(
+                    format!("output:{key}"),
+                    label,
+                    output,
+                    failed,
+                    copy.take(),
+                    p,
+                ));
             }
             if !detail.is_empty() {
                 let body = disclosure_body(
@@ -383,30 +400,74 @@ impl NativeChatView {
     /// One labelled block of a tool's detail: its arguments, the command it ran,
     /// or what it reported back. React painted it as a plain monospaced `<pre>`
     /// (`.ghostex-chat-tool-body`), so this is verbatim text in a scroll-capped
-    /// box, never a Markdown code block: that would put a language header and a
-    /// copy control on output the agent never wrote as code.
+    /// box, never a Markdown code block card: that would put a language header on
+    /// output the agent never wrote as code. `copy` is the whole call's text for
+    /// the copy button on the first block's label row.
+    ///
+    /// CDXC:SessionChat 2026-10-05 DECISION: "please let me select text here and copy". The text is a selectable `TextView` (one headerless fenced block, so it stays verbatim), the selection mechanism the transcript's prose already uses, so a drag selects it and Cmd/Ctrl+C or the transcript menu copies it.
     fn tool_body(
         &self,
         key: String,
         label: Option<&str>,
         content: String,
         failed: bool,
+        copy: Option<String>,
         p: &ChatAppearance,
     ) -> AnyElement {
         let s = p.scale;
+        let color = if failed { p.error() } else { p.muted };
+        let header = (label.is_some() || copy.is_some()).then(|| {
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(8.0 * s))
+                .min_w_0()
+                .child(
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(12.25 * s))
+                        .text_color(p.muted)
+                        .child(label.unwrap_or_default().to_string()),
+                )
+                .when_some(copy, |this, copy| {
+                    this.child(super::code_block::action(
+                        SharedString::from(format!("copy:{key}")),
+                        "titlebar/copy.svg",
+                        p,
+                        move |cx| {
+                            crate::app::helpers::gpui_copy_to_clipboard(
+                                ClipboardItem::new_string(copy.clone()),
+                                cx,
+                            )
+                        },
+                    ))
+                })
+        });
+        let mut style = TextViewStyle::default().default_cursor(true);
+        // The box below is the frame; the block inside it adds no card of its own.
+        style.code_block = StyleRefinement::default()
+            .p(px(0.0))
+            .bg(gpui::transparent_black())
+            .font_family(CHAT_MONO)
+            .text_size(px(12.6 * s))
+            .line_height(px(20.5 * s))
+            .text_color(color);
+        let text_view = TextView::markdown(
+            SharedString::from(format!("{key}:text")),
+            verbatim_fence(&content),
+        )
+        .selectable(true)
+        .style(style)
+        .min_w_0()
+        .text_color(color);
         div()
             .flex()
             .flex_col()
             .min_w_0()
             .gap(px(4.0 * s))
-            .when_some(label, |this, label| {
-                this.child(
-                    div()
-                        .text_size(px(12.25 * s))
-                        .text_color(p.muted)
-                        .child(label.to_string()),
-                )
-            })
+            .children(header)
             .child(
                 self.nested_scroll(
                     key,
@@ -421,10 +482,19 @@ impl NativeChatView {
                         .font_family(CHAT_MONO)
                         .text_size(px(12.6 * s))
                         .line_height(px(20.5 * s))
-                        .text_color(if failed { p.error() } else { p.muted })
-                        .child(content),
+                        .text_color(color)
+                        .child(text_view),
                 ),
             )
             .into_any_element()
     }
+}
+
+/// `text` as one fenced Markdown block, so it renders and copies verbatim: the fence is longer
+/// than any backtick run inside it, which no line of the text can then close.
+fn verbatim_fence(text: &str) -> String {
+    let longest = text.split(|c| c != '`').map(str::len).max().unwrap_or(0);
+    let fence = "`".repeat(longest.max(2) + 1);
+    let newline = if text.ends_with('\n') { "" } else { "\n" };
+    format!("{fence}\n{text}{newline}{fence}\n")
 }

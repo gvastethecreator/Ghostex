@@ -571,11 +571,11 @@ pub(crate) fn ingest_terminal_title_event_with_home(
         &runtime_settings,
         captured_agent_session_id.as_deref(),
     );
-    // CDXC:Coordinators 2026-10-03 SEE-ALSO: coordinator_keeps_its_title in server/src/coordinators/title.rs (the user's no-auto-rename decision).
+    // CDXC:Coordinators 2026-10-05 SEE-ALSO: keeps_its_given_title in server/src/coordinators/title.rs (the user's no-auto-rename decisions for coordinators and their threads).
     if reason.is_none()
-        && crate::coordinators::coordinator_keeps_its_title(repository.connection(), &current)
+        && crate::coordinators::keeps_its_given_title(repository.connection(), &current)
     {
-        reason = Some("coordinator-keeps-its-title".to_string());
+        reason = Some("keeps-its-given-title".to_string());
     }
     let mut update = lifecycle_update(lifecycle);
     if reason.is_none() {

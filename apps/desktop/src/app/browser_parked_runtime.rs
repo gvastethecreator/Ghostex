@@ -133,6 +133,9 @@ impl GhostexGpuiApp {
             cef::BrowserPageMetadataEvent::CloseRequested => {
                 self.close_parked_browser_tab(project_id, tab_id, cx);
             }
+            cef::BrowserPageMetadataEvent::CopyToClipboard(item) => {
+                gpui_copy_to_clipboard(item, cx);
+            }
             cef::BrowserPageMetadataEvent::TitleChanged(title) => {
                 let Some(parked_tabs) = self.parked_browser_tabs_by_project.get_mut(project_id)
                 else {

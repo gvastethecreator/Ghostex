@@ -31,8 +31,8 @@ use ghostex_gx_core::{
     CHATS_GROUP_ID, ProjectKey, SessionKey, TitleGenerationSettings, agent_session_default_title,
     created_session, default_agent_id_for_icon, first_prompt_title_runtime_settings,
     is_agentbox_run_location, local_agent_launch_params, open_remote_session_terminal,
-    remote_agent_launch_params, remote_launch_agent_id, resolve_sidebar_agent,
-    start_provider_params, with_run_location,
+    remote_agent_launch_params, remote_launch_agent_id, replacing_empty_sessions,
+    resolve_sidebar_agent, start_provider_params, with_run_location,
 };
 use serde_json::{Value, json};
 
@@ -480,10 +480,10 @@ impl GhostexGpuiApp {
             .gx_store_bot_name(&project_id, &agent.agent_id)
             .unwrap_or_else(|| agent.name.clone());
         let title = agent_session_default_title(Some(&title_name));
-        let params = with_run_location(
+        let params = replacing_empty_sessions(with_run_location(
             local_agent_launch_params(&agent, &project_id, title_settings, account_id, &title),
             run_location,
-        );
+        ));
         let preferred_interface = if is_agentbox_run_location(run_location) {
             "terminal".to_string()
         } else {
@@ -555,7 +555,7 @@ impl GhostexGpuiApp {
             None,
         );
         // The remote machine's own gxserver runs agentbox for a box launch there.
-        let params = with_run_location(
+        let params = replacing_empty_sessions(with_run_location(
             remote_agent_launch_params(
                 &remote_launch_agent_id(hud.as_deref(), &normalized),
                 &project.project_id,
@@ -564,7 +564,7 @@ impl GhostexGpuiApp {
                 &title,
             ),
             run_location,
-        );
+        ));
         let chat = !is_agentbox_run_location(run_location)
             && self.gx_store_preferred_interface(&normalized) == "chat";
         let task = self.start_gpui_remote_sidebar_rpc(

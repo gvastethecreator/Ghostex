@@ -139,4 +139,5 @@ pub const GXSERVER_MIGRATION_IDS: &[&str] = &[
     "0040_prune_consumed_draft_recovery",
     "0041_coordinators",
     "0042_coordinator_pending_messages",
+    "0043_session_chat_send_requests",
 ];

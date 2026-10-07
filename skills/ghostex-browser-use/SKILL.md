@@ -16,9 +16,26 @@ Use Trycua's typed browser workflow for supported browser page content.
 Keep the browser bound to an exact native window and verify every mutation from
 a fresh semantic snapshot.
 
-If `$cua-driver` is available, load it and read its `BROWSER.md` before acting;
-that versioned skill is the source of truth for the installed driver's schemas,
-authorization rules, and platform support.
+## Read the cua-driver skill first
+
+Before the first `cua-driver` call, read Trycua's `cua-driver` skill: it is the
+source of truth for the installed driver's tools, schemas, safety rules and
+platform notes, and this skill only adds Ghostex's guidance on top. Load
+`$cua-driver` if your agent offers it; otherwise read its `SKILL.md` and the
+reference files it links, above all `BROWSER.md`:
+
+```bash
+cat "$(cua-driver skills path)/SKILL.md"
+```
+
+From WSL, ask the Windows side for the path and translate it:
+
+```bash
+cat "$(wslpath -u "$(powershell.exe -NoProfile -Command 'cua-driver skills path' | tr -d '\r')")/SKILL.md"
+```
+
+If the skill is missing, install it with `cua-driver skills install` (through
+`powershell.exe` from WSL), or from Settings > Integrations.
 
 Use the `cua-driver` CLI, not MCP. Do not configure, register, or invoke a
 Trycua MCP server for this workflow.

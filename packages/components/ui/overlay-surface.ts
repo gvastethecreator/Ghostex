@@ -13,7 +13,7 @@ const overlayTooltipBorderStyle: React.CSSProperties = {
 const tooltipSurfaceStyle: React.CSSProperties = {
   background: 'var(--ghostex-tooltip-background, rgba(24, 24, 24, 0.98))',
   ...overlayTooltipBorderStyle,
-  borderRadius: 'var(--ghostex-tooltip-radius, 5px)',
+  borderRadius: 'var(--ghostex-tooltip-radius, 8px)',
   boxShadow: 'var(--ghostex-tooltip-shadow, 0 12px 30px rgba(0, 0, 0, 0.35))',
   color: 'var(--ghostex-tooltip-foreground, rgba(255, 255, 255, 0.78))',
   font: 'var(--ghostex-tooltip-font, 500 12px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif)',

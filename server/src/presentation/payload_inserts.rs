@@ -57,6 +57,19 @@ pub(crate) fn insert_sidebar_spaces_presentation_payload(
     Ok(())
 }
 
+/// The daemon's own Spaces switch beside its Spaces document (`read_sidebar_spaces_enabled`).
+pub(crate) fn insert_sidebar_spaces_enabled_presentation_payload(
+    snapshot: &mut Value,
+    sidebar_spaces_enabled: bool,
+) {
+    if let Some(snapshot) = snapshot.as_object_mut() {
+        snapshot.insert(
+            "sidebarSpacesEnabled".to_string(),
+            Value::Bool(sidebar_spaces_enabled),
+        );
+    }
+}
+
 pub(crate) fn insert_custom_session_tags_presentation_payload(
     snapshot: &mut Value,
     db: &Connection,

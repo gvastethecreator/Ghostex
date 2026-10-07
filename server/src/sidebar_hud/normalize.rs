@@ -439,12 +439,15 @@ pub(super) fn default_sidebar_agent_by_icon(icon: &str) -> Option<&'static Defau
         .find(|agent| agent.icon == icon)
 }
 
-pub(super) fn is_sidebar_agent_visible(agents: &[StoredSidebarAgent], agent_id: &str) -> bool {
-    agents
-        .iter()
-        .find(|agent| agent.agent_id == agent_id)
-        .map(|agent| !agent.hidden)
-        .unwrap_or(true)
+/// Whether an agent is on: its stored `hidden` flag, else (a built-in the user never touched)
+/// whether it starts visible.
+pub(super) fn is_sidebar_agent_enabled(agents: &[StoredSidebarAgent], agent_id: &str) -> bool {
+    match agents.iter().find(|agent| agent.agent_id == agent_id) {
+        Some(agent) => !agent.hidden,
+        None => default_sidebar_agent_by_id(agent_id)
+            .map(|agent| !agent.hidden_by_default)
+            .unwrap_or(false),
+    }
 }
 
 pub(super) fn default_sidebar_agent_name(agent_id: &str, stored_name: &str) -> String {

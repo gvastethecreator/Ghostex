@@ -89,18 +89,18 @@ impl GhostexGpuiApp {
         let height = px(30.0 * appearance.scale);
         let (group, bounds, y) = self.native_sticky_project_placement(snapshot, appearance)?;
         let root = self.native_sidebar.bounds;
-        // CDXC:Projects 2026-09-19 WHY:
-        // The recorded bounds are the header row's, which already sit inside its 3px side margins, and the chevron hangs 18px left of the row. The pinned box adds both back (margins outside, chevron gutter as left padding) so the clipped copy keeps the resting width and its chevron.
+        // CDXC:Projects 2026-10-06 WHY:
+        // The recorded bounds are the header box's, which already include the chevron slot at its left edge (the box reaches left by a negative margin). The pinned wrapper starts at those bounds, pads its left by that same reach so the header's negative margin lands on the wrapper's edge instead of being clipped, and keeps the header's 3px right margin.
         let margin = px(3.0 * appearance.scale);
-        let gutter = px(18.0 * appearance.scale);
+        let reach = px(super::project_header::PROJECT_HEADER_CHEVRON_INSET * appearance.scale);
         Some(
             deferred(
                 div()
                     .absolute()
-                    .left(bounds.left() - margin - gutter - root.left())
+                    .left(bounds.left() - root.left())
                     .top(y - root.top())
-                    .w(bounds.size.width + margin * 2.0 + gutter)
-                    .pl(gutter)
+                    .w(bounds.size.width + margin)
+                    .pl(reach)
                     .h(height)
                     .overflow_hidden()
                     // Under window glass the list stops at this header's bottom edge

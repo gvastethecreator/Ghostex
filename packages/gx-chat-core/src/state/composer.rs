@@ -26,6 +26,8 @@ use crate::document::{ComposerOverflow, IncomingDraft};
 pub struct ComposerState {
     /// The draft text the host's field holds, mirrored here so every rule reads one value.
     pub text: String,
+    /// The last submission whose call failed, for [`FailedSend`].
+    pub failed_send: Option<FailedSend>,
     /// The caret, in UTF-16 code units, which is what a JavaScript string index is.
     pub caret: usize,
     /// The draft revision the next save carries, `None` before the boot read answers.
@@ -178,6 +180,18 @@ pub struct Submission {
     /// The head delivery phase is waiting for the send gate to clear. A send has already drawn its
     /// echo or marker, so the phase resumes without drawing it again.
     pub awaiting_gate: bool,
+    /// The `sendRequestId` gxserver delivers this submission under at most once; `None` when the
+    /// host supplied no random ids, which leaves naming the send to gxserver.
+    pub send_request_id: Option<String>,
+}
+
+/// A submission whose send or queue call failed, kept so pressing Enter again on the same text
+/// retries the same send instead of making a new one.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FailedSend {
+    pub text: String,
+    pub mode: crate::composer::submission::SubmissionMode,
+    pub send_request_id: String,
 }
 
 impl ComposerState {

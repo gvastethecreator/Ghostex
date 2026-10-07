@@ -6,7 +6,9 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, bail, Context, Result};
+#[cfg(not(windows))]
+use anyhow::bail;
+use anyhow::{anyhow, Context, Result};
 use rusqlite::Connection;
 use serde_json::Value;
 
@@ -184,6 +186,7 @@ fi
 /// socket (dropping only the pid/command of the ones it may not inspect).
 /// macOS has no `ss`, and its `lsof` does report other users' sockets, so there
 /// `lsof` stays first.
+#[cfg(not(windows))]
 pub(crate) fn build_tcp_listener_command() -> String {
     r#"
 if [ "$(uname -s 2>/dev/null)" = Linux ]; then
@@ -222,6 +225,14 @@ exit 127
 }
 
 pub(crate) fn read_all_tcp_listeners() -> Result<Vec<TcpListenerDetail>> {
+    #[cfg(windows)]
+    return super::windows_listeners::read_windows_tcp_listeners();
+    #[cfg(not(windows))]
+    read_posix_tcp_listeners()
+}
+
+#[cfg(not(windows))]
+fn read_posix_tcp_listeners() -> Result<Vec<TcpListenerDetail>> {
     let output = run_portless_listener_snapshot_command(&build_tcp_listener_command())?;
     if output.exit_code == 127 {
         bail!("Neither lsof nor ss is installed, so this machine cannot list listening TCP ports.");
@@ -720,6 +731,7 @@ pub(crate) struct PortlessListenerSnapshotSections {
 
 pub(crate) struct PortlessSnapshotCommandOutput {
     pub(crate) exit_code: i32,
+    #[cfg_attr(windows, allow(dead_code))]
     pub(crate) stderr: String,
     pub(crate) stdout: String,
     pub(crate) stdout_truncated: bool,

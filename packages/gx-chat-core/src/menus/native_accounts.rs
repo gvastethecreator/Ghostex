@@ -319,6 +319,9 @@ pub struct AccountSwitchCard {
     pub id: String,
     pub provider: String,
     pub retry: Option<SwitchRetry>,
+    /// A failed switch shows a close button, which sends `accounts` / `dismissSwitch` so gxserver
+    /// marks it cancelled for every client.
+    pub dismissible: bool,
 }
 
 /// The Retry button on a failed switch.
@@ -368,6 +371,7 @@ pub fn native_account_switch_card(
         id: progress.id.clone(),
         provider: progress.provider.clone(),
         retry,
+        dismissible: progress.phase == "failed",
     })
 }
 

@@ -1220,4 +1220,8 @@ pub const GXSERVER_STORAGE_MIGRATIONS: &[Migration] = &[
         id: "0042_coordinator_pending_messages",
         sql: include_str!("migrations/0042_coordinator_pending_messages.sql"),
     },
+    Migration {
+        id: "0043_session_chat_send_requests",
+        sql: include_str!("migrations/0043_session_chat_send_requests.sql"),
+    },
 ];

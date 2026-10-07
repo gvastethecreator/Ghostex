@@ -41,6 +41,8 @@ impl GhostexGpuiApp {
         let view = cx.entity().clone();
         let bounds_view = view.clone();
         let wheel_view = view.clone();
+        let blocks_view = view.clone();
+        let grabbing = self.native_sidebar.space_gesture.is_mouse_dragging();
         let presence_view = view.clone();
         let header_view = view.clone();
         self.native_sidebar.header_hover = Default::default();
@@ -94,7 +96,18 @@ impl GhostexGpuiApp {
                 }),
             )
             .on_click(cx.listener(|app, event: &gpui::ClickEvent, _, cx| {
+                // A second press dragged sideways far enough to switch Space is not a double-click.
+                let space_drag = match event {
+                    gpui::ClickEvent::Mouse(click) => {
+                        super::space_gesture::SpaceGesture::is_drag_click(
+                            click.down.position,
+                            click.up.position,
+                        )
+                    }
+                    _ => false,
+                };
                 if event.click_count() == 2
+                    && !space_drag
                     && app
                         .native_sidebar
                         .snapshot
@@ -188,8 +201,22 @@ impl GhostexGpuiApp {
                                 app.native_sidebar.scroll_animation = None;
                                 app.native_sidebar_scroll_wheel_moved(cx);
                             }))
+                            .on_mouse_down(
+                                gpui::MouseButton::Left,
+                                cx.listener(|app, event: &gpui::MouseDownEvent, _, cx| {
+                                    app.begin_native_space_mouse_drag(event, cx)
+                                }),
+                            )
                             .child(
                                 v_flex()
+                                    // Every block but the trailing ungroup drop zone, which is empty list space.
+                                    .on_children_prepainted(move |bounds, _, cx| {
+                                        blocks_view.update(cx, |app, _| {
+                                            app.native_sidebar.space_gesture.set_list_blocks(
+                                                &bounds[..bounds.len().saturating_sub(1)],
+                                            )
+                                        })
+                                    })
                                     .w_full()
                                     .pl(px(6.0 * appearance.scale))
                                     .pr(px(2.0 * appearance.scale))
@@ -243,8 +270,9 @@ impl GhostexGpuiApp {
                                                 .iter()
                                                 .find(|group| group.group_id == item.id)
                                                 .map(|group| {
+                                                    // CDXC:Spaces 2026-10-06 WHY: padding, not a margin, so this block's measured bounds (where a press is a row's and not the empty list space that starts a Space drag) cover the project header's box, which reaches left over its chevron; as a margin, a click on the chevron armed the Space drag and showed the grabbing hand.
                                                     div()
-                                                        .ml(px(18.0 * appearance.scale))
+                                                        .pl(px(18.0 * appearance.scale))
                                                         .mr(px(5.0 * appearance.scale))
                                                         .mb(px(10.0 * appearance.scale))
                                                         .child(self.render_native_sidebar_group(
@@ -305,6 +333,26 @@ impl GhostexGpuiApp {
                                 }
                             },
                         );
+                        // A Space drag follows the pointer anywhere in the window until the button comes up.
+                        if grabbing {
+                            window.set_window_cursor_style(gpui::CursorStyle::ClosedHand);
+                        }
+                        let view = wheel_view.clone();
+                        window.on_mouse_event(move |event: &gpui::MouseMoveEvent, phase, _, cx| {
+                            if phase == gpui::DispatchPhase::Capture {
+                                view.update(cx, |app, cx| {
+                                    app.move_native_space_mouse_drag(event, cx)
+                                });
+                            }
+                        });
+                        let view = wheel_view.clone();
+                        window.on_mouse_event(move |event: &gpui::MouseUpEvent, phase, _, cx| {
+                            if phase == gpui::DispatchPhase::Capture
+                                && event.button == gpui::MouseButton::Left
+                            {
+                                view.update(cx, |app, cx| app.end_native_space_mouse_drag(cx));
+                            }
+                        });
                     },
                 )
                 .absolute()

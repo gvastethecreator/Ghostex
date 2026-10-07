@@ -21,20 +21,60 @@ use crate::transcript::tool_rows::{
 };
 use crate::transcript::tool_summary::{command_detail, format_tool_input};
 
-/// A tool's arguments and result as its open row shows them.
-pub fn tool_detail(pair: &ToolPair<'_>) -> Value {
-    let input = match pair.call_input() {
+/// The arguments an open tool row shows: a command tool's command line, or the input as text.
+fn tool_input_text(pair: &ToolPair<'_>) -> String {
+    match pair.call_input() {
         Some(input) => pair
             .call_name()
             .filter(|name| is_command_tool(name))
             .and_then(|_| command_detail(input))
             .unwrap_or_else(|| format_tool_input(input)),
         None => String::new(),
-    };
+    }
+}
+
+/// A tool's arguments and result as its open row shows them.
+pub fn tool_detail(pair: &ToolPair<'_>) -> Value {
     json!({
-        "input": clip_tool_body(&input),
+        "input": clip_tool_body(&tool_input_text(pair)),
         "output": clip_tool_body(pair.result_output().unwrap_or_default()),
     })
+}
+
+/// What an open tool row's copy button puts on the clipboard: the tool's name, then its command
+/// or input and its result under the labels the row draws, each in full rather than clipped to
+/// [`crate::transcript::tool_rows::MAX_TOOL_RESULT_CHARS`] the way the row shows them.
+///
+/// CDXC:SessionChat 2026-10-05 DECISION: "need a button on the top right I can click to copy all in the tool call result and the command etc". Every open tool row (desktop and phone) has a copy button that copies this text.
+pub fn tool_copy_text(pair: &ToolPair<'_>) -> String {
+    let name = pair.call_name().unwrap_or("Result");
+    let input = tool_input_text(pair);
+    let output = pair.result_output().unwrap_or_default();
+    let mut text = name.to_string();
+    if !input.is_empty() {
+        let label = if tool_glyph(name) == "terminal" {
+            "Command"
+        } else {
+            "Input"
+        };
+        text.push_str(&format!("\n\n{label}:\n{input}"));
+    }
+    if !output.is_empty() {
+        let label = if pair.call.is_some() {
+            "Result"
+        } else {
+            "Output"
+        };
+        text.push_str(&format!("\n\n{label}:\n{output}"));
+    }
+    text
+}
+
+/// [`tool_detail`] for a row the renderer draws open, with the full text its copy button copies.
+pub fn open_tool_detail(pair: &ToolPair<'_>) -> Value {
+    let mut detail = tool_detail(pair);
+    detail["copyText"] = tool_copy_text(pair).into();
+    detail
 }
 
 /// One row per tool pair.

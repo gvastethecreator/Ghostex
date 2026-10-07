@@ -17,8 +17,8 @@ use crate::{
     },
     presentation::increment_presentation_revision,
     sidebar_hud::{
-        create_sidebar_hud_settings_mutation, read_sidebar_hud, read_sidebar_hud_global_commands,
-        GlobalSidebarCommandUpdate,
+        create_sidebar_hud_settings_mutation, read_sidebar_agent_roster, read_sidebar_hud,
+        read_sidebar_hud_global_commands, GlobalSidebarCommandUpdate,
     },
     sidebar_project_collections::{
         assign_project_to_sidebar_collection, read_sidebar_project_collections,
@@ -82,6 +82,19 @@ pub(super) async fn route_sidebar_http(
                             &repository.list_global_sidebar_commands()?,
                         ),
                     );
+                    /*
+                    CDXC:AgentLauncher 2026-10-06 WHY:
+                    Settings › Agents asks for every agent, on and off, with when each was last used. That needs a sessions-table read, so it is opt-in and the launcher's frequent HUD reads stay a pure projection of project rows.
+                    */
+                    if params.get("includeAgentRoster").and_then(Value::as_bool) == Some(true) {
+                        hud.insert(
+                            "agentRoster".to_string(),
+                            read_sidebar_agent_roster(
+                                &projects,
+                                &repository.agent_launcher_last_used()?,
+                            ),
+                        );
+                    }
                 }
                 Ok(hud)
             },
@@ -399,6 +412,8 @@ pub(super) async fn route_sidebar_http(
                     "revision": revision,
                     "serverId": state.metadata.server_id.clone(),
                     "sidebarSpaces": spaces.clone(),
+                    "sidebarSpacesEnabled":
+                        crate::sidebar_spaces::read_sidebar_spaces_enabled(&state.paths),
                     "type": "sidebarSpacesChanged",
                 }));
                 Ok(json!({ "sidebarSpaces": spaces }))

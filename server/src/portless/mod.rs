@@ -8,6 +8,8 @@ pub mod sync;
 #[cfg(test)]
 mod tests;
 pub mod types;
+#[cfg(windows)]
+mod windows_listeners;
 
 pub use admin::*;
 pub use repository::*;

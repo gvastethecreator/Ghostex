@@ -8,6 +8,21 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// CDXC:AgentProviders 2026-10-04 WHY:
+/// When the account command dies before an agent appears (cswap refusing a flag, a missing login), the switch used to wait out its timeout and say only "has not started yet"; the last terminal lines carry the command's own error.
+fn terminal_tail(screen: &str) -> Option<String> {
+    let lines: Vec<&str> = screen
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    let tail = lines[lines.len().saturating_sub(3)..].join(" · ");
+    if tail.is_empty() {
+        return None;
+    }
+    Some(tail.chars().take(400).collect())
+}
+
 /// CDXC:AgentProviders 2026-09-11 DECISION:
 /// User: verify the new process's account identity and ready input before marking a switch successful or sending its continuation dot.
 /// The live process's configured login is the evidence: the saved account binding and shared transcript folder can both still describe a different account.
@@ -22,6 +37,7 @@ pub(crate) async fn wait_for_account_ready(
 ) -> Result<(), String> {
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
     let mut reason = "The selected account has not started yet.".to_string();
+    let mut saw_agent = false;
     loop {
         if cancelled() {
             return Err("The account switch was cancelled.".to_string());
@@ -46,6 +62,7 @@ pub(crate) async fn wait_for_account_ready(
         .ok()
         .flatten();
         if let Some(identity) = observation {
+            saw_agent = true;
             match identity {
                 Some(identity) if identity == expected_identity => {
                     if let Some(screen) = capture_session_terminal_text(zmx_name).await {
@@ -75,6 +92,15 @@ pub(crate) async fn wait_for_account_ready(
             }
         }
         if Instant::now() >= deadline {
+            if !saw_agent {
+                if let Some(tail) = capture_session_terminal_text(zmx_name)
+                    .await
+                    .and_then(|screen| terminal_tail(&screen))
+                {
+                    reason =
+                        format!("The selected account did not start. The terminal shows: {tail}");
+                }
+            }
             return Err(reason);
         }
         tokio::time::sleep(Duration::from_millis(250)).await;

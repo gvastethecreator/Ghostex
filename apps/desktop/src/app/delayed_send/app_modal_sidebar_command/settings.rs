@@ -85,6 +85,18 @@ impl GhostexGpuiApp {
                     cx,
                 );
             }
+            #[cfg(target_os = "windows")]
+            "openMacOSNotificationSettings" => {
+                if let Err(message) = gpui_open_url(GPUI_WINDOWS_NOTIFICATION_SETTINGS_URL) {
+                    self.dispatch_gpui_settings_action_status(
+                        "openMacOSNotificationSettings",
+                        false,
+                        &message,
+                        cx,
+                    );
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
             "openMacOSNotificationSettings" => {
                 self.open_gpui_macos_system_settings_url(
                     GPUI_MACOS_NOTIFICATION_SETTINGS_URL,
@@ -127,7 +139,10 @@ impl GhostexGpuiApp {
             "setPortlessEnabled" => {
                 self.handle_gpui_set_portless_enabled_message(command, cx);
             }
-            "saveSidebarAgent" | "deleteSidebarAgent" | "syncSidebarAgentOrder" => {
+            "saveSidebarAgent"
+            | "deleteSidebarAgent"
+            | "syncSidebarAgentOrder"
+            | "setSidebarAgentsEnabled" => {
                 self.handle_gpui_sidebar_agent_metadata_command(command, cx);
             }
             "saveSidebarCommand"

@@ -157,6 +157,14 @@ pub(crate) fn activity_for_hook_event(
             return Some("idle".to_string());
         }
     }
+    /*
+    CDXC:Notifications 2026-10-05 WHY:
+    Ghostex's Pi and OMP extensions send Stop only for a turn the agent finished on its own: once `agent_settled` says no retry or queued follow-up continues it, and never for an Esc (Interrupt) or a provider failure (StopFailure). Its Amp plugin does the same from `agent.end`'s status (`done`, `cancelled`, `error`). That makes their Stop the same completed-turn boundary as Claude's and Codex's, so a finished Pi, OMP or Amp turn enters attention and rings instead of settling silently to idle.
+    SEE-ALSO: build_pi_extension_source, build_omp_extension_source and build_amp_plugin_source in server/src/agent_hooks/plugin_sources.rs, normalize_agent_hook_activity in server/src/agents/activity.rs.
+    */
+    if matches!(agent_key, "pi" | "omp" | "amp") && lower == "stop" {
+        return Some("attention".to_string());
+    }
     // OpenClaude emits Claude's hook contract verbatim, so it shares every
     // Claude-specific rule below instead of falling through to the generic
     // tables (which have no PostCompact trigger check and no StopFailure arm).

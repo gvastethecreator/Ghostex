@@ -158,6 +158,8 @@ export interface GxserverQueueSessionChatPromptParams {
   sessionId: string;
   /** Appended at the END of the queue. Callers trim before sending. */
   text: string;
+  /** See `GxserverSendSessionChatMessageParams.sendRequestId`: a repeated id is not queued twice. */
+  sendRequestId?: string;
 }
 
 export interface GxserverQueueSessionChatPromptResult extends GxserverSessionChatQueueResult {

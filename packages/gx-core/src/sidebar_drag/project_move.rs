@@ -34,6 +34,7 @@ use crate::project_docs::{
     reorder_spaces, toggle_space_member, CollectionsDocument, DropPosition, SpaceMemberKind,
     SpacesDocument,
 };
+use crate::sidebar_view::machine_spaces::section_spaces_enabled;
 use crate::sidebar_view::spaces::resolve_selected_space;
 use crate::sidebar_view::{SidebarInputs, OTHER_SPACE_ID};
 
@@ -234,10 +235,11 @@ pub fn plan_project_move(
     }
     let machine = selected_machine(&inputs.ui.selected_machine_id);
     let section = project_section(core, inputs, &machine)?;
-    // `nativeSidebarSettings().sidebarSpacesEnabled ? ui.metadata.spaces[machineId] : undefined`.
+    // `nativeSidebarSettings().sidebarSpacesEnabled ? ui.metadata.spaces[machineId] : undefined`,
+    // with the switch read off the machine itself (`machine_spaces.rs`).
     // The Spaces REORDER deliberately does not go through this: `reorderNativeSidebar` reads
     // `ui.metadata.spaces[...]` directly, so a Space row can be dragged with the setting off.
-    let section_spaces = match inputs.settings.sidebar_spaces_enabled {
+    let section_spaces = match section_spaces_enabled(core.presentation(), inputs) {
         true => spaces,
         false => None,
     };

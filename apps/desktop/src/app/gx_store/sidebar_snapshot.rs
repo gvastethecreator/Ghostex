@@ -889,6 +889,8 @@ fn build_session(
                 "open": session.nesting.thread_count,
                 "collapsible": session.nesting.thread_count > 0,
                 "collapsed": session.nesting.collapsed,
+                "older": session.nesting.older_threads,
+                "olderShown": session.nesting.older_threads_shown,
             }),
         );
     }

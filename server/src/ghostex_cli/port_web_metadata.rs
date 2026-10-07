@@ -1,8 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Mutex,
+    Arc, Mutex,
 };
 use std::time::{Duration, Instant};
 
@@ -16,12 +17,19 @@ use crate::portless::listener_discovery::TcpListenerDetail;
 /// Page discovery runs on the computer because its localhost addresses are not reachable from the phone.
 /// Bounded concurrent probes keep a long list of non-HTTP listeners from delaying the browser picker indefinitely.
 pub(super) fn inspect_ports(listeners: &[TcpListenerDetail]) -> BTreeMap<u16, Value> {
-    let ports = listeners
+    let mut ports = listeners
         .iter()
         .map(|row| row.port)
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
+    ports.sort_by_key(|port| (probe_priority(listeners, *port), *port));
+    let targets = Arc::new(
+        ports
+            .iter()
+            .map(|port| (*port, connect_addresses(listeners, *port)))
+            .collect::<HashMap<_, _>>(),
+    );
     let cursor = AtomicUsize::new(0);
     let results = Mutex::new(BTreeMap::new());
     let deadline = Instant::now() + Duration::from_secs(6);
@@ -30,10 +38,22 @@ pub(super) fn inspect_ports(listeners: &[TcpListenerDetail]) -> BTreeMap<u16, Va
             let ports = &ports;
             let cursor = &cursor;
             let results = &results;
+            let targets = targets.clone();
             scope.spawn(move || {
                 let agent = ureq::AgentBuilder::new()
                     .timeout(Duration::from_millis(900))
                     .redirects(0)
+                    .resolver(move |netloc: &str| {
+                        let bound = netloc
+                            .rsplit_once(':')
+                            .filter(|(host, _)| host.eq_ignore_ascii_case("localhost"))
+                            .and_then(|(_, port)| port.parse::<u16>().ok())
+                            .and_then(|port| targets.get(&port));
+                        match bound {
+                            Some(addresses) => Ok(addresses.clone()),
+                            None => netloc.to_socket_addrs().map(Iterator::collect),
+                        }
+                    })
                     .build();
                 while Instant::now() < deadline {
                     let index = cursor.fetch_add(1, Ordering::Relaxed);
@@ -46,6 +66,96 @@ pub(super) fn inspect_ports(listeners: &[TcpListenerDetail]) -> BTreeMap<u16, Va
         }
     });
     results.into_inner().unwrap()
+}
+
+/// CDXC:Browser 2026-10-05 WHY:
+/// Probes connect to the address the port is bound to while the URL, and so the Host header, stays `localhost`. Left to the resolver, `localhost` tries `::1` first, and on Windows a refused loopback connection takes about two seconds, so every port bound only to 127.0.0.1 used up its whole timeout and was never described. Wildcard binds are reached through the loopback address of their family.
+fn connect_addresses(listeners: &[TcpListenerDetail], port: u16) -> Vec<SocketAddr> {
+    let loopbacks = [
+        IpAddr::V4(Ipv4Addr::LOCALHOST),
+        IpAddr::V6(Ipv6Addr::LOCALHOST),
+    ];
+    let mut addresses = listeners
+        .iter()
+        .filter(|listener| listener.port == port)
+        .flat_map(|listener| {
+            let address = listener.address.trim_start_matches('[').trim_end_matches(']');
+            let address = address.split('%').next().unwrap_or_default();
+            match address.parse::<IpAddr>() {
+                Ok(IpAddr::V4(ip)) if ip.is_unspecified() => vec![loopbacks[0]],
+                Ok(IpAddr::V6(ip)) if ip.is_unspecified() => vec![loopbacks[1]],
+                Ok(ip) => vec![ip],
+                Err(_) => loopbacks.to_vec(),
+            }
+        })
+        .collect::<Vec<_>>();
+    if addresses.is_empty() {
+        addresses = loopbacks.to_vec();
+    }
+    // Loopback first, IPv4 before IPv6, then any address bound to one interface.
+    addresses.sort_by_key(|ip| (!ip.is_loopback(), ip.is_ipv6()));
+    addresses.dedup();
+    addresses
+        .into_iter()
+        .map(|ip| SocketAddr::new(ip, port))
+        .collect()
+}
+
+/// CDXC:Browser 2026-10-05 WHY:
+/// The probe budget is shared, and a computer can hold dozens of listeners that never answer HTTP (Windows RPC and service ports, Ghostex's own session daemons) and each hold a probe until it times out. Dev-server runtimes go first and those system listeners last, so they cannot use up the budget before the pages the picker exists for.
+fn probe_priority(listeners: &[TcpListenerDetail], port: u16) -> u8 {
+    let commands = listeners
+        .iter()
+        .filter(|listener| listener.port == port)
+        .filter_map(|listener| listener.command.as_deref())
+        .map(str::to_ascii_lowercase)
+        .collect::<Vec<_>>();
+    let dev_runtime = |command: &str| {
+        command.starts_with("python")
+            || command.starts_with("next-server")
+            || matches!(
+                command,
+                "node"
+                    | "bun"
+                    | "deno"
+                    | "ruby"
+                    | "php"
+                    | "java"
+                    | "go"
+                    | "cargo"
+                    | "dotnet"
+                    | "tsx"
+                    | "npx"
+                    | "uvicorn"
+                    | "gunicorn"
+                    | "puma"
+            )
+    };
+    let system = |command: &str| {
+        matches!(
+            command,
+            "system"
+                | "svchost"
+                | "lsass"
+                | "wininit"
+                | "services"
+                | "spoolsv"
+                | "launchd"
+                | "rapportd"
+                | "sharingd"
+                | "controlcenter"
+                | "mdnsresponder"
+                | "wmx"
+                | "zmx"
+        )
+    };
+    if commands.iter().any(|command| dev_runtime(command)) {
+        0
+    } else if port < 1024 || commands.iter().any(|command| system(command)) {
+        2
+    } else {
+        1
+    }
 }
 
 fn response(agent: &ureq::Agent, url: &str) -> Option<ureq::Response> {

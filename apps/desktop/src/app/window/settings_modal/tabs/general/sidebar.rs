@@ -370,6 +370,17 @@ fn sidebar_section(
         window,
         cx,
     ));
+    // The sidebar's Sort & Filter menu writes the same setting (CDXC:Sidebar 2026-10-05 in gx-core
+    // sidebar_view/ordering.rs `is_grouped_working`).
+    rows.extend(page.toggle(
+        g,
+        s,
+        "groupWorkingSessions",
+        "Group working sessions",
+        "Move sessions into a collapsed Working section under their project while their agent works; they return to Sessions when it stops or needs you. Also in the sidebar's Sort & Filter menu.",
+        false,
+        cx,
+    ));
     // CDXC:Sidebar 2026-06-16-18:19: agentManagerZoomPercent is labelled Sidebar Interface Size.
     rows.extend(page.slider(
         g,

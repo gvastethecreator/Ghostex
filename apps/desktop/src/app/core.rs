@@ -1016,6 +1016,10 @@ impl Drop for GhostexGpuiApp {
         }
         #[cfg(target_os = "windows")]
         crate::navigation_history::windows_mouse::unregister(self.parent_ns_view);
+        #[cfg(target_os = "windows")]
+        if lead {
+            unregister_gpui_windows_notification_click_target();
+        }
         #[cfg(target_os = "macos")]
         if lead {
             unregister_gpui_menu_bar_status_callback_target();

@@ -5,6 +5,7 @@ use crate::ghostex_cli::{
     sessions,
 };
 use serde_json::{json, Value};
+use std::time::{Duration, Instant};
 
 pub(crate) fn text<'a>(session: &'a Value, key: &str) -> &'a str {
     session
@@ -43,7 +44,7 @@ pub(crate) fn caller() -> CliResult<Value> {
         .find_map(|key| std::env::var(key).ok().filter(|value| !value.trim().is_empty()).map(|value| (key, value.trim().to_owned())))
         .ok_or_else(|| CliError::Other("Cannot identify the caller. Run inside a Ghostex agent session with GHOSTEX_GLOBAL_SESSION_REF or GHOSTEX_SESSION_ID set.".into()))?;
     let flags = inventory_flags(&Flags::default(), &reference)?;
-    let rows = sessions::fetch_session_list(&flags, false)?;
+    let rows = live_session_rows(&flags)?;
     let matches: Vec<_> = rows
         .iter()
         .filter(|row| {
@@ -64,6 +65,34 @@ pub(crate) fn caller() -> CliResult<Value> {
     let mut caller = matches[0].clone();
     resolve_names(std::slice::from_mut(&mut caller), &flags);
     Ok(caller)
+}
+
+/// How long the caller lookup waits for gxserver to answer, which covers a gxserver restart.
+const CALLER_LIVE_WAIT: Duration = Duration::from_secs(20);
+const CALLER_LIVE_POLL: Duration = Duration::from_millis(500);
+
+/// CDXC:Cli 2026-10-05 WHY:
+/// The session list falls back to gxserver's persisted state when gxserver does not answer, and those rows carry no agent session id and no launcher name. A coordinator that messaged its threads right after a gxserver restart sent `Agent: claude` and `Agent Session ID: unavailable` (observed 2026-10-05, coordinator G4snt), while its own record still had the id. The caller's identity is therefore read only from the running gxserver, waiting out a restart; a message cannot be sent without gxserver anyway, so a gxserver that stays down fails the command instead of sending a header with missing identity.
+/// SEE-ALSO: server/src/ghostex_cli/sessions/persisted.rs (the fallback rows), `caller` above.
+fn live_session_rows(flags: &Flags) -> CliResult<Vec<Value>> {
+    let deadline = Instant::now() + CALLER_LIVE_WAIT;
+    loop {
+        match sessions::fetch_live_gxserver_session_list(flags) {
+            Ok(result) => {
+                return Ok(result
+                    .get("sessions")
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default())
+            }
+            Err(error) if Instant::now() >= deadline => {
+                return Err(CliError::Other(format!(
+                    "gxserver did not answer, so your own identity for the message header could not be read: {error} It may be restarting; try again in a few seconds."
+                )))
+            }
+            Err(_) => std::thread::sleep(CALLER_LIVE_POLL),
+        }
+    }
 }
 
 pub(crate) fn resolve_names(rows: &mut [Value], flags: &Flags) {
@@ -152,13 +181,18 @@ fn header_value(row: &Value, key: &str) -> String {
 }
 
 /// CDXC:Cli 2026-09-17 DECISION:
-/// User: prepend the sender's CLI-resolved identity to every agent message. Assemble the header before enqueueing so delayed delivery retains the original sender.
+/// User: attach the sender's CLI-resolved identity to every agent message. Assemble the block before enqueueing so delayed delivery retains the original sender.
 /// CDXC:Cli 2026-09-18 DECISION:
-/// User: the header must not render as a heading. The old `MESSAGE FROM` header ended in a dashed line, which Markdown reads as a setext underline, so the chat turned the whole header into an h2. A blank line now separates header and body.
-/// SEE-ALSO: packages/gx-chat-core/src/transcript/agent_message.rs parses this header (and the old dashed one) into the chat's message card.
+/// User: the block must not render as a heading. The old `MESSAGE FROM` header ended in a dashed line, which Markdown reads as a setext underline, so the chat turned the whole header into an h2. A blank line now separates the block from the body.
+/// CDXC:Cli 2026-10-05 DECISION:
+/// User: move the block BELOW the body (identity stays in every message), so Claude and Codex title the session from the task text instead of the sender's `Session:` title. Supersedes the 2026-09-17 placement at the top.
+/// CDXC:Cli 2026-10-05 DECISION:
+/// User: a body that starts with `/` or `!` (after leading whitespace) keeps the block FIRST, as before, so the receiving agent never runs the body's first line as a slash or shell command.
+/// SEE-ALSO: packages/gx-chat-core/src/transcript/agent_message.rs parses the block in both positions (and the old dashed one) into the chat's message card; server/src/coordinators/brief.rs `agent_message` writes the same block.
 pub(crate) fn message(sender: &Value, body: &str) -> String {
     let sender = summary(sender);
-    format!("Message from another agent\nAgent: {}\nSession: {}\nSession ID: {}\nAgent ID: {}\nAgent Session ID: {}\nReply to: {}\n\n{}",
+    let block = format!("Message from another agent\nAgent: {}\nSession: {}\nSession ID: {}\nAgent ID: {}\nAgent Session ID: {}\nReply to: {}",
         header_value(&sender, "agentName"), header_value(&sender, "title"), header_value(&sender, "sessionId"),
-        header_value(&sender, "agentId"), header_value(&sender, "agentSessionId"), header_value(&sender, "globalRef"), body)
+        header_value(&sender, "agentId"), header_value(&sender, "agentSessionId"), header_value(&sender, "globalRef"));
+    crate::coordinators::place_agent_message_block(&block, body)
 }

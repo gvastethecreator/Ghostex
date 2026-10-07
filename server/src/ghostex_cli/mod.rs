@@ -362,7 +362,10 @@ fn run_command(name: &str, args: &[String]) -> CliResult<()> {
     match name {
         "account-login" => account_login::run(args),
         "agent-cli" => agent_cli::run(args),
-        "agentbox" => agentbox_cli::run(args),
+        "agentbox" => {
+            require_built_in(ghostex_settings_catalog::built_in_extensions::CLOUD_BOXES)?;
+            agentbox_cli::run(args)
+        }
         "agents" => agents::run(args),
         "coordinator" => coordinator::run(args),
         "sessions" | "s" | "list-sessions" | "ls" => sessions::sessions_command(args),

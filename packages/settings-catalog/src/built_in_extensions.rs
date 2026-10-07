@@ -14,6 +14,7 @@
 
 use crate::data::GHOSTEX_OFFICIAL_EXTENSIONS;
 use crate::json::J;
+use crate::Platform;
 use serde_json::{Map, Value};
 
 /// The Actions feature (Start button, Settings > Actions, action hotkeys). The id predates the
@@ -23,6 +24,9 @@ pub const ACTIONS: &str = "quickActions";
 pub const OPEN_IN: &str = "openIn";
 /// Spaces (the sidebar's Space row, Space menus and Settings rows).
 pub const SPACES: &str = "spaces";
+/// Cloud Boxes (Settings > Cloud Boxes, the new thread's Run on choice, Run in box menus, the
+/// `ghostex agentbox` verbs). macOS and Linux only.
+pub const CLOUD_BOXES: &str = "cloudBoxes";
 
 fn entry(id: &str) -> Option<&'static J> {
     GHOSTEX_OFFICIAL_EXTENSIONS
@@ -55,9 +59,62 @@ pub fn switch_key(id: &str) -> Option<(&'static str, bool)> {
     Some((key, entry.get("settingsKeyEnables") == Some(&J::Bool(true))))
 }
 
+/// Whether built-in extension `id` exists on `platform` (its `platforms` list; none means every
+/// platform). One that does not is left off the Extensions page and is always off there.
+pub fn available_on(id: &str, platform: Platform) -> bool {
+    let Some(platforms) = entry(id).and_then(|entry| entry.get("platforms")) else {
+        return true;
+    };
+    let name = crate::help::platform_id(platform);
+    platforms
+        .as_array()
+        .iter()
+        .any(|value| value.as_str() == Some(name))
+}
+
+/// The Help sentence for an entry that exists on some platforms only.
+pub fn availability_note(id: &str) -> Option<String> {
+    entry(id)?.get("platforms")?;
+    let names: Vec<&str> = [Platform::MacOs, Platform::Windows, Platform::Linux]
+        .into_iter()
+        .filter(|platform| available_on(id, *platform))
+        .map(crate::availability::platform_name)
+        .collect();
+    Some(format!("Only on {}.", names.join(" and ")))
+}
+
+/// The built-in extension whose switch is setting `key`, if any.
+pub fn feature_switched_by(key: &str) -> Option<&'static str> {
+    GHOSTEX_OFFICIAL_EXTENSIONS
+        .as_array()
+        .iter()
+        .find(|entry| entry.get("settingsKey").and_then(J::as_str) == Some(key))
+        .and_then(|entry| entry.get("id").and_then(J::as_str))
+}
+
+/// Whether setting `key` belongs to a built-in extension that does not exist on `platform`: its
+/// Extensions card row (keyed by its id), its switch or a row it owns on another page.
+pub fn key_unavailable_on(platform: Platform, key: &str) -> bool {
+    GHOSTEX_OFFICIAL_EXTENSIONS.as_array().iter().any(|entry| {
+        let id = entry.get("id").and_then(J::as_str);
+        id.is_some_and(|id| !available_on(id, platform))
+            && (id == Some(key)
+                || entry.get("settingsKey").and_then(J::as_str) == Some(key)
+                || strings(entry, "settingKeys").any(|owned| owned == key))
+    })
+}
+
+/// Whether Settings page `page_id` exists on `platform`: no feature owns it, or its feature does.
+pub fn page_available_on(page_id: &str, platform: Platform) -> bool {
+    feature_owning_page(page_id).is_none_or(|id| available_on(id, platform))
+}
+
 /// Whether built-in extension `id` is on, reading saved values through `read` and falling back to
-/// the catalog default. An unknown id counts as on.
+/// the catalog default. An unknown id counts as on; one this platform does not have is off.
 pub fn enabled_with(id: &str, read: impl Fn(&str) -> Option<bool>) -> bool {
+    if !available_on(id, Platform::current()) {
+        return false;
+    }
     let Some((key, enables)) = switch_key(id) else {
         return true;
     };

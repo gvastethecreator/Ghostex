@@ -16,6 +16,20 @@ pub(crate) const NOTIFICATION_FEED_KIND_FINISHED: &str = "finished";
 pub(crate) const NOTIFICATION_FEED_KIND_NEEDS_INPUT: &str = "needsInput";
 pub(crate) const NOTIFICATION_FEED_KIND_BELL: &str = "bell";
 pub(crate) const NOTIFICATION_FEED_KIND_CUSTOM: &str = "custom";
+/// A banked usage reset of a saved account expires soon; clients draw it red.
+pub(crate) const NOTIFICATION_FEED_KIND_RESET_EXPIRING: &str = "resetExpiring";
+/// Ghostex used an expiring banked reset on its own.
+pub(crate) const NOTIFICATION_FEED_KIND_RESET_REDEEMED: &str = "resetRedeemed";
+
+/// CDXC:Notifications 2026-10-05 WHY:
+/// Account rows (banked reset warnings) belong to no session, but the feed's one-live-row-per-session rule is exactly what they need per account: the 24-hour warning replaces the unread 3-day one, and an automatic redeem replaces both. Their `sessionId` is this prefix plus the saved account id, which no real session id can collide with; the orphan sweep and the read-acknowledges-the-thread rule skip them, and every row carries `accountId` so a client opens the account instead of a session.
+pub(crate) const ACCOUNT_NOTIFICATION_SESSION_PREFIX: &str = "account:";
+/// The `projectId` account rows are stored under.
+pub(crate) const ACCOUNT_NOTIFICATION_PROJECT_ID: &str = "accounts";
+
+pub(crate) fn account_notification_session_id(account_id: &str) -> String {
+    format!("{ACCOUNT_NOTIFICATION_SESSION_PREFIX}{account_id}")
+}
 
 pub(crate) struct NewNotificationFeedRow {
     pub project_id: String,
@@ -97,8 +111,8 @@ fn prune_notification_feed(db: &Connection) -> DomainResult<()> {
 /// Rows whose session was deleted have nothing to open; drop them before listing.
 fn drop_orphaned_notification_feed_rows(db: &Connection) -> DomainResult<()> {
     db.execute(
-        "DELETE FROM notification_feed WHERE sessionId NOT IN (SELECT sessionId FROM sessions)",
-        [],
+        "DELETE FROM notification_feed WHERE sessionId NOT IN (SELECT sessionId FROM sessions) AND substr(sessionId, 1, length(?1)) <> ?1",
+        params![ACCOUNT_NOTIFICATION_SESSION_PREFIX],
     )
     .map_err(sql_error)?;
     Ok(())
@@ -126,11 +140,13 @@ pub(crate) fn unread_notification_session_ids(
 ) -> DomainResult<Vec<String>> {
     let mut statement = db
         .prepare(
-            "SELECT DISTINCT sessionId FROM notification_feed WHERE readAt IS NULL AND (?1 IS NULL OR id = ?1)",
+            "SELECT DISTINCT sessionId FROM notification_feed WHERE readAt IS NULL AND (?1 IS NULL OR id = ?1) AND substr(sessionId, 1, length(?2)) <> ?2",
         )
         .map_err(sql_error)?;
     let rows = statement
-        .query_map(params![id], |row| row.get::<_, String>(0))
+        .query_map(params![id, ACCOUNT_NOTIFICATION_SESSION_PREFIX], |row| {
+            row.get::<_, String>(0)
+        })
         .map_err(sql_error)?
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(sql_error)?;
@@ -211,6 +227,12 @@ fn item_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     });
     if let Some(agent_name) = agent_name.filter(|value| !value.trim().is_empty()) {
         item["agentName"] = Value::String(agent_name);
+    }
+    if let Some(account_id) = item["sessionId"]
+        .as_str()
+        .and_then(|id| id.strip_prefix(ACCOUNT_NOTIFICATION_SESSION_PREFIX))
+    {
+        item["accountId"] = Value::String(account_id.to_string());
     }
     Ok(item)
 }

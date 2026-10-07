@@ -160,11 +160,23 @@ impl SharedSidebarSettingsSnapshot {
     /// Where new threads run unless the user picks another location: `"local"`,
     /// `"agentbox:<provider>"` or `"agentbox:docker:<sshHost>"`, already in the
     /// `/api/createAgentSession` `runLocation` form.
+    /// This computer while Cloud Boxes is off (Settings > Extensions), whatever default was saved.
     pub fn agentbox_default_location(&self) -> String {
+        if !self.cloud_boxes_enabled() {
+            return DEFAULT_AGENTBOX_LOCATION.to_string();
+        }
         normalize_agentbox_location(
             self.object
                 .get("agentboxDefaultLocation")
                 .and_then(Value::as_str),
+        )
+    }
+
+    /// Whether the Cloud Boxes built-in extension is on (never on Windows).
+    pub fn cloud_boxes_enabled(&self) -> bool {
+        ghostex_settings_catalog::built_in_extensions::enabled(
+            &self.object,
+            ghostex_settings_catalog::built_in_extensions::CLOUD_BOXES,
         )
     }
 

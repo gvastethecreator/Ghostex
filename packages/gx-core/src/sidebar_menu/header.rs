@@ -243,7 +243,7 @@ pub fn agent_launcher_items_with_accounts(
 /// The launcher's "New Coordinator…" row.
 ///
 /// CDXC:Coordinators 2026-10-03 DECISION:
-/// User: "Please move this to the top in both apps": "New Coordinator…" is the first row of a project's agent launcher, above the agents, on the desktop, the web build and the phone. A coordinator is started where agents are started, so the launcher offers it; the dialog behind it names the coordinator and picks its Claude or Codex agent. Supersedes the 2026-09-30 placement after Run in a box.
+/// User: "Please move this to the top in both apps": "New Coordinator…" is the first row of a project's agent launcher, above the agents, on the desktop, the web build and the phone. A coordinator is started where agents are started, so the launcher offers it; the dialog behind it names the coordinator and picks its Claude, Codex or ZCode agent. Supersedes the 2026-09-30 placement after Run in a box.
 /// SEE-ALSO: `agentMenuItems` in apps/mobile/app/src/screens/sessions-screen/use-sessions-screen-menus.tsx (the phone's agent menu keeps the same order).
 fn new_coordinator_row(group_id: &str) -> MenuItem {
     MenuItem::row(

@@ -16,11 +16,22 @@ pub(in crate::app::native_chat) struct SuggestionWindowState {
     /// A sync asked for while `opening`: the step in flight measured an older state.
     stale: bool,
     inline: Option<gpui::WeakEntity<SuggestionPanel>>,
+    windowed: Option<gpui::WeakEntity<SuggestionPanel>>,
+    /// The row the pointer last moved onto, painted at once while the core is told about it.
+    pub(super) hover: Option<usize>,
+    /// Rows the pointer moved onto since the last key or edit, whose selection the core echoes.
+    pub(super) hovered: Vec<usize>,
 }
 
 impl SuggestionWindowState {
     pub(in crate::app::native_chat) fn is_open(&self) -> bool {
         self.bounds.is_some()
+    }
+
+    /// Hands the highlight back to the core's selection: a key, an edit or a pick moves it there.
+    pub(in crate::app::native_chat) fn clear_hover(&mut self) {
+        self.hover = None;
+        self.hovered.clear();
     }
 
     /// The card inside its window, whose frame is `window_frame` of the card.
@@ -94,6 +105,7 @@ impl NativeChatView {
             return;
         }
         self.suggestion_selection = Some((text.clone(), caret));
+        self.suggestions.clear_hover();
         self.invoke(
             json!({"type":"composerSelection","text":text,"caret":caret}),
             cx,
@@ -260,7 +272,7 @@ impl NativeChatView {
                             let panel = cx.new(|cx| {
                                 let subscription = cx.observe(&chat, |_, _, cx| cx.notify());
                                 SuggestionPanel {
-                                    chat,
+                                    chat: chat.clone(),
                                     source,
                                     scroll: Default::default(),
                                     selected: None,
@@ -268,6 +280,8 @@ impl NativeChatView {
                                     _subscription: subscription,
                                 }
                             });
+                            let weak = panel.downgrade();
+                            chat.update(cx, |chat, _| chat.suggestions.windowed = Some(weak));
                             cx.new(|cx| Root::new(panel, window, cx).bg(gpui::transparent_black()))
                         }
                     },
@@ -288,6 +302,17 @@ impl NativeChatView {
         });
     }
 
+    /// Repaints the open list for a snapshot that only moved its selection (`only_selection_moved`).
+    pub(in crate::app::native_chat) fn repaint_suggestions(&self, cx: &mut Context<Self>) {
+        for panel in [&self.suggestions.windowed, &self.suggestions.inline]
+            .into_iter()
+            .flatten()
+            .filter_map(gpui::WeakEntity::upgrade)
+        {
+            panel.update(cx, |_, cx| cx.notify());
+        }
+    }
+
     /// Ends the deferred window step, running it again when the composer card moved or a sync was
     /// asked for while it was in flight.
     fn finish_suggestion_step(&mut self, anchor: Bounds<Pixels>, cx: &mut Context<Self>) {
@@ -302,6 +327,7 @@ impl SuggestionPanel {
     pub(super) fn choose(&mut self, command: serde_json::Value, cx: &mut Context<Self>) {
         let source = self.source;
         let chat = self.chat.clone();
+        chat.update(cx, |chat, _| chat.suggestions.clear_hover());
         cx.defer(move |cx| {
             let _ = source.update(cx, |_, window, cx| {
                 chat.update(cx, |chat, cx| {
@@ -312,6 +338,37 @@ impl SuggestionPanel {
             });
         });
     }
+}
+
+/// CDXC:SessionChat 2026-10-06 WHY:
+/// Hovering a row tells the core, whose answer is a whole new snapshot. Adopting it like any other repainted the chat window (at most every 50ms, `notify_if_shown`) and only then the list, so the highlight trailed the pointer and every hovered row redrew the main window under the frosted popup. A snapshot that differs only in the list's selection now repaints just the list.
+pub(in crate::app::native_chat) fn only_selection_moved(
+    old: &serde_json::Value,
+    new: &serde_json::Value,
+) -> bool {
+    const SELECTION: [&str; 2] = ["selected", "sendOnEnter"];
+    let (Some(old), Some(new)) = (old.as_object(), new.as_object()) else {
+        return false;
+    };
+    let (Some(old_list), Some(new_list)) = (
+        old.get("suggestions")
+            .and_then(serde_json::Value::as_object),
+        new.get("suggestions")
+            .and_then(serde_json::Value::as_object),
+    ) else {
+        return false;
+    };
+    SELECTION
+        .iter()
+        .any(|key| old_list.get(*key) != new_list.get(*key))
+        && old_list.len() == new_list.len()
+        && new_list.iter().all(|(key, value)| {
+            SELECTION.contains(&key.as_str()) || old_list.get(key) == Some(value)
+        })
+        && old.len() == new.len()
+        && new
+            .iter()
+            .all(|(key, value)| key == "suggestions" || old.get(key) == Some(value))
 }
 
 #[cfg(target_os = "macos")]

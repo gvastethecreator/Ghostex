@@ -5,6 +5,7 @@ USAGE
   ghostex coordinator create [--project-id <id>] [--agent <agent-id>] [--title <name>]
                              [--model <m>] [--effort <e>] [--goal <text>]
                              [--task <first message>] [--json]
+  ghostex coordinator promote [<session-ref>] [--goal <text>] [--json]
   ghostex coordinator options [--json]
   ghostex coordinator list [--project-id <id>] [--json]
   ghostex coordinator status [--coordinator <ref>] [--all] [--json]
@@ -22,25 +23,40 @@ USAGE
   ghostex coordinator guide
 
 WHAT A COORDINATOR IS
-  A coordinator is an agent session (Claude or Codex) with a standing role: it
+  A coordinator is an agent session (Claude, Codex or ZCode) with a standing role: it
   answers quick questions itself and starts a thread for every piece of real
   work. Threads are ordinary agent sessions; they sit under their coordinator in
   the sidebar. When a thread finishes a turn, Ghostex forwards its final message
   to the coordinator as a "Message from another agent" (first line
-  "Ghostex thread report: ..."); when a thread waits on a question or an
+  "Ghostex thread report: ...", sender block last); when a thread waits on a question or an
   approval, the coordinator is told what it asks. The coordinator never has to
   poll. `ghostex coordinator guide` prints the coordinator's full playbook.
 
 CREATE
   create starts a coordinator in your project (--project-id picks another).
-  --agent takes an id from `ghostex agents types`; it must be a Claude or Codex
-  agent, and defaults to the first Claude agent listed. --model picks its model
-  (a value from the agent's model list, such as sonnet or opus[1m]); a Claude
-  coordinator defaults to Opus 5.5 (opus[1m]), a Codex one to its configured
-  model. --effort defaults to medium, which is plenty for routing work. --goal
-  is one line the coordinator works toward. --task sends it a first message.
+  --agent takes an id from `ghostex agents types`; it must be a Claude, Codex
+  or ZCode agent, and defaults to the first configured one, preferring Claude.
+  --model picks
+  its model (a value from the agent's model list, such as sonnet or opus[1m]);
+  a Claude coordinator defaults to Opus 5.5 (opus[1m]), a Codex or ZCode one to
+  its configured model. --effort defaults to medium, which is plenty for
+  routing work; a ZCode coordinator takes no effort. --goal is one line the
+  coordinator works toward. --task sends
+  it a first message.
   options lists the agents a coordinator can run on, with each one's models,
   the model it starts on, and the efforts each model accepts.
+
+PROMOTE
+  promote makes a session that already exists (Claude, Codex or ZCode) a
+  coordinator, keeping its conversation: the sidebar's Advanced > Make
+  Coordinator does the same. Without <session-ref> it promotes the session it runs in. It never
+  restarts or interrupts the agent: the coordinator playbook is queued in the
+  session's chat and reaches it once its current turn is over, and the next
+  time the session starts or resumes on its own (waking from sleep, a Full
+  Reload, an app restart) it gets the role as a system prompt, like a created
+  coordinator. --goal sets the goal. A session that is already a coordinator,
+  a thread of one, a draft, or in a box cannot be promoted. Sessions it started
+  earlier are not its threads; adopt each with link.
 
 STATUS
   status prints the goal, the standing instructions, the memory notes, and every

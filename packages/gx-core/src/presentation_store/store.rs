@@ -22,6 +22,9 @@ pub struct SideState {
     pub workspace_groups: Option<WorkspaceSessionGroupsState>,
     pub project_collections: Option<SidebarProjectCollectionsState>,
     pub spaces: Option<SidebarSpacesState>,
+    /// The daemon's own Spaces switch (`sidebarSpacesEnabled` on that machine). `None` from a
+    /// daemon that does not publish it.
+    pub spaces_enabled: Option<bool>,
     pub custom_session_tags: Option<CustomSessionTagsState>,
 }
 

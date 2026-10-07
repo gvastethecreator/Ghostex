@@ -114,6 +114,19 @@ pub fn with_run_location(mut params: Value, run_location: Option<&str>) -> Value
     params
 }
 
+/// Marks an `/api/createAgentSession` call as the user's own new-session action (the new-session
+/// hotkey, a project's agent button or menu, the New Thread picker), so gxserver closes the
+/// project's other sessions that are still fully empty once this one exists. Coordinators, the
+/// board, the Help chat and other creates leave it out.
+///
+/// SEE-ALSO: server/src/empty_session_cleanup.rs (CDXC:Sessions 2026-10-04).
+pub fn replacing_empty_sessions(mut params: Value) -> Value {
+    if let Value::Object(object) = &mut params {
+        object.insert("replaceEmptySessions".to_string(), json!(true));
+    }
+    params
+}
+
 /// The options of `createAgentSessionRecordForProject`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AgentRecordOptions {

@@ -56,8 +56,17 @@ static STATUS: Mutex<StatusCache> = Mutex::new(StatusCache {
     waiters: Vec::new(),
 });
 
-/// The last status gxserver answered, if any.
+/// Whether the Cloud Boxes built-in extension is on. While it is off nothing reads the status and
+/// every surface sees no answer, so no Run on row or Run in a Box page appears.
+fn cloud_boxes_enabled() -> bool {
+    crate::shared_settings::shared_sidebar_settings_snapshot().cloud_boxes_enabled()
+}
+
+/// The last status gxserver answered, if any; none while Cloud Boxes is off.
 pub(crate) fn cached_agentbox_locations() -> Option<AgentboxLocations> {
+    if !cloud_boxes_enabled() {
+        return None;
+    }
     STATUS.lock().ok().and_then(|cache| cache.locations.clone())
 }
 
@@ -90,6 +99,9 @@ impl GhostexGpuiApp {
         max_age: Duration,
         cx: &mut gpui::Context<Self>,
     ) {
+        if !cloud_boxes_enabled() {
+            return;
+        }
         let started = Instant::now();
         {
             let Ok(mut cache) = STATUS.lock() else {
@@ -147,6 +159,9 @@ impl GhostexGpuiApp {
         + 'static,
         cx: &mut gpui::Context<Self>,
     ) {
+        if !cloud_boxes_enabled() {
+            return then(self, None, cx);
+        }
         let cached = {
             let Ok(mut cache) = STATUS.lock() else {
                 return then(self, None, cx);

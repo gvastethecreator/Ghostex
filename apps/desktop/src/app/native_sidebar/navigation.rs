@@ -71,11 +71,13 @@ impl GhostexGpuiApp {
         */
         let compact = !footer || self.sidebar_width < SIDEBAR_COMPACT_COMMANDS_WIDTH * scale;
         /*
-        CDXC:Sidebar 2026-09-23 DECISION:
-        User: when the top row has no room for all its buttons, Search and Notifications leave the
-        row and become the top two items of the sidebar menu, with a separator below them. They
-        move together, and the menu button always stays because it now holds both. This
-        supersedes the 2026-09-20 rule that kept Search and dropped the bell first, then the menu.
+        CDXC:Sidebar 2026-10-05 DECISION:
+        User: "i actually want search and notifications to be always shown, there's space for those
+        too in all cases, just hide feedback in case of a narrow sidebar". Search, the bell and the
+        menu button stay in the top row at every sidebar width; when the row has no room for the
+        Send Feedback button too, only that button leaves the row and becomes the top item of the
+        sidebar menu, with a separator below it. This supersedes the 2026-09-23 rule that moved
+        Search and Notifications into the menu together.
         */
         let compact_button_slot = 38.0 * scale;
         /*
@@ -109,38 +111,21 @@ impl GhostexGpuiApp {
             - 5.0 * scale;
         let bell_visible = !footer && self.titlebar_notification_bell_visible();
         // Search, Send Feedback and the menu button, plus the bell when it shows.
-        let overflowed = !footer
+        let feedback_collapsed = !footer
             && compact
             && compact_room < (if bell_visible { 4.0 } else { 3.0 }) * compact_button_slot;
-        if overflowed && let Some(items) = more_menu.as_array_mut() {
-            let search_label = match shortcut.as_deref() {
-                Some(shortcut) if !shortcut.is_empty() => format!("{label} ({shortcut})"),
-                _ => label.to_owned(),
-            };
-            let mut leading = vec![json!({
-                "label": search_label,
-                "icon": "search",
-                "command": {"type": "sidebarAction", "action": action_id},
-            })];
-            if bell_visible {
-                let unread = self.notification_feed_state.unread_count;
-                leading.push(json!({
-                    "label": if unread > 0 {
-                        format!("Notifications ({})", crate::notification_feed::notification_feed_badge_label(unread))
-                    } else {
-                        "Notifications".to_owned()
-                    },
-                    "icon": "bell",
-                    "command": {"type": "openNotifications"},
-                }));
-            }
-            leading.push(json!({
-                "label": "Send Feedback",
-                "icon": "messageCircle",
-                "command": {"type": "sidebarAction", "action": "feedback"},
-            }));
-            leading.push(json!({"separator": true}));
-            items.splice(0..0, leading);
+        if feedback_collapsed && let Some(items) = more_menu.as_array_mut() {
+            items.splice(
+                0..0,
+                [
+                    json!({
+                        "label": "Send Feedback",
+                        "icon": "messageCircle",
+                        "command": {"type": "sidebarAction", "action": "feedback"},
+                    }),
+                    json!({"separator": true}),
+                ],
+            );
         }
         let icon_path = if footer {
             "titlebar/bolt.svg"
@@ -196,7 +181,11 @@ impl GhostexGpuiApp {
                         self.render_workarea_header_agents_toggle(Some(appearance.muted), cx),
                     ),
                 )
-                .when(compact, |row| row.child(div().flex_1()))
+                .when(compact, |row| {
+                    // The negative margin cancels the row gap this zero-width spacer adds, so the
+                    // buttons right of it take exactly the 38px slots `compact_room` counts.
+                    row.child(div().flex_1().mr(px(-4.0 * scale)))
+                })
             })
             .when_some(bots_toggle, |row, bots_mode| {
                 row.child(self.render_native_sidebar_bots_toggle(bots_mode, appearance, cx))
@@ -210,90 +199,92 @@ impl GhostexGpuiApp {
             everything beside it keeps its own box. Below the compact width the label stops being
             drawn at all rather than being clipped to nothing.
             */
-            .when(!overflowed, |row| {
-                row.child(if compact {
-                    div()
-                        .id(format!("native-sidebar-{label}"))
-                        .role(gpui::Role::Button)
-                        .aria_label(tooltip_label.clone())
-                        .when(cfg!(target_os = "windows"), |button| button.occlude())
-                        .h(px(28.0 * scale))
-                        .w(px(34.0 * scale))
-                        .rounded(px(5.0 * scale))
-                        .flex()
-                        .flex_shrink_0()
-                        .items_center()
-                        .justify_center()
-                        .cursor_default()
-                        .hover(|row| row.bg(appearance.hover))
-                        .child(titlebar_svg_icon(
-                            icon_path,
-                            15.0 * scale,
-                            titlebar_active_text_color().opacity(0.52),
-                        ))
-                        .on_click(cx.listener(move |app, _, _, cx| {
-                            cx.stop_propagation();
-                            app.dispatch_native_sidebar_ui(
-                                json!({"type": "sidebarAction", "action": action_id}),
-                                cx,
-                            );
-                        }))
-                        .managed_discrete_tooltip_with_placement(
-                            ManagedTooltipPlacement::Right,
-                            tooltip_delay,
-                            move |window, cx| titlebar_tooltip(tooltip_label.clone(), window, cx),
-                        )
-                        .into_any_element()
-                } else {
-                    h_flex()
-                        .id(format!("native-sidebar-{label}"))
-                        .role(gpui::Role::Button)
-                        .aria_label(tooltip_label.clone())
-                        .when(cfg!(target_os = "windows"), |button| button.occlude())
-                        .flex_1()
-                        .h(px((if footer { 28.0 } else { 27.0 }) * scale))
-                        .min_w_0()
-                        .overflow_hidden()
-                        .pl(px((if footer { 12.0 } else { 7.0 }) * scale))
-                        .pr(px(15.0 * scale))
-                        .gap(px(11.0 * scale))
-                        .cursor_default()
-                        .hover(|row| row.text_color(titlebar_active_text_color()))
-                        .child(div().flex().flex_shrink_0().items_center().child(
-                            titlebar_svg_icon(
+            .child(if compact {
+                div()
+                    .id(format!("native-sidebar-{label}"))
+                    .role(gpui::Role::Button)
+                    .aria_label(tooltip_label.clone())
+                    .when(cfg!(target_os = "windows"), |button| button.occlude())
+                    .h(px(28.0 * scale))
+                    .w(px(34.0 * scale))
+                    .rounded(px(5.0 * scale))
+                    .flex()
+                    .flex_shrink_0()
+                    .items_center()
+                    .justify_center()
+                    .cursor_default()
+                    .hover(|row| row.bg(appearance.hover))
+                    .child(titlebar_svg_icon(
+                        icon_path,
+                        15.0 * scale,
+                        titlebar_active_text_color().opacity(0.52),
+                    ))
+                    .on_click(cx.listener(move |app, _, _, cx| {
+                        cx.stop_propagation();
+                        app.dispatch_native_sidebar_ui(
+                            json!({"type": "sidebarAction", "action": action_id}),
+                            cx,
+                        );
+                    }))
+                    .managed_discrete_tooltip_with_placement(
+                        ManagedTooltipPlacement::Right,
+                        tooltip_delay,
+                        move |window, cx| titlebar_tooltip(tooltip_label.clone(), window, cx),
+                    )
+                    .into_any_element()
+            } else {
+                h_flex()
+                    .id(format!("native-sidebar-{label}"))
+                    .role(gpui::Role::Button)
+                    .aria_label(tooltip_label.clone())
+                    .when(cfg!(target_os = "windows"), |button| button.occlude())
+                    .flex_1()
+                    .h(px((if footer { 28.0 } else { 27.0 }) * scale))
+                    .min_w_0()
+                    .overflow_hidden()
+                    .pl(px((if footer { 12.0 } else { 7.0 }) * scale))
+                    .pr(px(15.0 * scale))
+                    .gap(px(11.0 * scale))
+                    .cursor_default()
+                    .hover(|row| row.text_color(titlebar_active_text_color()))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_shrink_0()
+                            .items_center()
+                            .child(titlebar_svg_icon(
                                 icon_path,
                                 15.0 * scale,
                                 titlebar_active_text_color().opacity(0.52),
-                            ),
-                        ))
-                        .child(
-                            div()
-                                .min_w_0()
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .child(label),
-                        )
-                        .child(div().flex_1())
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .text_color(titlebar_active_text_color().opacity(0.38))
-                                .text_size(px(11.0 * scale))
-                                .child(shortcut.clone().unwrap_or_default()),
-                        )
-                        .on_click(cx.listener(move |app, _, _, cx| {
-                            cx.stop_propagation();
-                            app.dispatch_native_sidebar_ui(
-                                json!({"type": "sidebarAction", "action": action_id}),
-                                cx,
-                            );
-                        }))
-                        .into_any_element()
-                })
+                            )),
+                    )
+                    .child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .child(label),
+                    )
+                    .child(div().flex_1())
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .text_color(titlebar_active_text_color().opacity(0.38))
+                            .text_size(px(11.0 * scale))
+                            .child(shortcut.clone().unwrap_or_default()),
+                    )
+                    .on_click(cx.listener(move |app, _, _, cx| {
+                        cx.stop_propagation();
+                        app.dispatch_native_sidebar_ui(
+                            json!({"type": "sidebarAction", "action": action_id}),
+                            cx,
+                        );
+                    }))
+                    .into_any_element()
             })
             // CDXC:Feedback 2026-10-04 DECISION:
-            // User: "add a button at the top of the sidebar. It should be a chat bubble icon" that opens the Send Feedback pop-up (window/feedback_modal/). It sits after Search, and moves into the sidebar menu with Search and Notifications when the row has no room.
-            .when(!footer && !overflowed, |row| {
+            // User: "add a button at the top of the sidebar. It should be a chat bubble icon" that opens the Send Feedback pop-up (window/feedback_modal/). It sits after Search, and moves into the sidebar menu when the row has no room; Search and Notifications never leave the row (CDXC:Sidebar 2026-10-05).
+            .when(!footer && !feedback_collapsed, |row| {
                 row.child(
                     div()
                         .id("native-sidebar-feedback")
@@ -330,7 +321,7 @@ impl GhostexGpuiApp {
             })
             // CDXC:Notifications 2026-09-20 DECISION:
             // User: the notification bell sits in the sidebar's top row, before the sidebar menu button.
-            .when(bell_visible && !overflowed, |row| {
+            .when(bell_visible, |row| {
                 row.child(self.render_sidebar_notification_bell(appearance, cx))
             })
             .when(!footer, |row| {

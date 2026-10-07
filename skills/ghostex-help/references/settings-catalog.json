@@ -470,6 +470,20 @@
       "agentWritable": true
     },
     {
+      "key": "groupWorkingSessions",
+      "title": "Group working sessions",
+      "subtitle": "Move sessions into a collapsed Working section under their project while their agent works; they return to Sessions when it stops or needs you. Also in the sidebar's Sort & Filter menu.",
+      "tab": "settings",
+      "tabTitle": "General",
+      "group": "sidebar",
+      "groupTitle": "Sidebar",
+      "section": "sidebar",
+      "sectionTitle": "Sidebar",
+      "type": "boolean",
+      "default": false,
+      "agentWritable": true
+    },
+    {
       "key": "agentManagerZoomPercent",
       "title": "Sidebar Interface Size",
       "subtitle": "Scale the sidebar interface.",
@@ -2602,6 +2616,20 @@
       "agentWritable": true
     },
     {
+      "key": "resetExpirySystemNotifications",
+      "title": "Reset Expiry Notifications",
+      "subtitle": "Show a system notification when a banked Claude or Codex usage reset expires within 3 days and again within 24 hours. The red notification in the bell stays either way.",
+      "tab": "settings",
+      "tabTitle": "General",
+      "group": "notifications",
+      "groupTitle": "Notifications",
+      "section": "sounds",
+      "sectionTitle": "Sounds",
+      "type": "boolean",
+      "default": true,
+      "agentWritable": true
+    },
+    {
       "key": "attentionNotificationActions",
       "title": "Agent Completion Alert Test",
       "subtitle": "Test the current completion alert settings or open Notification Settings.",
@@ -2859,6 +2887,18 @@
       "agentWritable": false
     },
     {
+      "key": "agentsTidyUpOfferDismissed",
+      "title": "agentsTidyUpOfferDismissed",
+      "subtitle": "App-managed state saved with the settings; not a user preference.",
+      "tab": "settings",
+      "tabTitle": "General",
+      "section": "internalState",
+      "sectionTitle": "Internal state (not user settings)",
+      "type": "boolean",
+      "default": false,
+      "agentWritable": false
+    },
+    {
       "key": "settingsModalNavigation",
       "title": "settingsModalNavigation",
       "subtitle": "App-managed state saved with the settings; not a user preference.",
@@ -3008,6 +3048,15 @@
         "jumpToProject7": "cmd+ctrl+7",
         "jumpToProject8": "cmd+ctrl+8",
         "jumpToProject9": "cmd+ctrl+9",
+        "goToSpace1": "cmd+alt+shift+1",
+        "goToSpace2": "cmd+alt+shift+2",
+        "goToSpace3": "cmd+alt+shift+3",
+        "goToSpace4": "cmd+alt+shift+4",
+        "goToSpace5": "cmd+alt+shift+5",
+        "goToSpace6": "cmd+alt+shift+6",
+        "goToSpace7": "cmd+alt+shift+7",
+        "goToSpace8": "cmd+alt+shift+8",
+        "goToSpace9": "cmd+alt+shift+9",
         "focusSessionSlot1": "cmd+1",
         "focusSessionSlot2": "cmd+2",
         "focusSessionSlot3": "cmd+3",
@@ -8032,6 +8081,54 @@
       "agentWritable": false
     },
     {
+      "key": "claudeAutoRedeemExpiringResets",
+      "title": "Auto-redeem expiring Claude resets",
+      "subtitle": "Ghostex automatically uses a banked Claude reset 5 minutes before it expires, so it isn't lost.",
+      "tab": "accounts",
+      "tabTitle": "Accounts",
+      "section": "accounts",
+      "sectionTitle": "Accounts",
+      "type": "boolean",
+      "default": false,
+      "agentWritable": false
+    },
+    {
+      "key": "claudeAutoRedeemResetsAtLimit",
+      "title": "Also use expiring Claude resets at a limit",
+      "subtitle": "When you hit a Claude usage limit and a banked reset expires within 24 hours, Ghostex automatically uses it right away instead of waiting for its last 5 minutes. Needs Auto-redeem expiring Claude resets.",
+      "tab": "accounts",
+      "tabTitle": "Accounts",
+      "section": "accounts",
+      "sectionTitle": "Accounts",
+      "type": "boolean",
+      "default": false,
+      "agentWritable": false
+    },
+    {
+      "key": "codexAutoRedeemExpiringResets",
+      "title": "Auto-redeem expiring Codex resets",
+      "subtitle": "Ghostex automatically uses a banked Codex reset 5 minutes before it expires, so it isn't lost.",
+      "tab": "accounts",
+      "tabTitle": "Accounts",
+      "section": "accounts",
+      "sectionTitle": "Accounts",
+      "type": "boolean",
+      "default": false,
+      "agentWritable": false
+    },
+    {
+      "key": "codexAutoRedeemResetsAtLimit",
+      "title": "Also use expiring Codex resets at a limit",
+      "subtitle": "When you hit a Codex usage limit and a banked reset expires within 24 hours, Ghostex automatically uses it right away instead of waiting for its last 5 minutes. Needs Auto-redeem expiring Codex resets.",
+      "tab": "accounts",
+      "tabTitle": "Accounts",
+      "section": "accounts",
+      "sectionTitle": "Accounts",
+      "type": "boolean",
+      "default": false,
+      "agentWritable": false
+    },
+    {
       "key": "hideAccountEmails",
       "title": "Hide account emails",
       "subtitle": "Hide account email addresses in the Accounts page and account switchers.",
@@ -8044,161 +8141,9 @@
       "agentWritable": false
     },
     {
-      "key": "defaultPromptAgent",
-      "title": "Default Prompt Agent",
-      "subtitle": "Choose the agent used by Git helper prompts, project board Start Work, and the default worktree first-prompt selection.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "ui",
-      "agentWritable": false
-    },
-    {
-      "key": "titleGenerationAgent",
-      "title": "Title Generation Agent",
-      "subtitle": "Choose the headless agent Ghostex uses for first-prompt session title generation. Hover the info icon to see the exact command Ghostex sends.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "ui",
-      "options": [
-        {
-          "label": "Codex",
-          "value": "codex"
-        },
-        {
-          "label": "Cursor CLI",
-          "value": "cursor"
-        },
-        {
-          "label": "Claude",
-          "value": "claude"
-        },
-        {
-          "label": "Grok Build",
-          "value": "grok"
-        },
-        {
-          "label": "Pi Agent",
-          "value": "pi"
-        },
-        {
-          "label": "Antigravity CLI",
-          "value": "antigravity"
-        },
-        {
-          "label": "Custom",
-          "value": "custom"
-        }
-      ],
-      "agentWritable": false
-    },
-    {
-      "key": "customTitleCommand",
-      "title": "Custom Title Command",
-      "subtitle": "Run this command with the title prompt on stdin. It should print only the title.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "ui",
-      "agentWritable": false
-    },
-    {
-      "key": "acceptAll",
-      "title": "Agent approvals",
-      "subtitle": "Choose whether supported agents ask before editing files or running commands. Per-agent settings can override this default.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "ui",
-      "agentWritable": false
-    },
-    {
-      "key": "agentAcceptAllEnabled",
-      "title": "Agent approvals: accept all",
-      "subtitle": "Start supported agents with approvals turned off (full access) by default. Off keeps each agent CLI default approval mode. Projects can override it.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "boolean",
-      "default": false,
-      "agentWritable": true
-    },
-    {
-      "key": "defaultPromptAgentId",
-      "title": "Default Prompt Agent",
-      "subtitle": "Agent id used when Ghostex sends a prompt on your behalf (for example PR review). Use an id from the configured agents.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "string",
-      "default": "codex",
-      "agentWritable": true
-    },
-    {
-      "key": "sessionTitleGenerationAgent",
-      "title": "Title Generation Agent",
-      "subtitle": "Headless agent Ghostex uses for first-prompt session title generation.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "enum",
-      "default": "codex",
-      "options": [
-        {
-          "label": "Codex",
-          "value": "codex"
-        },
-        {
-          "label": "Cursor CLI",
-          "value": "cursor"
-        },
-        {
-          "label": "Claude",
-          "value": "claude"
-        },
-        {
-          "label": "Grok Build",
-          "value": "grok"
-        },
-        {
-          "label": "Pi Agent",
-          "value": "pi"
-        },
-        {
-          "label": "Antigravity CLI",
-          "value": "antigravity"
-        },
-        {
-          "label": "Custom",
-          "value": "custom"
-        }
-      ],
-      "agentWritable": true
-    },
-    {
-      "key": "customSessionTitleGenerationCommand",
-      "title": "Custom Title Command",
-      "subtitle": "Custom command run with the title prompt on stdin when Title Generation Agent is custom. It should print only the title.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "string",
-      "default": "",
-      "agentWritable": true
-    },
-    {
-      "key": "addAgent",
-      "title": "Add Agent",
-      "subtitle": "Add, reorder, edit, or delete agent launchers. Expand a row to install or update its CLI, check its version, and open installation docs.",
+      "key": "agentSwitches",
+      "title": "Turn agents on or off",
+      "subtitle": "Turn on the agents you use; they appear in the New session menu, the sidebar's Select Agent and on your phone. Drag to set their order. Agents you turned off but used before stay dimmed in the list; agents you never used wait under More agents. Expand a row to edit its command, permission mode and default view, or to install or update its CLI.",
       "tab": "agents",
       "tabTitle": "Agents",
       "section": "agentList",
@@ -8305,13 +8250,188 @@
       "agentWritable": false
     },
     {
-      "key": "agentResumeHooks",
-      "title": "Agent Hooks",
-      "subtitle": "Agent resume hooks let Ghostex capture each agent's native session id and resume the exact conversation after sleep, reload, or app restart. Install a single agent's hook from its row, or install and remove every Ghostex-owned hook with Install All and Uninstall All.",
+      "key": "addCustomAgent",
+      "title": "Add custom agent",
+      "subtitle": "Add your own command, or a variant of a built-in agent with other flags. Works like gives it that agent's logo, chat view, resume hook and permission handling. Custom agents can be turned off or deleted.",
       "tab": "agents",
       "tabTitle": "Agents",
       "section": "agentList",
       "sectionTitle": "Agents",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "preferredAgentInterfaceOverrides",
+      "title": "Default view per agent",
+      "subtitle": "Agents that support Ghostex's Chat View are marked with a chat bubble and can open in Chat or Terminal regardless of the global Default Agent View. Inherit keeps following that global setting.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "agentList",
+      "sectionTitle": "Agents",
+      "type": "json",
+      "default": {},
+      "agentWritable": false
+    },
+    {
+      "key": "defaultPromptAgent",
+      "title": "Default Prompt Agent",
+      "subtitle": "Choose the agent used by Git helper prompts, project board Start Work, and the default worktree first-prompt selection.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Defaults",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "titleGenerationAgent",
+      "title": "Title Generation Agent",
+      "subtitle": "Choose the headless agent Ghostex uses for first-prompt session title generation. Hover the info icon to see the exact command Ghostex sends.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Defaults",
+      "type": "ui",
+      "options": [
+        {
+          "label": "Codex",
+          "value": "codex"
+        },
+        {
+          "label": "Cursor CLI",
+          "value": "cursor"
+        },
+        {
+          "label": "Claude",
+          "value": "claude"
+        },
+        {
+          "label": "Grok Build",
+          "value": "grok"
+        },
+        {
+          "label": "Pi Agent",
+          "value": "pi"
+        },
+        {
+          "label": "Antigravity CLI",
+          "value": "antigravity"
+        },
+        {
+          "label": "Custom",
+          "value": "custom"
+        }
+      ],
+      "agentWritable": false
+    },
+    {
+      "key": "customTitleCommand",
+      "title": "Custom Title Command",
+      "subtitle": "Run this command with the title prompt on stdin. It should print only the title.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Defaults",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "acceptAll",
+      "title": "Agent approvals",
+      "subtitle": "Choose whether supported agents ask before editing files or running commands. Per-agent settings can override this default.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Defaults",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "agentAcceptAllEnabled",
+      "title": "Agent approvals: accept all",
+      "subtitle": "Start supported agents with approvals turned off (full access) by default. Off keeps each agent CLI default approval mode. Projects can override it.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Config",
+      "type": "boolean",
+      "default": false,
+      "agentWritable": true
+    },
+    {
+      "key": "defaultPromptAgentId",
+      "title": "Default Prompt Agent",
+      "subtitle": "Agent id used when Ghostex sends a prompt on your behalf (for example PR review). Use an id from the configured agents.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Config",
+      "type": "string",
+      "default": "codex",
+      "agentWritable": true
+    },
+    {
+      "key": "sessionTitleGenerationAgent",
+      "title": "Title Generation Agent",
+      "subtitle": "Headless agent Ghostex uses for first-prompt session title generation.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Config",
+      "type": "enum",
+      "default": "codex",
+      "options": [
+        {
+          "label": "Codex",
+          "value": "codex"
+        },
+        {
+          "label": "Cursor CLI",
+          "value": "cursor"
+        },
+        {
+          "label": "Claude",
+          "value": "claude"
+        },
+        {
+          "label": "Grok Build",
+          "value": "grok"
+        },
+        {
+          "label": "Pi Agent",
+          "value": "pi"
+        },
+        {
+          "label": "Antigravity CLI",
+          "value": "antigravity"
+        },
+        {
+          "label": "Custom",
+          "value": "custom"
+        }
+      ],
+      "agentWritable": true
+    },
+    {
+      "key": "customSessionTitleGenerationCommand",
+      "title": "Custom Title Command",
+      "subtitle": "Custom command run with the title prompt on stdin when Title Generation Agent is custom. It should print only the title.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Config",
+      "type": "string",
+      "default": "",
+      "agentWritable": true
+    },
+    {
+      "key": "agentResumeHooks",
+      "title": "Session resume hooks",
+      "subtitle": "Hooks let Ghostex capture each agent's native session id and resume the exact conversation after sleep, reload, or app restart. Install one agent's hook from its row, fix every agent that is on with Fix all, or install and remove every Ghostex hook with Install all and Uninstall all.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "agentHooks",
+      "sectionTitle": "Session resume hooks",
       "type": "ui",
       "options": [
         {
@@ -8410,16 +8530,16 @@
       "agentWritable": false
     },
     {
-      "key": "preferredAgentInterfaceOverrides",
-      "title": "Default view per agent",
-      "subtitle": "Agents that support Ghostex's Chat View are marked with a chat bubble and can open in Chat or Terminal regardless of the global Default Agent View. Inherit keeps following that global setting.",
+      "key": "agentHooksAutoInstall",
+      "title": "Install the hook when I turn on an agent",
+      "subtitle": "Install an agent's session resume hook as soon as you turn it on, without asking.",
       "tab": "agents",
       "tabTitle": "Agents",
-      "section": "agentList",
-      "sectionTitle": "Agents",
-      "type": "json",
-      "default": {},
-      "agentWritable": false
+      "section": "agentHooks",
+      "sectionTitle": "Session resume hooks",
+      "type": "boolean",
+      "default": false,
+      "agentWritable": true
     },
     {
       "key": "ghostexCapture",
@@ -8446,7 +8566,7 @@
     {
       "key": "bundledAgentSkills",
       "title": "Bundled Agent Skills",
-      "subtitle": "Install the Ghostex skills you want agents to discover. Ghostex Computer Use and Ghostex Browser Use need Fast Computer Use installed first, and Ghostex SpaceO needs SpaceO (Mac only). Each skill is copied to ~/.agents/skills and can be updated or uninstalled independently, or removed together with Uninstall All.",
+      "subtitle": "Install the Ghostex skills you want agents to discover. Ghostex Computer Use and Ghostex Browser Use need Fast Computer & Browser Use installed first and also install its cua-driver skill, and Ghostex SpaceO needs SpaceO (Mac only). Each Ghostex skill is copied to ~/.agents/skills and can be updated or uninstalled independently, or removed together with Uninstall All.",
       "tab": "integrations",
       "tabTitle": "Integrations",
       "section": "integrations",
@@ -8498,8 +8618,8 @@
     },
     {
       "key": "cuaPermissions",
-      "title": "Fast Computer Use Permissions",
-      "subtitle": "Fast Computer Use needs Accessibility to click and type in apps, and Screen Recording to understand what is visible on the desktop.",
+      "title": "Fast Computer & Browser Use Permissions",
+      "subtitle": "Fast Computer & Browser Use needs Accessibility to click and type in apps, and Screen Recording to understand what is visible on the desktop.",
       "tab": "integrations",
       "tabTitle": "Integrations",
       "section": "integrations",
@@ -8603,7 +8723,8 @@
       "section": "overview",
       "sectionTitle": "Cloud Boxes",
       "type": "ui",
-      "agentWritable": false
+      "agentWritable": false,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "agentboxSetUpForMe",
@@ -8614,7 +8735,8 @@
       "section": "overview",
       "sectionTitle": "Cloud Boxes",
       "type": "ui",
-      "agentWritable": false
+      "agentWritable": false,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "agentboxWhatIsABox",
@@ -8625,7 +8747,8 @@
       "section": "overview",
       "sectionTitle": "Cloud Boxes",
       "type": "ui",
-      "agentWritable": false
+      "agentWritable": false,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "agentboxProviders",
@@ -8662,7 +8785,8 @@
           "value": "digitalocean"
         }
       ],
-      "agentWritable": false
+      "agentWritable": false,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "agentboxRemoteDocker",
@@ -8673,7 +8797,8 @@
       "section": "providers",
       "sectionTitle": "Where boxes run",
       "type": "ui",
-      "agentWritable": false
+      "agentWritable": false,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "agentboxClaudeSignIn",
@@ -8684,7 +8809,8 @@
       "section": "agentSignIn",
       "sectionTitle": "Agent sign-in",
       "type": "ui",
-      "agentWritable": false
+      "agentWritable": false,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "agentboxCodexSignIn",
@@ -8695,7 +8821,8 @@
       "section": "agentSignIn",
       "sectionTitle": "Agent sign-in",
       "type": "ui",
-      "agentWritable": false
+      "agentWritable": false,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "agentboxDefaultLocation",
@@ -8737,7 +8864,8 @@
           "value": "agentbox:digitalocean"
         }
       ],
-      "agentWritable": true
+      "agentWritable": true,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "agentboxBoxes",
@@ -8748,7 +8876,8 @@
       "section": "boxes",
       "sectionTitle": "Your boxes",
       "type": "ui",
-      "agentWritable": false
+      "agentWritable": false,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "agentboxStartThread",
@@ -8759,7 +8888,8 @@
       "section": "howTo",
       "sectionTitle": "How it works",
       "type": "ui",
-      "agentWritable": false
+      "agentWritable": false,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "agentboxWebApp",
@@ -8770,7 +8900,8 @@
       "section": "howTo",
       "sectionTitle": "How it works",
       "type": "ui",
-      "agentWritable": false
+      "agentWritable": false,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "agentboxBilling",
@@ -8781,7 +8912,8 @@
       "section": "howTo",
       "sectionTitle": "How it works",
       "type": "ui",
-      "agentWritable": false
+      "agentWritable": false,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "titlebarViewOrder",
@@ -9381,6 +9513,17 @@
       "agentWritable": false
     },
     {
+      "key": "cloudBoxes",
+      "title": "Cloud Boxes",
+      "subtitle": "Run agent sessions in isolated boxes, in Docker on this computer or in the cloud, from New Thread's Run on choice or Run in a Box in the Select Agent menu.",
+      "tab": "extensions",
+      "tabTitle": "Extensions",
+      "section": "official",
+      "sectionTitle": "Built-in",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
       "key": "extensionsButton",
       "title": "Extensions",
       "subtitle": "An entry in the work area header’s ⋯ menu that opens this Extensions page.",
@@ -9461,6 +9604,19 @@
       "type": "boolean",
       "default": false,
       "agentWritable": true
+    },
+    {
+      "key": "cloudBoxesHidden",
+      "title": "Turn off Cloud Boxes",
+      "subtitle": "Turn off Cloud Boxes everywhere: the Cloud Boxes page in Settings, the Run on choice of a new thread, Run in a Box in the Select Agent menu and the agentbox commands. Off by default; your boxes and box settings are kept.",
+      "tab": "extensions",
+      "tabTitle": "Extensions",
+      "section": "official",
+      "sectionTitle": "Built-in",
+      "type": "boolean",
+      "default": true,
+      "agentWritable": true,
+      "availability": "Only on macOS and Linux."
     },
     {
       "key": "store",
@@ -10954,6 +11110,60 @@
       "description": "Jump to project 9 as shown in the sidebar.",
       "defaultKey": "cmd+ctrl+9",
       "windowsLinuxDefaultKey": "cmd+alt+9"
+    },
+    {
+      "id": "goToSpace1",
+      "title": "Go to Space 1",
+      "description": "Switch to Space 1 as shown in the sidebar.",
+      "defaultKey": "cmd+alt+shift+1"
+    },
+    {
+      "id": "goToSpace2",
+      "title": "Go to Space 2",
+      "description": "Switch to Space 2 as shown in the sidebar.",
+      "defaultKey": "cmd+alt+shift+2"
+    },
+    {
+      "id": "goToSpace3",
+      "title": "Go to Space 3",
+      "description": "Switch to Space 3 as shown in the sidebar.",
+      "defaultKey": "cmd+alt+shift+3"
+    },
+    {
+      "id": "goToSpace4",
+      "title": "Go to Space 4",
+      "description": "Switch to Space 4 as shown in the sidebar.",
+      "defaultKey": "cmd+alt+shift+4"
+    },
+    {
+      "id": "goToSpace5",
+      "title": "Go to Space 5",
+      "description": "Switch to Space 5 as shown in the sidebar.",
+      "defaultKey": "cmd+alt+shift+5"
+    },
+    {
+      "id": "goToSpace6",
+      "title": "Go to Space 6",
+      "description": "Switch to Space 6 as shown in the sidebar.",
+      "defaultKey": "cmd+alt+shift+6"
+    },
+    {
+      "id": "goToSpace7",
+      "title": "Go to Space 7",
+      "description": "Switch to Space 7 as shown in the sidebar.",
+      "defaultKey": "cmd+alt+shift+7"
+    },
+    {
+      "id": "goToSpace8",
+      "title": "Go to Space 8",
+      "description": "Switch to Space 8 as shown in the sidebar.",
+      "defaultKey": "cmd+alt+shift+8"
+    },
+    {
+      "id": "goToSpace9",
+      "title": "Go to Space 9",
+      "description": "Switch to Space 9 as shown in the sidebar.",
+      "defaultKey": "cmd+alt+shift+9"
     },
     {
       "id": "focusSessionSlot1",

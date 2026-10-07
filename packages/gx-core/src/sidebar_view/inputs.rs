@@ -58,13 +58,16 @@ pub enum SessionSortMode {
     Manual,
 }
 
-/// The six section headings of a project's session list.
+/// The seven section headings of a project's session list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SectionId {
     Browser,
     Pinned,
     Drafts,
+    /// Sessions whose agent is working, while Group working sessions is on (ordering.rs
+    /// `is_grouped_working`).
+    Working,
     Sessions,
     Parked,
     Snoozed,
@@ -72,10 +75,11 @@ pub enum SectionId {
 
 impl SectionId {
     /// Render order of the headings.
-    pub const ORDER: [SectionId; 6] = [
+    pub const ORDER: [SectionId; 7] = [
         SectionId::Browser,
         SectionId::Pinned,
         SectionId::Drafts,
+        SectionId::Working,
         SectionId::Sessions,
         SectionId::Parked,
         SectionId::Snoozed,
@@ -86,6 +90,7 @@ impl SectionId {
             SectionId::Browser => "browser",
             SectionId::Pinned => "pinned",
             SectionId::Drafts => "drafts",
+            SectionId::Working => "working",
             SectionId::Sessions => "sessions",
             SectionId::Parked => "parked",
             SectionId::Snoozed => "snoozed",
@@ -93,13 +98,14 @@ impl SectionId {
     }
 }
 
-/// Which of a project's section headings are collapsed. Drafts, Parked, and Snoozed start
+/// Which of a project's section headings are collapsed. Drafts, Working, Parked, and Snoozed start
 /// collapsed; only Pinned and Sessions are persisted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SectionCollapse {
     pub browser: bool,
     pub pinned: bool,
     pub drafts: bool,
+    pub working: bool,
     pub sessions: bool,
     pub parked: bool,
     pub snoozed: bool,
@@ -111,6 +117,7 @@ impl Default for SectionCollapse {
             browser: false,
             pinned: false,
             drafts: true,
+            working: true,
             sessions: false,
             parked: true,
             snoozed: true,
@@ -124,6 +131,7 @@ impl SectionCollapse {
             SectionId::Browser => self.browser,
             SectionId::Pinned => self.pinned,
             SectionId::Drafts => self.drafts,
+            SectionId::Working => self.working,
             SectionId::Sessions => self.sessions,
             SectionId::Parked => self.parked,
             SectionId::Snoozed => self.snoozed,
@@ -135,6 +143,7 @@ impl SectionCollapse {
             SectionId::Browser => self.browser = collapsed,
             SectionId::Pinned => self.pinned = collapsed,
             SectionId::Drafts => self.drafts = collapsed,
+            SectionId::Working => self.working = collapsed,
             SectionId::Sessions => self.sessions = collapsed,
             SectionId::Parked => self.parked = collapsed,
             SectionId::Snoozed => self.snoozed = collapsed,
@@ -177,6 +186,8 @@ pub struct SidebarCollapseState {
     pub expanded_hover_actions: BTreeSet<String>,
     /// Coordinators whose threads are folded away, by the coordinator's sidebar row id.
     pub collapsed_coordinators: BTreeSet<String>,
+    /// Coordinators whose older threads (idle for two hours) the user listed, by sidebar row id.
+    pub expanded_coordinator_older_threads: BTreeSet<String>,
     pub section_collapse: BTreeMap<String, SectionCollapse>,
     /// Keyed by section key (`local`, `remote:<machine>`).
     pub selected_space_by_section: BTreeMap<String, String>,
@@ -240,12 +251,17 @@ impl SidebarUiState {
     }
 }
 
+/// The setting behind the Sort & Filter page's Group Working Sessions row and its Settings switch.
+pub const GROUP_WORKING_SESSIONS_SETTING_KEY: &str = "groupWorkingSessions";
+
 /// The settings the rows and the list depend on, with the defaults and clamps of
 /// `normalizeghostexSettings`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SidebarSettings {
     pub enable_session_parking: bool,
     pub project_session_list_collapsed_count: u32,
+    /// THIS computer's Spaces switch. A remote machine's section follows that machine's own switch
+    /// instead (`machine_spaces::spaces_enabled_on`).
     pub sidebar_spaces_enabled: bool,
     /// The section follows the active session into its Space.
     pub sidebar_space_follow_active_session: bool,
@@ -270,6 +286,8 @@ pub struct SidebarSettings {
     pub expand_collapsed_projects_on_jump: bool,
     /// That jump also puts the project's session list back to the compact one.
     pub show_less_for_expanded_project_jumps: bool,
+    /// Rows whose agent is working sit in each project's Working section (`groupWorkingSessions`).
+    pub group_working_sessions: bool,
     /// The Bots extension is on (`botsHidden` is false), so the sidebar offers its Bots mode.
     pub bots_enabled: bool,
     /// The Bot automations extension is on (`botAutomationsHidden` is false). It needs Bots too.
@@ -299,6 +317,7 @@ impl Default for SidebarSettings {
             browser_view_tab_hidden: false,
             expand_collapsed_projects_on_jump: true,
             show_less_for_expanded_project_jumps: false,
+            group_working_sessions: false,
             bots_enabled: false,
             bot_automations_enabled: false,
             actions_enabled: false,
@@ -374,6 +393,10 @@ impl SidebarSettings {
             show_less_for_expanded_project_jumps: boolean(
                 "showLessForExpandedProjectJumps",
                 defaults.show_less_for_expanded_project_jumps,
+            ),
+            group_working_sessions: boolean(
+                GROUP_WORKING_SESSIONS_SETTING_KEY,
+                defaults.group_working_sessions,
             ),
             // An inverted key like every Official extension switch, hidden unless set to false.
             bots_enabled: !boolean("botsHidden", !defaults.bots_enabled),
@@ -534,6 +557,9 @@ pub struct SidebarInputs {
     pub ui: SidebarUiState,
     pub settings: SidebarSettings,
     pub host: SidebarHostInputs,
+    /// A probe that draws every group: Spaces read as off on every machine
+    /// (`machine_spaces::spaces_enabled_on`).
+    pub(crate) spaces_lifted: bool,
 }
 
 /// The mode the list is drawn in: the remembered one while Bots is on, Projects otherwise, so

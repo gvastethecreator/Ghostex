@@ -428,7 +428,44 @@ pub(crate) fn ingest_agent_hook_event(
         Value::Bool(agent_session_id_changed),
     );
     result.insert("session".to_string(), session);
+    if let Some(context) = coordinator_session_start_context(repository, lifecycle, params)? {
+        result.insert("additionalContext".to_string(), Value::String(context));
+    }
     Ok(Value::Object(result))
+}
+
+/*
+CDXC:Coordinators 2026-10-03 WHY:
+ZCode has no system-prompt or config flag its launch command could carry, so a ZCode coordinator's
+guide pointer rides the SessionStart hook: this endpoint answers the ingest with `additionalContext`
+and the hook prints it for zcode to fold into context. Only a ZCode SessionStart on a session with
+a coordinators row is answered, so every other hook response stays unchanged.
+*/
+fn coordinator_session_start_context(
+    repository: &DomainRepository<'_>,
+    lifecycle: &LifecycleParams,
+    params: &Map<String, Value>,
+) -> Result<Option<String>, DomainStateError> {
+    let agent = crate::agent_hooks::event_mapping::normalized_hook_agent_key(
+        read_text(params, "agentName")
+            .as_deref()
+            .unwrap_or_default(),
+    );
+    let is_session_start = read_text(params, "eventName")
+        .is_some_and(|event| event.eq_ignore_ascii_case("SessionStart"));
+    if !(agent == "zcode" && is_session_start) {
+        return Ok(None);
+    }
+    let coordinator = crate::coordinators::read_coordinator(
+        repository.connection(),
+        &lifecycle.project_id,
+        &lifecycle.session_id,
+    )?
+    .is_some();
+    Ok(
+        coordinator
+            .then(|| crate::coordinators::GUIDE_POINTER_COORDINATOR_INSTRUCTIONS.to_string()),
+    )
 }
 
 /// A working↔not-working flip is the only activity change the chat channel
@@ -497,14 +534,32 @@ pub(crate) fn next_session_chat_prompt_setting(
         .or_else(|| params.get("tool_use_id"))
         .and_then(Value::as_str);
     let tool_input = params.get("toolInput").or_else(|| params.get("tool_input"));
+    let stored = previous.and_then(crate::session_chat::parse_stored_session_chat_prompt);
     if let Some(prompt) =
         crate::session_chat::derive_session_chat_prompt(tool_name, tool_input, event_name)
     {
-        return serde_json::to_string(&prompt.with_tool_use_id(tool_use_id.map(str::to_string)))
+        let prompt = prompt.with_tool_use_id(tool_use_id.map(str::to_string));
+        /*
+        CDXC:SessionChat 2026-10-06 WHY:
+        Claude Code follows an AskUserQuestion's PreToolUse (which carries the call's
+        tool_use_id) with a PermissionRequest for the same call that carries none. Storing that
+        one dropped the id, so every client saw the same question flip between two identities,
+        which reset its card mid-answer and left nothing to tell a re-asked question from the
+        answered one. The same prompt from an event without an id keeps the stored id.
+        */
+        let prompt = match stored.as_ref() {
+            Some(stored)
+                if prompt.tool_use_id().is_none()
+                    && stored.clone().with_tool_use_id(None) == prompt =>
+            {
+                prompt.with_tool_use_id(stored.tool_use_id().map(str::to_string))
+            }
+            _ => prompt,
+        };
+        return serde_json::to_string(&prompt)
             .ok()
             .or_else(|| previous.map(str::to_string));
     }
-    let stored = previous.and_then(crate::session_chat::parse_stored_session_chat_prompt);
     let clear = match stored.as_ref() {
         Some(stored) => crate::session_chat::session_chat_prompt_clear_decision(
             Some(stored),
@@ -808,7 +863,10 @@ pub(crate) fn is_first_prompt_claim_generic_title(
 }
 
 pub(crate) fn normalize_first_prompt_title_claim_prompt(prompt: Option<&str>) -> Option<String> {
-    let normalized = prompt?.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = crate::coordinators::strip_agent_message_header(prompt?)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     let normalized = normalized.trim();
     if normalized.is_empty() {
         return None;
@@ -1071,6 +1129,16 @@ pub(crate) fn normalize_agent_hook_activity(
         }
         if matches!(lower.as_str(), "sessionend" | "session-end") {
             return Some("idle".to_string());
+        }
+    }
+    // Pi's, OMP's and Amp's Stop is a completed turn (CDXC:Notifications in
+    // agent_hooks/event_mapping.rs); their dialogs need the user, and an Esc ends the run without
+    // finishing it.
+    if matches!(normalized_agent.as_deref(), Some("pi" | "omp" | "amp")) {
+        match lower.as_str() {
+            "stop" | "notification" => return Some("attention".to_string()),
+            "interrupt" => return Some("idle".to_string()),
+            _ => {}
         }
     }
     // OpenClaude ships Claude's hook contract verbatim, so it shares every

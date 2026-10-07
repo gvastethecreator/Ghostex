@@ -81,12 +81,15 @@ fn answer_settled(state: &mut ChatState, outcome: &RpcOutcome) -> Vec<Effect> {
                 request.answer_kind.as_str(),
                 "terminalChoice" | "terminalDialog"
             );
-            if request.answer_kind == "approval"
-                || request.answer_kind == "question"
-                || permission_prompt
-                || screen_choice
+            // The card's own question and approval sends already hid it when they went out.
+            if request.restore_dismissed.is_none()
+                && (request.answer_kind == "approval"
+                    || request.answer_kind == "question"
+                    || permission_prompt
+                    || screen_choice)
             {
                 state.questions.dismissed_prompt = request.prompt_key.clone();
+                state.questions.dismissed_tool_use_id = None;
             }
             // The card's own send clears its saved answers once gxserver has them.
             if let Some(content_key) = request.content_key.as_deref() {
@@ -99,6 +102,13 @@ fn answer_settled(state: &mut ChatState, outcome: &RpcOutcome) -> Vec<Effect> {
             endpoint: _,
         } => {
             state.questions.answered_notice_key = None;
+            // The card hid when its answer went out; the refusal brings it back to retry.
+            if let Some((key, tool_use_id)) = request.restore_dismissed.clone() {
+                if state.questions.dismissed_prompt == request.prompt_key {
+                    state.questions.dismissed_prompt = key;
+                    state.questions.dismissed_tool_use_id = tool_use_id;
+                }
+            }
             // A refused picker answer stops blocking the composer: the row is gone from the
             // agent's screen, or it never was what the card thought.
             if request.answer_kind == "terminalChoice" {

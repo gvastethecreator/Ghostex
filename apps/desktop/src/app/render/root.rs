@@ -223,7 +223,6 @@ impl Render for GhostexGpuiApp {
         self.prepare_focus_bounds_for_render(window.scale_factor(), cx);
         #[cfg(target_os = "macos")]
         self.sync_terminal_close_confirm_dialog(window, cx);
-        self.sync_terminal_paste_confirmation_dialog(window, cx);
         self.sync_terminal_search_inputs(window, cx);
         self.sync_composited_terminal_keyboard_owner(window, cx);
         self.drain_pending_keyboard_handoff(window, cx);

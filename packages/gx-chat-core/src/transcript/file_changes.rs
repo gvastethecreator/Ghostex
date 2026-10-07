@@ -193,8 +193,15 @@ fn edit_lines(edit: &Value) -> Option<Vec<DiffLine>> {
             Some(value) => Some(value),
         })
     };
-    let before = pick(&["old_string", "oldString", "old"]);
-    let after = pick(&["new_string", "newString", "new", "content", "file_text"]);
+    let before = pick(&["old_string", "oldString", "oldText", "old"]);
+    let after = pick(&[
+        "new_string",
+        "newString",
+        "newText",
+        "new",
+        "content",
+        "file_text",
+    ]);
     let Some(Value::String(after)) = after else {
         return None;
     };
@@ -245,8 +252,9 @@ fn file_changes<'a>(name: &str, input: &Value) -> Vec<FileChange<'a>> {
         return Vec::new();
     };
     let path = path.to_string();
+    // Pi's `edit` takes `{path, edits: [{oldText, newText}]}`, the list Claude's MultiEdit uses.
     let edits: Vec<Value> = match (kind.as_str(), input.get("edits")) {
-        ("multiedit", Some(Value::Array(items))) => items.clone(),
+        ("multiedit" | "edit", Some(Value::Array(items))) => items.clone(),
         _ => vec![input.clone()],
     };
     let mut lines = Vec::new();

@@ -80,7 +80,7 @@ action_kinds! {
     ToggleAgentTasks => "toggleAgentTasks",
     ToggleAgentTasksCompleted => "toggleAgentTasksCompleted",
     ToggleCoordinatorThreads => "toggleCoordinatorThreads",
-    ToggleCoordinatorThreadsDone => "toggleCoordinatorThreadsDone",
+    ToggleCoordinatorThreadsMore => "toggleCoordinatorThreadsMore",
     OpenCoordinatorThread => "openCoordinatorThread",
     SearchOpen => "searchOpen",
     SearchClose => "searchClose",

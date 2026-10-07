@@ -53,7 +53,7 @@ fn tailcat_status_payload_from_state(
         binary_path: binary_path.map(|path| path.to_string_lossy().to_string()),
         binary_version,
         token: snapshot.token,
-        ports: state.ports,
+        ports: tailcat_served_ports(&state),
         allowed_client_keys: state.allowed_client_keys,
         last_error: snapshot.last_error,
     }

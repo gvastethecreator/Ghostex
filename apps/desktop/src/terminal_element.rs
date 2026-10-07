@@ -1493,6 +1493,19 @@ impl TerminalView {
             return;
         }
 
+        // The web host receives clipboard data through the browser's trusted
+        // paste event. Let Shift+Insert reach that event instead of the PTY.
+        #[cfg(target_arch = "wasm32")]
+        if keystroke.key == "insert"
+            && modifiers.shift
+            && !modifiers.control
+            && !modifiers.platform
+            && !modifiers.alt
+            && !modifiers.function
+        {
+            return;
+        }
+
         if keystroke.key_char.is_some()
             && (event.prefer_character_input || self.pending_character_input)
         {
@@ -1717,6 +1730,18 @@ impl TerminalView {
     fn handle_key_up(&mut self, event: &KeyUpEvent) {
         let keystroke = &event.keystroke;
         self.last_modifiers = keystroke.modifiers;
+        // Shift+Insert's press went to the browser paste event, so its release
+        // must not reach the PTY either.
+        #[cfg(target_arch = "wasm32")]
+        if keystroke.key == "insert"
+            && keystroke.modifiers.shift
+            && !keystroke.modifiers.control
+            && !keystroke.modifiers.platform
+            && !keystroke.modifiers.alt
+            && !keystroke.modifiers.function
+        {
+            return;
+        }
         if terminal_word_navigation_input(keystroke).is_some() {
             return;
         }

@@ -42,7 +42,8 @@ pub fn fetch_gxserver_session_list(flags: &Flags) -> CliResult<Value> {
     }
 }
 
-fn fetch_live_gxserver_session_list(flags: &Flags) -> CliResult<Value> {
+/// The session list as the running gxserver reports it, with no fallback to its persisted state.
+pub fn fetch_live_gxserver_session_list(flags: &Flags) -> CliResult<Value> {
     let projects_response = call_gxserver_rpc("/api/listProjects", &json!({}), flags)?;
     let recent_projects_response = call_gxserver_rpc("/api/listRecentProjects", &json!({}), flags)?;
     /*
@@ -185,11 +186,23 @@ fn fetch_live_gxserver_session_list(flags: &Flags) -> CliResult<Value> {
      * CDXC:Spaces 2026-08-27:
      * The snapshot also carries the daemon-owned saved sidebar filters so
      * phones render and edit the same Space row as the desktop sidebar.
+     *
+     * CDXC:Spaces 2026-10-06 WHY:
+     * Spaces follow the machine's own switch (`sidebarSpacesEnabled`, which
+     * the snapshot publishes beside them), and the phone draws a Space row
+     * whenever this list carries Spaces, so a machine with Spaces off sends
+     * none. A daemon too old to publish the switch keeps sending them.
      */
+    let spaces_enabled = snapshot
+        .and_then(|snapshot| snapshot.get("sidebarSpacesEnabled"))
+        .and_then(Value::as_bool)
+        != Some(false);
     insert_present(
         &mut result,
         "sidebarSpaces",
-        snapshot.and_then(|snapshot| snapshot.get("sidebarSpaces")),
+        snapshot
+            .filter(|_| spaces_enabled)
+            .and_then(|snapshot| snapshot.get("sidebarSpaces")),
     );
     /*
      * CDXC:Sessions 2026-09-11 WHY:

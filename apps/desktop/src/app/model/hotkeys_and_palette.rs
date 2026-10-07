@@ -134,6 +134,17 @@ pub(crate) fn gpui_command_palette_project_slot_hotkey_number(action_id: &str) -
     }
 }
 
+/// The position, 1 to 9, of a Go to Space hotkey (`go_to_native_space` in native_sidebar/space_gesture.rs).
+pub(crate) fn gpui_space_slot_hotkey_number(action_id: &str) -> Option<usize> {
+    let slot = action_id.strip_prefix("goToSpace")?;
+    if slot.len() != 1 {
+        return None;
+    }
+    slot.parse::<usize>()
+        .ok()
+        .filter(|slot| (1..=9).contains(slot))
+}
+
 pub(crate) fn gpui_command_pane_focused_session_hotkey_action(
     action_id: &str,
 ) -> Option<GpuiCommandPaneFocusedSessionHotkeyAction> {

@@ -256,7 +256,21 @@ pub(crate) fn gpui_request_macos_notification_permission()
     })
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Windows asks no permission up front: this reports whether Windows lets Ghostex show toasts.
+#[cfg(target_os = "windows")]
+pub(crate) fn gpui_request_macos_notification_permission()
+-> GpuiMacOSNotificationAuthorizationStatus {
+    gpui_windows_notification_status()
+}
+
+/// Linux notification daemons ask no permission; delivery itself reports a missing `notify-send`.
+#[cfg(target_os = "linux")]
+pub(crate) fn gpui_request_macos_notification_permission()
+-> GpuiMacOSNotificationAuthorizationStatus {
+    GpuiMacOSNotificationAuthorizationStatus::Authorized
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub(crate) fn gpui_request_macos_notification_permission()
 -> GpuiMacOSNotificationAuthorizationStatus {
     GpuiMacOSNotificationAuthorizationStatus::Unsupported
@@ -270,7 +284,22 @@ pub(crate) fn gpui_deliver_macos_settings_test_notification() -> GpuiMacOSNotifi
     })
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+pub(crate) fn gpui_deliver_macos_settings_test_notification() -> GpuiMacOSNotificationDeliveryResult
+{
+    gpui_deliver_windows_test_notification()
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn gpui_deliver_macos_settings_test_notification() -> GpuiMacOSNotificationDeliveryResult
+{
+    gpui_deliver_linux_notification(
+        "Agent task complete",
+        "This is a Ghostex notification test.",
+    )
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub(crate) fn gpui_deliver_macos_settings_test_notification() -> GpuiMacOSNotificationDeliveryResult
 {
     GpuiMacOSNotificationDeliveryResult::Unsupported
@@ -330,11 +359,45 @@ pub(crate) fn gpui_deliver_macos_session_attention_notification(
     })
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+pub(crate) fn gpui_deliver_macos_session_attention_notification(
+    candidate: GpuiSessionAttentionNotificationCandidate,
+) -> GpuiMacOSNotificationDeliveryResult {
+    gpui_deliver_windows_notification(candidate)
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn gpui_deliver_macos_session_attention_notification(
+    candidate: GpuiSessionAttentionNotificationCandidate,
+) -> GpuiMacOSNotificationDeliveryResult {
+    gpui_deliver_linux_notification(&candidate.title, &candidate.body)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub(crate) fn gpui_deliver_macos_session_attention_notification(
     _candidate: GpuiSessionAttentionNotificationCandidate,
 ) -> GpuiMacOSNotificationDeliveryResult {
     GpuiMacOSNotificationDeliveryResult::Unsupported
+}
+
+/// CDXC:Notifications 2026-10-05 WHY:
+/// Linux shows system notifications through the desktop's freedesktop notification daemon via `notify-send` (libnotify), which every major desktop ships; a click cannot be routed back without keeping a process waiting per notification, so Linux notifications only inform. A missing `notify-send` reports the banners as unavailable.
+#[cfg(target_os = "linux")]
+pub(crate) fn gpui_deliver_linux_notification(
+    title: &str,
+    body: &str,
+) -> GpuiMacOSNotificationDeliveryResult {
+    let status = std::process::Command::new("notify-send")
+        .args(["--app-name=Ghostex", "--", title, body])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    match status {
+        Ok(status) if status.success() => GpuiMacOSNotificationDeliveryResult::Sent,
+        Ok(_) => GpuiMacOSNotificationDeliveryResult::Failed,
+        Err(_) => GpuiMacOSNotificationDeliveryResult::Unsupported,
+    }
 }
 
 #[cfg(target_os = "macos")]

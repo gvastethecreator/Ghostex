@@ -20,6 +20,8 @@ pub const DEFAULT_GHOSTEX_SETTINGS: &[(&str, J)] = &[
     // CDXC:AgentProviders 2026-09-04 DECISION:
     // User: new installs must start with Agent approvals set to Keep default. Running supported agents without approval is an explicit opt-in.
     ("agentAcceptAllEnabled", J::Bool(false)),
+    ("agentHooksAutoInstall", J::Bool(false)),
+    ("agentsTidyUpOfferDismissed", J::Bool(false)),
     ("agentManagerZoomPercent", J::Num(100.0)),
     ("defaultPromptAgentId", J::Str("codex")),
     ("sessionTitleGenerationAgent", J::Str("codex")),
@@ -105,6 +107,8 @@ pub const DEFAULT_GHOSTEX_SETTINGS: &[(&str, J)] = &[
     ("gitActionsTitlebarButtonHidden", J::Bool(false)),
     // CDXC:Extensions 2026-10-01 DECISION: Actions is off by default (built_in_extensions.rs).
     ("actionsHidden", J::Bool(true)),
+    // CDXC:AgentBox 2026-10-06 DECISION: Cloud Boxes is off by default (official_extensions.rs).
+    ("cloudBoxesHidden", J::Bool(true)),
     ("openInTitlebarButtonHidden", J::Bool(false)),
     // CDXC:CodeEditor 2026-05-06-15:00
     // Embedded code-server editor panes can reuse the user's local VS Code
@@ -243,6 +247,12 @@ pub const DEFAULT_GHOSTEX_SETTINGS: &[(&str, J)] = &[
     ("hideLastActiveTimeOnSessionCards", J::Bool(true)),
     ("highlightPendingQuestions", J::Bool(false)),
     ("hideAccountEmails", J::Bool(false)),
+    // CDXC:AgentProviders 2026-10-06 DECISION:
+    // User: Claude and Codex each get a setting to auto-redeem banked resets that are going to expire anyway, used 5 minutes before expiry ("no no shouldn't be 60 minutes before that's big waste. Let's do 5 minutes instead."); using one at a usage limit in its last 24 hours happens only "if user enables that toggle", the separate AtLimit switch. All off by default because a redeemed reset cannot be given back; gxserver owns the rule (server/src/accounts/reset_watch.rs). Supersedes the 2026-10-05 single switch that also covered the limit case, and the 60-minute last call.
+    ("claudeAutoRedeemExpiringResets", J::Bool(false)),
+    ("codexAutoRedeemExpiringResets", J::Bool(false)),
+    ("claudeAutoRedeemResetsAtLimit", J::Bool(false)),
+    ("codexAutoRedeemResetsAtLimit", J::Bool(false)),
     // CDXC:Sessions 2026-06-13-17:50:
     // First-run sidebar tag filter settings should show the default triage tags,
     // the No tag filter, and the default separators. Users opt out by hiding or
@@ -435,6 +445,9 @@ pub const DEFAULT_GHOSTEX_SETTINGS: &[(&str, J)] = &[
     // Keep this default-on even after adding macOS permission prompts and test
     // controls; users should opt out explicitly when they do not want banners.
     ("showMacOSAttentionNotifications", J::Bool(true)),
+    // CDXC:Notifications 2026-10-05 DECISION:
+    // User: a banked reset that expires within 3 days, and again within 24 hours, also gets a system notification, which "can be switched off for the system" while the red bell row stays.
+    ("resetExpirySystemNotifications", J::Bool(true)),
     ("hideMenuBarSessionStatusIndicators", J::Bool(false)),
     ("petOverlayEnabled", J::Bool(false)),
     ("selectedPetId", J::Str("boo")),
@@ -463,6 +476,7 @@ pub const DEFAULT_GHOSTEX_SETTINGS: &[(&str, J)] = &[
     // last-width restore path used at app restart.
     ("sidebarDefaultWidthPx", J::Num(275.0)),
     ("projectSessionListCollapsedCount", J::Num(13.0)),
+    ("groupWorkingSessions", J::Bool(false)),
     ("sidebarSpacesEnabled", J::Bool(false)),
     ("sidebarSpaceSwitchBehavior", J::Str("restore")),
     ("projectSwitchKeepAliveMinutes", J::Num(10.0)),
@@ -701,6 +715,15 @@ pub const DEFAULT_GHOSTEX_SETTINGS: &[(&str, J)] = &[
             ("jumpToProject7", J::Str("cmd+ctrl+7")),
             ("jumpToProject8", J::Str("cmd+ctrl+8")),
             ("jumpToProject9", J::Str("cmd+ctrl+9")),
+            ("goToSpace1", J::Str("cmd+alt+shift+1")),
+            ("goToSpace2", J::Str("cmd+alt+shift+2")),
+            ("goToSpace3", J::Str("cmd+alt+shift+3")),
+            ("goToSpace4", J::Str("cmd+alt+shift+4")),
+            ("goToSpace5", J::Str("cmd+alt+shift+5")),
+            ("goToSpace6", J::Str("cmd+alt+shift+6")),
+            ("goToSpace7", J::Str("cmd+alt+shift+7")),
+            ("goToSpace8", J::Str("cmd+alt+shift+8")),
+            ("goToSpace9", J::Str("cmd+alt+shift+9")),
             ("focusSessionSlot1", J::Str("cmd+1")),
             ("focusSessionSlot2", J::Str("cmd+2")),
             ("focusSessionSlot3", J::Str("cmd+3")),

@@ -2,12 +2,11 @@ use axum::http::StatusCode;
 use serde_json::{json, Value};
 
 use crate::{
-    constants::GXSERVER_LOCAL_API_PORT,
     domain::read_domain_rpc_params,
     protocol::{rpc_error, rpc_success},
     server::{routed_json, AppState, RoutedResponse},
     storage::open_gxserver_database,
-    tailcat::read_tailcat_status_payload_for_paths,
+    tailcat::{read_tailcat_status_payload_for_paths, tailcat_gxserver_api_port},
 };
 
 use super::pair_device::*;
@@ -92,7 +91,7 @@ pub(crate) async fn handle_remote_access_http(
                         address,
                         name: identity.computer_name.clone(),
                         user: identity.username.clone(),
-                        port: GXSERVER_LOCAL_API_PORT,
+                        port: tailcat_gxserver_api_port(),
                         ssh_port,
                         secret: Some(secret.secret.clone()),
                         expires_at: Some(secret.expires_at_iso()),

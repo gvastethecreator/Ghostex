@@ -132,6 +132,12 @@ const STORES: &[ChatStore] = &[
         backend: Backend::Local,
     },
     ChatStore {
+        id: "piContext",
+        prefix: "ghostex.chat.context-details.pi.v1",
+        collection: false,
+        backend: Backend::Local,
+    },
+    ChatStore {
         id: "basicContext",
         prefix: "ghostex.chat.context-details.basic.v1",
         collection: false,

@@ -619,11 +619,21 @@ impl GhostexGpuiApp {
                                 .min_w_0()
                                 .child(
                                     h_flex()
+                                        .min_w_0()
+                                        .overflow_hidden()
                                         .gap(px(4.0 * scale))
-                                        .child(div().min_w_0().whitespace_nowrap().child(label))
+                                        .child(
+                                            div()
+                                                .min_w_0()
+                                                .overflow_hidden()
+                                                .whitespace_nowrap()
+                                                .text_ellipsis()
+                                                .child(label),
+                                        )
                                         .when_some(item["suffix"].as_str(), |row, suffix| {
                                             row.child(
                                                 div()
+                                                    .flex_shrink_0()
                                                     .text_size(px(10.0 * scale))
                                                     .opacity(0.6)
                                                     .child(suffix.to_owned()),
@@ -635,6 +645,10 @@ impl GhostexGpuiApp {
                                     |column, detail| {
                                         column.child(
                                             div()
+                                                .min_w_0()
+                                                .overflow_hidden()
+                                                .whitespace_nowrap()
+                                                .text_ellipsis()
                                                 .text_size(px(10.0 * scale))
                                                 .opacity(0.6)
                                                 .child(detail.to_owned()),

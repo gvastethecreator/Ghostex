@@ -146,6 +146,13 @@ pub(crate) fn requested_agentbox_provider(
             "AgentBox runs on macOS and Linux only.",
         ));
     }
+    if !cloud_boxes_enabled() {
+        return Err(DomainStateError::bad_request(
+            ghostex_settings_catalog::built_in_extensions::turned_off_message(
+                ghostex_settings_catalog::built_in_extensions::CLOUD_BOXES,
+            ),
+        ));
+    }
     Ok(Some(provider.to_string()))
 }
 
@@ -196,4 +203,17 @@ pub(crate) fn new_box_name(project_path: &str) -> String {
         .take(6)
         .collect();
     format!("gx-{slug}-{tail}")
+}
+
+/// Whether the Cloud Boxes built-in extension is on (Settings > Extensions; never on Windows). While
+/// it is off no client can start a box and every status answers "not supported", so the desktop,
+/// the web build and the phone's Run on rows drop their box choices together.
+///
+/// CDXC:AgentBox 2026-10-06 SEE-ALSO: packages/settings-catalog/src/data/official_extensions.rs (the user decision).
+pub(crate) fn cloud_boxes_enabled() -> bool {
+    let paths = crate::paths::get_gxserver_paths(None);
+    ghostex_settings_catalog::built_in_extensions::enabled_in_value(
+        crate::session_lifecycle::read_sidebar_settings(&paths).as_ref(),
+        ghostex_settings_catalog::built_in_extensions::CLOUD_BOXES,
+    )
 }

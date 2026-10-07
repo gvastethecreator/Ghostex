@@ -13,9 +13,29 @@ disable-model-invocation: true
 # ghostex-computer-use
 
 Use this skill when a task needs native macOS app automation through Ghostex
-Desktop Control. This skill is intentionally a wrapper around `$cua-driver`: if
-the `$cua-driver` skill is available, load it for current schemas and safety
-rules, but issue operations through the `cua-driver` CLI.
+Desktop Control. This skill is a wrapper around `$cua-driver`: read that skill
+first (below), and issue operations through the `cua-driver` CLI.
+
+## Read the cua-driver skill first
+
+Before the first `cua-driver` call, read Trycua's `cua-driver` skill: it is the
+source of truth for the installed driver's tools, schemas, safety rules and
+platform notes, and this skill only adds Ghostex's guidance on top. Load
+`$cua-driver` if your agent offers it; otherwise read its `SKILL.md` and the
+reference files it links:
+
+```bash
+cat "$(cua-driver skills path)/SKILL.md"
+```
+
+From WSL, ask the Windows side for the path and translate it:
+
+```bash
+cat "$(wslpath -u "$(powershell.exe -NoProfile -Command 'cua-driver skills path' | tr -d '\r')")/SKILL.md"
+```
+
+If the skill is missing, install it with `cua-driver skills install` (through
+`powershell.exe` from WSL), or from Settings > Integrations.
 
 Use the CLI, not MCP. Do not configure, register, or invoke a Trycua MCP
 server for this workflow.
@@ -31,8 +51,8 @@ Route browser work by surface:
 ## Requirements
 
 - Trycua must be installed. Ghostex installs it from first-launch setup or
-  Settings > Integrations, where the Fast Computer Use (Trycua) card runs the official installer in
-  a command pane.
+  Settings > Integrations, where the Fast Computer & Browser Use row runs the
+  official installer and installs the `$cua-driver` skill with it.
 - Trycua must be available as `cua-driver` (see Windows and WSL below).
 - macOS Accessibility and Screen Recording permissions must be granted for
   Trycua.
@@ -126,7 +146,7 @@ powershell.exe -NoProfile -Command "irm https://cua.ai/driver/install.ps1 | iex"
   element indexes.
 - Prefer one small verified action at a time. Re-snapshot after every stateful
   action because element indexes can change as the UI updates.
-- For full command details, defer to `$cua-driver`; this wrapper exists so users
-  can ask for `$ghostex-computer-use`.
+- For full command details, defer to the `cua-driver` skill you read first;
+  this wrapper exists so users can ask for `$ghostex-computer-use`.
 - When a native-app workflow reaches supported browser page content, switch to
   `$ghostex-browser-use`; switch back here for browser chrome or native dialogs.

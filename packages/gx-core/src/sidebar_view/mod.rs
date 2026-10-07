@@ -18,6 +18,7 @@ pub(crate) mod collections;
 mod groups;
 mod inputs;
 mod machine_connection;
+pub(crate) mod machine_spaces;
 mod machines;
 pub(crate) mod membership;
 mod model;
@@ -53,7 +54,8 @@ pub use inputs::{
     BrowserTabInput, CloseAfterDoneInput, DelayedSendInput, MachineTabInput, ProjectDiffStats,
     SectionCollapse, SectionId, SessionSortMode, SidebarCollapseState, SidebarHiddenItems,
     SidebarHostInputs, SidebarInputs, SidebarMode, SidebarSettings, SidebarUiState,
-    UnavailableState, LOCAL_MACHINE_ID, MACHINE_STATE_CONNECTED, MAX_RECENT_SPACE_SESSION_IDS,
+    UnavailableState, GROUP_WORKING_SESSIONS_SETTING_KEY, LOCAL_MACHINE_ID, MACHINE_STATE_CONNECTED,
+    MAX_RECENT_SPACE_SESSION_IDS,
 };
 pub use machine_connection::{machine_state_copy, machine_state_is_busy, machine_state_is_failure};
 pub use model::{SidebarUpdateWork, SidebarViewModel};

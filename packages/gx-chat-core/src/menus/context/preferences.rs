@@ -29,6 +29,7 @@ pub const CONTEXT_PREFERENCES_STORE_CLAUDE: &str = "claudeContext";
 pub const CONTEXT_PREFERENCES_STORE_CODEX: &str = "codexContext";
 pub const CONTEXT_PREFERENCES_STORE_CURSOR: &str = "cursorContext";
 pub const CONTEXT_PREFERENCES_STORE_HERMES: &str = "hermesContext";
+pub const CONTEXT_PREFERENCES_STORE_PI: &str = "piContext";
 pub const CONTEXT_PREFERENCES_STORE_BASIC: &str = "basicContext";
 
 /// The record for one agent.
@@ -39,6 +40,7 @@ pub fn context_preferences_key(agent: ContextDetailsAgent) -> StorageKey {
             ContextDetailsAgent::Codex => CONTEXT_PREFERENCES_STORE_CODEX,
             ContextDetailsAgent::Cursor => CONTEXT_PREFERENCES_STORE_CURSOR,
             ContextDetailsAgent::Hermes => CONTEXT_PREFERENCES_STORE_HERMES,
+            ContextDetailsAgent::Pi => CONTEXT_PREFERENCES_STORE_PI,
             ContextDetailsAgent::Basic => CONTEXT_PREFERENCES_STORE_BASIC,
         }
         .to_string(),
@@ -185,6 +187,9 @@ fn normalize_order(
 /// CDXC:AgentProviders 2026-09-26 DECISION:
 /// User (Bots mockup, screen 08): a Hermes status line reads context, cost, tokens and session
 /// time; the model stays out because the chat box already shows it.
+///
+/// CDXC:AgentProviders 2026-10-06 DECISION:
+/// User: Pi's status line shows "model, usage, context, like Claude's": model, context used, cost and tokens.
 pub fn default_preferences(agent: ContextDetailsAgent) -> ContextDetailsPreferences {
     let (shown, starred): (&[(&str, bool)], &[&str]) = match agent {
         ContextDetailsAgent::Claude => (
@@ -222,6 +227,7 @@ pub fn default_preferences(agent: ContextDetailsAgent) -> ContextDetailsPreferen
             &["contextUsed", "branch", "lines"],
         ),
         ContextDetailsAgent::Hermes => (&[], &["contextUsed", "costUsd", "tokens", "sessionTime"]),
+        ContextDetailsAgent::Pi => (&[], &["model", "contextUsed", "costUsd", "tokens"]),
         ContextDetailsAgent::Basic => (&[], &["repo", "branch"]),
     };
     ContextDetailsPreferences {

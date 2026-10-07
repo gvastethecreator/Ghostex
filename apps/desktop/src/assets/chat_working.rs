@@ -41,12 +41,21 @@ pub(crate) static VISUAL: LazyLock<WorkingStripVisual> = LazyLock::new(|| {
     .expect("shared working strip appearance")
 });
 
+/// CDXC:SessionChat 2026-10-05 DECISION: User: "the rotating working icon still shows the lines just as before … make sure to fix it" (supersedes the 2026-10-04 padding-only fix). The flickering square was each rotated sprite's quad edge (the 96 px glow quads most visibly) sampling the neighbouring atlas tiles, which padding inside the asset cannot stop; the GPUI monochrome sprite shaders now clamp samples inside the tile (`.dependencies/zed` gpui_windows `shaders.hlsl`, gpui_wgpu `shaders.wgsl`, gpui_apple `shaders.metal`). `SPARK_PAD` still keeps the glyph clear of its own tile edge, and `spark_svg_size` renders the padded svg larger by the same ratio so the glyph keeps its size.
+pub(crate) const SPARK_PAD: f32 = 4.0;
+
+/// The on-screen size of the padded spark svg whose glyph measures `glyph_px`.
+pub(crate) fn spark_svg_size(glyph_px: f32) -> f32 {
+    glyph_px * (24.0 + 2.0 * SPARK_PAD) / 24.0
+}
+
 /// Cache a bounded set of SVG blur masks; GPUI tints their alpha masks like CSS drop-shadow.
 pub(crate) fn asset(key: &str) -> Option<String> {
     let path = &VISUAL.spark_path;
     if key == "spark" {
+        let box_units = 24.0 + 2.0 * SPARK_PAD;
         return Some(format!(
-            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="{path}"/></svg>"#
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="-{SPARK_PAD} -{SPARK_PAD} {box_units} {box_units}"><path d="{path}"/></svg>"#
         ));
     }
     let (color, step) = key.split_once('-')?;

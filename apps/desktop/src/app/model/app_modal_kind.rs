@@ -45,8 +45,12 @@ pub(crate) enum GpuiAppModalKind {
     UpdateAvailable,
     /// Name, agent, goal and first request of a new coordinator (new_coordinator_modal_lifecycle.rs).
     NewCoordinator,
+    /// Make an existing session a coordinator, with an optional goal (new_coordinator_modal_lifecycle.rs).
+    MakeCoordinator,
     /// Send Feedback, from the sidebar's chat-bubble button (feedback_modal_lifecycle.rs).
     Feedback,
+    /// "Paste potentially unsafe text?" for terminal paste protection (terminal_input/paste_and_shortcuts.rs).
+    TerminalPasteConfirm,
 }
 
 impl GpuiAppModalKind {
@@ -88,7 +92,9 @@ impl GpuiAppModalKind {
             }
             "updateAvailable" => Some(Self::UpdateAvailable),
             "newCoordinator" => Some(Self::NewCoordinator),
+            "makeCoordinator" => Some(Self::MakeCoordinator),
             "feedback" => Some(Self::Feedback),
+            "terminalPasteConfirm" => Some(Self::TerminalPasteConfirm),
             _ => None,
         }
     }
@@ -129,7 +135,9 @@ impl GpuiAppModalKind {
             Self::Extension(id) => extension_modal_id(id),
             Self::UpdateAvailable => "updateAvailable",
             Self::NewCoordinator => "newCoordinator",
+            Self::MakeCoordinator => "makeCoordinator",
             Self::Feedback => "feedback",
+            Self::TerminalPasteConfirm => "terminalPasteConfirm",
         }
     }
 
@@ -168,7 +176,9 @@ impl GpuiAppModalKind {
             Self::Extension(_) => "Ghostex Extension",
             Self::UpdateAvailable => "Ghostex Update",
             Self::NewCoordinator => "Ghostex New Coordinator",
+            Self::MakeCoordinator => "Ghostex Make Coordinator",
             Self::Feedback => "Ghostex Send Feedback",
+            Self::TerminalPasteConfirm => "Ghostex Paste",
         }
     }
 
@@ -312,11 +322,17 @@ impl GpuiAppModalKind {
                 px(crate::app::window::NEW_COORDINATOR_MODAL_WIDTH),
                 px(crate::app::window::NEW_COORDINATOR_MODAL_INITIAL_HEIGHT),
             ),
+            Self::MakeCoordinator => size(
+                px(crate::app::window::NEW_COORDINATOR_MODAL_WIDTH),
+                px(crate::app::window::MAKE_COORDINATOR_MODAL_INITIAL_HEIGHT),
+            ),
             Self::Feedback => size(
                 px(crate::app::window::FEEDBACK_MODAL_WIDTH),
                 px(crate::app::window::FEEDBACK_MODAL_INITIAL_HEIGHT),
             ),
             Self::Extension(id) => extension_modal_window_size(id),
+            // `TERMINAL_PASTE_CONFIRM_MODAL_WIDTH` / `_INITIAL_HEIGHT` in window/terminal_paste_confirm_modal.rs.
+            Self::TerminalPasteConfirm => size(px(440.0), px(180.0)),
             Self::RemoteGxserverInstall => size(
                 px(APP_MODAL_HOST_REMOTE_GXSERVER_INSTALL_WINDOW_WIDTH),
                 px(APP_MODAL_HOST_REMOTE_GXSERVER_INSTALL_WINDOW_HEIGHT),
@@ -429,6 +445,7 @@ impl GpuiAppModalKind {
             | Self::SessionNote
             | Self::RemoteSetup
             | Self::Feedback
+            | Self::TerminalPasteConfirm
             | Self::Onboarding => serde_json::json!({
                 "modal": self.modal_id(),
                 "type": "open",
@@ -436,8 +453,11 @@ impl GpuiAppModalKind {
             Self::MermaidDiagram | Self::MarkdownTable => serde_json::json!({
                 "modal": self.modal_id(), "source": "", "type": "open",
             }),
-            // A New Coordinator open names its project, which only the sidebar knows.
-            Self::Extension(_) | Self::NewCoordinator => serde_json::Value::Null,
+            // A New Coordinator open names its project and a Make Coordinator open its session,
+            // which only the sidebar knows.
+            Self::Extension(_) | Self::NewCoordinator | Self::MakeCoordinator => {
+                serde_json::Value::Null
+            }
             Self::UpdateAvailable => serde_json::json!({
                 "modal": self.modal_id(),
                 "type": "open",

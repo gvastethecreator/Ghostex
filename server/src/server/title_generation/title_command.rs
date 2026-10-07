@@ -23,7 +23,7 @@ pub(crate) fn build_session_history_title_source(prompts: &[String]) -> Option<S
         .take(GXSERVER_SESSION_HISTORY_TITLE_SOURCE_MESSAGE_COUNT)
         .map(|prompt| {
             js_string_slice_prefix(
-                prompt,
+                crate::coordinators::strip_agent_message_header(prompt),
                 GXSERVER_SESSION_HISTORY_TITLE_SOURCE_MESSAGE_MAX_LENGTH,
             )
             .trim()

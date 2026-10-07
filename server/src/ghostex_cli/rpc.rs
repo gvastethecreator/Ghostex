@@ -314,6 +314,9 @@ pub fn request_gxserver_envelope(
             (true, status, read_json_body(response))
         }
         Err(ureq::Error::Status(status, response)) => (false, status, read_json_body(response)),
+        Err(error) if timed_out_after_connecting(&error) => {
+            return Err(timeout_error(target, pathname, body, timeout_ms));
+        }
         Err(error) => {
             return Err(connection_error_for_target(target, &error.to_string()));
         }
@@ -358,6 +361,51 @@ fn read_json_body(response: ureq::Response) -> Option<Value> {
         .read_to_string(&mut text)
         .ok()?;
     parse_json_value(&text)
+}
+
+/// A request gxserver accepted but did not answer in time. ureq reports a failed connect as
+/// `ConnectionFailed`; a timeout while waiting for the answer is an `Io` error.
+fn timed_out_after_connecting(error: &ureq::Error) -> bool {
+    let ureq::Error::Transport(transport) = error else {
+        return false;
+    };
+    transport.kind() == ureq::ErrorKind::Io
+        && std::error::Error::source(transport)
+            .and_then(|source| source.downcast_ref::<std::io::Error>())
+            .is_some_and(|io| {
+                matches!(
+                    io.kind(),
+                    std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+                )
+            })
+}
+
+/// CDXC:Cli 2026-10-05 WHY:
+/// A request that timed out while gxserver was running said "Could not connect to local gxserver … Start it with gx server start", which sent callers off to start a server that was up and, for a send, hid that gxserver keeps typing the message after the CLI stops waiting. A timeout now says so, and a send's says the message may still arrive and to retry only with the same request id, which gxserver delivers at most once (session_chat_send_requests.rs). A refused connection keeps the start-it-first message.
+fn timeout_error(target: &Target, pathname: &str, body: &Value, timeout_ms: f64) -> CliError {
+    let mut message = format!(
+        "gxserver at {} did not answer {} within {} ms. It is running but did not finish in time; the request may still complete.",
+        target.base_url,
+        pathname,
+        timeout_ms.max(0.0) as u64
+    );
+    if matches!(
+        pathname,
+        "/api/sendSessionChatMessage"
+            | "/api/queueSessionChatPrompt"
+            | "/api/answerSessionChatPrompt"
+            | "/api/sendSessionChatQueuedPrompt"
+    ) {
+        message.push_str(" The message may still be delivered: read the chat before sending it again, and retry only with the same request id");
+        if let Some(id) = body
+            .pointer("/params/sendRequestId")
+            .and_then(Value::as_str)
+        {
+            message.push_str(&format!(" ({id})"));
+        }
+        message.push_str(" (--request-id for ghostex agents send, --send-request-id for the chat commands) so it is never delivered twice.");
+    }
+    CliError::Other(message)
 }
 
 fn connection_error_for_target(target: &Target, _detail: &str) -> CliError {

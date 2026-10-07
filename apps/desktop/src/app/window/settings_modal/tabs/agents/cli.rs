@@ -19,9 +19,9 @@ use super::logos::muted_fill;
 use super::select::DropdownOption;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    Animation, AnimationExt as _, AnyElement, ClickEvent, Context, InteractiveElement as _,
-    IntoElement, ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Task, Transformation, Window, div, px, radians,
+    Animation, AnimationExt as _, AnyElement, Context, InteractiveElement as _, IntoElement,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Task,
+    Transformation, Window, div, px, radians,
 };
 use gpui_component::{h_flex, v_flex};
 use serde_json::{Value, json};
@@ -420,6 +420,7 @@ impl AgentsTab {
             return;
         }
         let mut installed = false;
+        let installed_agent = agent_id.to_string();
         match result.and_then(|value| {
             CliState::parse(&value).ok_or_else(|| "The CLI request failed.".to_string())
         }) {
@@ -447,6 +448,7 @@ impl AgentsTab {
         }
         cx.notify();
         if installed {
+            self.on_cli_installed(&installed_agent, cx);
             self.cli_changed(cx);
         }
     }
@@ -783,15 +785,15 @@ impl AgentsTab {
                 None => update,
             }
         });
-        Some(cli_titled_button(
+        // CDXC:AgentLauncher 2026-10-06 DECISION: User: "ok implement the plan": an available update is not a problem, so the row offers it as a muted link instead of a button.
+        Some(cli_quiet_link(
             p,
             id("update"),
             if error.is_some() {
                 "Retry update"
             } else {
-                "Update CLI"
+                "Update available"
             },
-            icons::REFRESH,
             title,
             move |page: &mut Self, _window, cx| {
                 page.cli_start(CliSlot::Row, &agent, "update", &detected, cx)
@@ -938,11 +940,14 @@ impl AgentsTab {
                 .line_height(px(16.0))
                 .text_color(hsla(link_color))
                 .hover(|this| this.underline())
-                .on_click(cx.listener(move |page, _: &ClickEvent, _window, cx| {
+                .role(gpui::Role::Link)
+                .aria_label("Install docs")
+                .on_press(cx, move |page, _window, cx| {
+                    let url = url.clone();
                     page.store.update(cx, |store, cx| {
                         store.post_message(json!({ "type": "openExternalUrl", "url": url }), cx)
                     });
-                }))
+                })
                 .child("Install docs")
                 .child(settings_icon(icons::EXTERNAL_LINK, 14.0, link_color))
                 .into_any_element()
@@ -962,6 +967,7 @@ impl AgentsTab {
         let refresh = ghost_icon_button(
             p,
             SharedString::from(format!("agent-cli-refresh-{agent_id}")),
+            "Check the CLI again",
             refresh_icon,
             refresh_disabled,
             false,
@@ -1243,11 +1249,14 @@ impl AgentsTab {
                         .text_size(px(12.0))
                         .line_height(px(16.0))
                         .text_color(hsla(muted))
-                        .on_click(cx.listener(move |page, _: &ClickEvent, _window, cx| {
+                        .role(gpui::Role::Button)
+                        .aria_label("Command output")
+                        .aria_expanded(output_open)
+                        .on_press(cx, move |page, _window, cx| {
                             let job = page.cli_job(CliSlot::Panel, &toggle_agent);
                             job.output_open = !job.output_open;
                             cx.notify();
-                        }))
+                        })
                         .child(disclosure_triangle(output_open, muted))
                         .child("Command output"),
                 );
@@ -1292,6 +1301,7 @@ fn disclosure_triangle(open: bool, color: gpui::Rgba) -> AnyElement {
 pub(super) fn ghost_icon_button(
     p: &SettingsPalette,
     id: SharedString,
+    label: impl Into<SharedString>,
     icon: AnyElement,
     disabled: bool,
     pressed: bool,
@@ -1306,6 +1316,8 @@ pub(super) fn ghost_icon_button(
     let pressed_fill = muted_fill(p);
     div()
         .id(id)
+        .role(gpui::Role::Button)
+        .aria_label(label.into())
         .flex_shrink_0()
         .size(px(28.0))
         .flex()
@@ -1317,9 +1329,9 @@ pub(super) fn ghost_icon_button(
         .when(!disabled, |this| {
             this.cursor_pointer()
                 .hover(move |this| this.bg(hsla(if pressed { pressed_fill } else { hover })))
-                .on_click(cx.listener(move |page, _: &ClickEvent, window, cx| {
+                .on_press(cx, move |page, window, cx| {
                     on_click(page, window, cx);
-                }))
+                })
         })
         .child(icon)
         .into_any_element()
@@ -1342,6 +1354,8 @@ fn cli_icon_button(
     };
     h_flex()
         .id(id)
+        .role(gpui::Role::Button)
+        .aria_label(label)
         .flex_shrink_0()
         .h(px(28.0))
         .pl(px(8.0))
@@ -1361,9 +1375,9 @@ fn cli_icon_button(
         .when(!disabled, |this| {
             this.cursor_pointer()
                 .hover(move |this| this.bg(hsla(hover)))
-                .on_click(cx.listener(move |page, _: &ClickEvent, window, cx| {
+                .on_press(cx, move |page, window, cx| {
                     on_click(page, window, cx);
-                }))
+                })
         })
         .child(icon)
         .child(label)
@@ -1379,6 +1393,44 @@ fn cli_button_busy(
 ) -> AnyElement {
     let icon = spinning_icon(icons::REFRESH, 16.0, p.foreground, &id);
     cli_icon_button(p, id, label, icon, true, |_, _, _| {}, cx)
+}
+
+/// A muted text action with a leading refresh icon and a `title`, for offers that are not
+/// problems (an available CLI update).
+fn cli_quiet_link(
+    p: &SettingsPalette,
+    id: SharedString,
+    label: &'static str,
+    title: String,
+    on_click: impl Fn(&mut AgentsTab, &mut Window, &mut Context<AgentsTab>) + 'static,
+    cx: &mut Context<AgentsTab>,
+) -> AnyElement {
+    let muted = p.muted;
+    let foreground = p.foreground;
+    let hover = muted_fill(p);
+    h_flex()
+        .id(id)
+        .role(gpui::Role::Button)
+        .aria_label(label)
+        .flex_shrink_0()
+        .h(px(28.0))
+        .px(px(8.0))
+        .gap(px(5.0))
+        .items_center()
+        .rounded(px(MODAL_RADIUS_CONTROL))
+        .cursor_pointer()
+        .text_size(px(12.5))
+        .line_height(px(16.0))
+        .text_color(hsla(muted))
+        .whitespace_nowrap()
+        .hover(move |this| this.bg(hsla(hover)).text_color(hsla(foreground)))
+        .tooltip(tooltip_text(title))
+        .on_press(cx, move |page, window, cx| {
+            on_click(page, window, cx);
+        })
+        .child(settings_icon(icons::REFRESH, 14.0, muted))
+        .child(label)
+        .into_any_element()
 }
 
 /// An outline `size='sm'` action with a `title` (the Kit tooltip stands in for the native one).

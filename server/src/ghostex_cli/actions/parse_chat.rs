@@ -71,6 +71,10 @@ pub(super) fn evaluate_parser(parser: Parser, rest: &[String], flags: &Flags) ->
             .map_err(|error| CliError::Other(format!("Invalid --draft-version-json: {error}")))?;
         value["draftVersion"] = version;
     }
+    // A caller that may retry names the send once (`--send-request-id`), so gxserver delivers it once.
+    if let (Some(id), Some(object)) = (flags.text("sendRequestId"), value.as_object_mut()) {
+        object.insert("sendRequestId".to_string(), Value::String(id));
+    }
     Ok(value)
 }
 

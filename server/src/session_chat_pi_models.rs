@@ -29,6 +29,11 @@ const CATALOG_UPDATED_AT: &str = "2026-09-30";
 
 /// Pi's thinking levels, lowest first (`EXTENDED_THINKING_LEVELS` in pi-ai).
 const PI_THINKING_LEVELS: [&str; 7] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+/// Whether `level` is one of Pi's thinking levels.
+pub(crate) fn is_pi_thinking_level(level: &str) -> bool {
+    PI_THINKING_LEVELS.contains(&level)
+}
+
 /// OMP's efforts, lowest first (`THINKING_EFFORTS` in pi-catalog); `off` is not one of them.
 const OMP_EFFORTS: [&str; 6] = ["minimal", "low", "medium", "high", "xhigh", "max"];
 
@@ -184,7 +189,11 @@ fn read_lineup(agent: PiFamilyAgent) -> Option<Value> {
 fn pinned_models(agent: PiFamilyAgent, home: &Path) -> (Option<String>, Vec<String>) {
     match agent {
         PiFamilyAgent::Pi => {
-            let settings = std::fs::read(home.join(".pi").join("agent").join("settings.json"))
+            let agent_dir = crate::session_chat_paths::configured_agent_directory(
+                "PI_CODING_AGENT_DIR",
+                ".pi/agent",
+            );
+            let settings = std::fs::read(agent_dir.join("settings.json"))
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
                 .unwrap_or(Value::Null);
@@ -356,6 +365,15 @@ struct LineupModel {
     efforts: Vec<&'static str>,
     /// What the CLI's statusline prints for this model.
     terminal_labels: Vec<String>,
+    /// Tokens the model takes in one request, which the status line's context meter divides by.
+    context_window: Option<u64>,
+}
+
+fn context_window_of(model: &Value) -> Option<u64> {
+    model
+        .get("contextWindow")
+        .and_then(Value::as_u64)
+        .filter(|tokens| *tokens > 0)
 }
 
 /// A Pi `Model` object from `get_available_models`. Its levels follow `getSupportedThinkingLevels`:
@@ -393,6 +411,7 @@ fn pi_model_row(model: &Value) -> Option<LineupModel> {
         .to_string();
     Some(LineupModel {
         terminal_labels: vec![id.clone()],
+        context_window: context_window_of(model),
         provider,
         id,
         name,
@@ -431,6 +450,7 @@ fn omp_model_row(model: &Value) -> Option<LineupModel> {
         terminal_labels.push(id.clone());
     }
     Some(LineupModel {
+        context_window: context_window_of(model),
         provider,
         id,
         name,
@@ -491,7 +511,7 @@ fn build_catalog(
         }
         let value = format!("{}/{}", model.provider, model.id);
         let is_default = default == Some(value.as_str());
-        rows.push(json!({
+        let mut row = json!({
             "value": value,
             "label": model.name,
             "description": if is_default { format!("{value} (default)") } else { value.clone() },
@@ -499,7 +519,11 @@ fn build_catalog(
             "efforts": model.efforts,
             "group": model.provider,
             "terminalLabels": model.terminal_labels,
-        }));
+        });
+        if let Some(tokens) = model.context_window {
+            row["contextWindow"] = json!(tokens);
+        }
+        rows.push(row);
     }
     let levels: &[&str] = match agent {
         PiFamilyAgent::Pi => &PI_THINKING_LEVELS,
@@ -536,35 +560,88 @@ pub fn read_pi_family_selection(
 ) -> Option<SessionChatDetectedSelection> {
     let family = PiFamilyAgent::from_option_agent(agent)?;
     let catalog = pi_family_model_catalog(family);
-    let model = transcript_model(repository, project_id, session_id);
-    if catalog.is_none() && model.is_none() {
+    let path = transcript_path(repository, project_id, session_id);
+    let model = path.as_deref().and_then(transcript_model);
+    let status = path
+        .as_deref()
+        .filter(|_| family == PiFamilyAgent::Pi)
+        .and_then(crate::session_chat_pi_status::read_pi_transcript_status);
+    if catalog.is_none() && model.is_none() && status.is_none() {
         return None;
     }
+    let row = |value: &str| {
+        catalog.as_ref().and_then(|catalog| {
+            catalog
+                .pointer(&format!("/agents/{}/models", family.id()))?
+                .as_array()?
+                .iter()
+                .find(|row| row.get("value").and_then(Value::as_str) == Some(value))
+                .cloned()
+        })
+    };
+    let status_row = status
+        .as_ref()
+        .and_then(|status| status.model.as_deref())
+        .and_then(row);
+    let context_window = status_row
+        .as_ref()
+        .and_then(|row| row.get("contextWindow"))
+        .and_then(Value::as_u64);
+    let context_usage = status
+        .as_ref()
+        .and_then(|status| status.context_tokens)
+        .map(
+            |tokens| crate::session_chat_options::SessionChatContextUsage {
+                used_percentage: context_window
+                    .map(|window| ((tokens as f64 / window as f64) * 100.0).round() as u32),
+                used_tokens: Some(tokens),
+                window_size: context_window,
+            },
+        );
+    let pi_status = status.as_ref().map(|status| {
+        crate::session_chat_pi_status::pi_status_value(
+            status,
+            status_row
+                .as_ref()
+                .and_then(|row| row.get("label"))
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            context_window,
+        )
+    });
     Some(SessionChatDetectedSelection {
+        // The lineup's name for the model (`GPT-5.5`), as the picker's own row reads.
         model: model.map(|value| SessionChatDetectedChoice {
-            label: value.clone(),
+            label: row(&value)
+                .and_then(|row| row.get("label")?.as_str().map(str::to_string))
+                .unwrap_or_else(|| value.clone()),
             value,
             source: SessionChatOptionEvidence::Transcript,
         }),
+        context_usage,
+        pi_status,
         model_catalog: catalog,
         ..SessionChatDetectedSelection::default()
     })
 }
 
-/// The last `model_change` in the transcript's tail, as `provider/id`: Pi writes `provider` and
-/// `modelId`, OMP writes `model` already joined.
-fn transcript_model(
+fn transcript_path(
     repository: &DomainRepository<'_>,
     project_id: &str,
     session_id: &str,
-) -> Option<String> {
+) -> Option<std::path::PathBuf> {
     let session = repository.get_session(project_id, session_id).ok()??;
-    let path = crate::session_chat::resolve_session_chat_transcript_path(
+    crate::session_chat::resolve_session_chat_transcript_path(
         crate::session_chat::SessionChatTranscriptAgent::Pi,
         read_runtime_text(&session, "agentSessionId").as_deref(),
         read_runtime_text(&session, "agentSessionPath").as_deref(),
-    )?;
-    let text = crate::session_chat_options::transcript_tail_text(&path).ok()?;
+    )
+}
+
+/// The last `model_change` in the transcript's tail, as `provider/id`: Pi writes `provider` and
+/// `modelId`, OMP writes `model` already joined.
+fn transcript_model(path: &Path) -> Option<String> {
+    let text = crate::session_chat_options::transcript_tail_text(path).ok()?;
     text.lines().rev().find_map(|line| {
         if !line.contains("\"model_change\"") {
             return None;
