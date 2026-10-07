@@ -48,6 +48,8 @@ struct SupervisorMemory {
     /// The `sendRequestId` of each report still waiting to reach its coordinator, by coordinator
     /// and report text, so a retried report is the same send to gxserver's send ledger.
     report_send_ids: HashMap<(SessionKey, String), String>,
+    /// Empryo coordinators: when their role was last checked, and how often it was typed again.
+    empryo_roles: HashMap<SessionKey, EmpryoRoleCheck>,
 }
 
 enum ReportKind {
@@ -216,6 +218,7 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
     let Ok(mut memory) = memory.lock() else {
         return Vec::new();
     };
+    repair_empryo_coordinator_roles(state, &db, &repository, &mut memory);
     let open = threads
         .into_iter()
         .filter(|thread| !thread.is_resolved())
@@ -246,7 +249,7 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
     let mut names: Option<HashMap<String, String>> = None;
     let mut pending: std::collections::BTreeMap<SessionKey, Vec<PendingReport>> =
         std::collections::BTreeMap::new();
-    for thread in open {
+    for mut thread in open {
         let coordinator_key = thread.coordinator_key();
         let alive = *coordinator_alive
             .entry(coordinator_key.clone())
@@ -318,27 +321,28 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
             has_run: true,
         };
         let hook_state = classify_thread_session(Some(&session), as_run, &now_iso, false);
-        let state_now =
-            if hook_state == ThreadState::Waiting && coordinators::waits_on_screen(&session) {
-                ThreadState::Waiting
-            } else if hook_state != ThreadState::Working
-                && hook_state != ThreadState::Sleeping
-                && thread.observed_working
-            {
-                // Only a thread about to be reported pays for the transcript read.
-                let working = memory
-                    .transcript_gates
-                    .entry(key.clone())
-                    .or_default()
-                    .is_working(&session);
-                if working {
-                    ThreadState::Working
-                } else {
-                    hook_state
-                }
+        let state_now = if is_running_empryo(&session) {
+            empryo_thread_state(&db, &mut memory, &mut thread, &session, hook_state)
+        } else if hook_state == ThreadState::Waiting && coordinators::waits_on_screen(&session) {
+            ThreadState::Waiting
+        } else if hook_state != ThreadState::Working
+            && hook_state != ThreadState::Sleeping
+            && thread.observed_working
+        {
+            // Only a thread about to be reported pays for the transcript read.
+            let working = memory
+                .transcript_gates
+                .entry(key.clone())
+                .or_default()
+                .is_working(&session);
+            if working {
+                ThreadState::Working
             } else {
                 hook_state
-            };
+            }
+        } else {
+            hook_state
+        };
         let report = match state_now {
             ThreadState::Working => {
                 memory.not_working_since.remove(&key);
@@ -423,6 +427,120 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
         });
     }
     deliveries
+}
+
+#[derive(Default)]
+struct EmpryoRoleCheck {
+    checked_at: i64,
+    retyped: usize,
+}
+
+/// A running session whose agent is Empryo.
+fn is_running_empryo(session: &Value) -> bool {
+    effective_lifecycle_state(session) == "running"
+        && crate::session_chat_follower::session_chat_agent_for_session(session).as_deref()
+            == Some("empryo")
+}
+
+/// How often an Empryo coordinator's role is checked on its screen, and how often it is typed
+/// again before the supervisor gives up on that coordinator.
+const EMPRYO_ROLE_CHECK_EVERY_MS: i64 = 30_000;
+const EMPRYO_ROLE_RETYPES: usize = 3;
+
+/// CDXC:Coordinators 2026-10-07 WHY:
+/// Empryo 3.9.1-beta sets `/agent` on the window's current chat only: a first window draws its input box before its engine has restored the tab, and the restore (or another window joining the engine) writes the tab back without the agent, so a coordinator queued its `/agent ghostex-coordinator` line, saw it accepted, and still ran without its role (seen live 2026-10-07). The role shows on the input box border as `as ghostex-coordinator`, so an idle Empryo coordinator whose border lacks it gets the line again, a few times at most.
+fn repair_empryo_coordinator_roles(
+    state: &AppState,
+    db: &rusqlite::Connection,
+    repository: &DomainRepository<'_>,
+    memory: &mut SupervisorMemory,
+) {
+    let Ok(coordinators) = coordinators::list_coordinators(db) else {
+        return;
+    };
+    let now = now_ms();
+    let role = format!("as {}", coordinators::EMPRYO_COORDINATOR_AGENT_NAME);
+    let keys: HashSet<SessionKey> = coordinators
+        .into_iter()
+        .map(|coordinator| (coordinator.project_id, coordinator.session_id))
+        .collect();
+    memory.empryo_roles.retain(|key, _| keys.contains(key));
+    for key in keys {
+        let check = memory.empryo_roles.entry(key.clone()).or_default();
+        if now - check.checked_at < EMPRYO_ROLE_CHECK_EVERY_MS {
+            continue;
+        }
+        check.checked_at = now;
+        let Some(session) = repository.get_session(&key.0, &key.1).ok().flatten() else {
+            continue;
+        };
+        if !is_running_empryo(&session) {
+            continue;
+        }
+        let Ok(screen) = crate::zmx::read_zmx_session_history_capture(repository, &key.0, &key.1)
+        else {
+            continue;
+        };
+        let lines: Vec<String> = screen
+            .text
+            .lines()
+            .map(crate::session_chat_options::strip_ansi_sgr)
+            .collect();
+        let Some(head) = crate::session_chat_composer::empryo_input_head(&lines) else {
+            continue;
+        };
+        if lines[head].contains(&role) {
+            check.retyped = 0;
+            continue;
+        }
+        if check.retyped >= EMPRYO_ROLE_RETYPES
+            || crate::session_chat_composer::empryo_composer_busy(&screen.text) != Some(false)
+        {
+            continue;
+        }
+        check.retyped += 1;
+        if let Some(command) = coordinators::coordinator_role_queued_command("empryo") {
+            let _ = queue_coordinator_role_command(state, &key.0, &key.1, &command, false);
+        }
+    }
+}
+
+/// CDXC:Coordinators 2026-10-07 DECISION:
+/// Coordinator for Sven: "let the coordinator supervisor count an Empryo thread's turns (working, finished, final message) from its own tab's transcript instead of hooks, scoped to Empryo."
+/// WHY: Empryo 3.9.1-beta runs every window of a repository on one engine, which runs the hooks of all of them in the first window's process with that window's session id and no tab, so a thread whose window joined another's engine never reported a turn, and the first window's hooks spoke for its neighbours' turns too (seen live 2026-10-07). Its own tab's transcript (session_chat_empryo_mirror.rs) is exact: an open turn is work, and a turn that ended after the thread's last report is a finished turn to report; an older one was reported already. A question or approval card still reads as waiting.
+fn empryo_thread_state(
+    db: &rusqlite::Connection,
+    memory: &mut SupervisorMemory,
+    thread: &mut ThreadRecord,
+    session: &Value,
+    hook_state: ThreadState,
+) -> ThreadState {
+    let lifecycle = memory
+        .transcript_gates
+        .entry(thread.key())
+        .or_default()
+        .lifecycle(session);
+    let Some(lifecycle) = lifecycle else {
+        // No turn yet: its brief is still on its way in.
+        return ThreadState::Working;
+    };
+    if lifecycle.state == crate::session_chat::SessionChatTurnLifecycleState::Working {
+        return ThreadState::Working;
+    }
+    if hook_state == ThreadState::Waiting {
+        return ThreadState::Waiting;
+    }
+    let reported = thread.reported_at.as_deref().and_then(parse_iso_ms_opt);
+    let new_turn = match (lifecycle.timestamp, reported) {
+        (Some(ended), Some(reported)) => ended > reported,
+        (_, None) => true,
+        (None, Some(_)) => false,
+    };
+    if new_turn && !thread.observed_working {
+        let _ = set_thread_observed_working(db, &thread.project_id, &thread.session_id);
+        thread.observed_working = true;
+    }
+    ThreadState::Finished
 }
 
 async fn deliver(state: Arc<AppState>, memory: Arc<Mutex<SupervisorMemory>>, delivery: Delivery) {

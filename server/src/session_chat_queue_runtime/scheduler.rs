@@ -55,6 +55,15 @@ pub(crate) struct SessionChatTranscriptGate {
 
 impl SessionChatTranscriptGate {
     pub(crate) fn is_working(&mut self, session: &Value) -> bool {
+        self.lifecycle(session)
+            .is_some_and(|lifecycle| lifecycle.state == SessionChatTurnLifecycleState::Working)
+    }
+
+    /// The newest turn's lifecycle in the session's transcript, `None` without one.
+    pub(crate) fn lifecycle(
+        &mut self,
+        session: &Value,
+    ) -> Option<crate::session_chat::SessionChatTurnLifecycle> {
         let agent = session_text(session, "agentId").or_else(|| runtime_text(session, "agentName"));
         let agent_icon = session
             .get("launchSettings")
@@ -65,9 +74,7 @@ impl SessionChatTranscriptGate {
             .as_deref()
             .filter(|value| resolve_session_chat_transcript_agent(Some(value)).is_some())
             .or(agent_icon);
-        let Some(transcript_agent) = resolve_session_chat_transcript_agent(resolved_agent) else {
-            return false;
-        };
+        let transcript_agent = resolve_session_chat_transcript_agent(resolved_agent)?;
         let agent_session_id = runtime_text(session, "agentSessionId");
         let agent_session_path = runtime_text(session, "agentSessionPath");
         let identity = format!(
@@ -81,7 +88,15 @@ impl SessionChatTranscriptGate {
             .flatten()
             .filter(|path| path.is_file());
         let path = match cached {
-            Some(path) => Some(path),
+            Some(path) => {
+                // The Empryo chat is a mirror only a resolve or an open chat keeps current.
+                if transcript_agent == crate::session_chat::SessionChatTranscriptAgent::Empryo {
+                    crate::session_chat_empryo_mirror::sync_empryo_transcript_mirror_for_path(
+                        &path,
+                    );
+                }
+                Some(path)
+            }
             None => resolve_session_chat_transcript_path(
                 transcript_agent,
                 agent_session_id.as_deref(),
@@ -90,22 +105,15 @@ impl SessionChatTranscriptGate {
         };
         self.identity = identity;
         self.path = path.clone();
-        let Some(path) = path else {
-            // No transcript on disk yet: agent hooks are the only signal, and
-            // they already said idle.
-            return false;
-        };
+        // No transcript on disk yet: agent hooks are the only signal, and they already said idle.
         match read_session_chat_tail_page(
             transcript_agent,
-            &path,
+            &path?,
             SESSION_CHAT_QUEUE_LIFECYCLE_TAIL_LIMIT,
             None,
         ) {
-            Ok(SessionChatTailPage::Page {
-                lifecycle: Some(lifecycle),
-                ..
-            }) => lifecycle.state == SessionChatTurnLifecycleState::Working,
-            _ => false,
+            Ok(SessionChatTailPage::Page { lifecycle, .. }) => lifecycle,
+            _ => None,
         }
     }
 }

@@ -531,8 +531,12 @@ pub(crate) fn empryo_user_prompts(raw: &[u8]) -> Vec<String> {
 #[derive(Default)]
 struct EmpryoMirrorState {
     raw_path: PathBuf,
-    /// The tabs other Ghostex sessions own, which the mirror leaves out (session_chat_empryo_tabs.rs).
+    /// The session's own log, which the tab scan starts from (session_chat_empryo_tabs.rs).
+    own_path: PathBuf,
+    /// The tabs other Ghostex sessions own, which the mirror leaves out.
     foreign_tabs: HashSet<String>,
+    /// [`crate::session_chat_empryo_tabs::empryo_tab_scan_key`] at the last scan.
+    scanned_at: Option<(Option<std::time::SystemTime>, Option<std::time::SystemTime>)>,
     raw_len: u64,
     raw_modified: Option<std::time::SystemTime>,
     output_len: usize,
@@ -580,6 +584,21 @@ fn write_mirror(
 /// One sync pass. Rebuilds only when the raw log's size or mtime moved, or the mirror is gone
 /// (a wiped state dir or a fresh daemon always rebuilds).
 fn sync_mirror(mirror_path: &Path, state: &mut EmpryoMirrorState) -> Option<()> {
+    // A tab whose window joined another session's engine is logged there, which shows once the
+    // window has named its tab in `tabs.json`; a session started later adds its own tab to the ones
+    // left out. Either changes the scan key, and only then is the folder scanned again.
+    let scan_key = crate::session_chat_empryo_tabs::empryo_tab_scan_key(&state.own_path);
+    let mut rescanned = false;
+    if state.scanned_at != Some(scan_key) {
+        state.scanned_at = Some(scan_key);
+        if let Some((host, foreign_tabs)) =
+            crate::session_chat_empryo_tabs::empryo_tab_scan(&state.own_path)
+        {
+            rescanned = host != state.raw_path || foreign_tabs != state.foreign_tabs;
+            state.raw_path = host;
+            state.foreign_tabs = foreign_tabs;
+        }
+    }
     let raw_meta = fs::metadata(&state.raw_path).ok()?;
     let raw_len = raw_meta.len();
     let raw_modified = raw_meta.modified().ok();
@@ -588,7 +607,8 @@ fn sync_mirror(mirror_path: &Path, state: &mut EmpryoMirrorState) -> Option<()> 
         state.output_len = 0;
         state.output_hash = 0;
     }
-    let up_to_date = mirror_exists
+    let up_to_date = !rescanned
+        && mirror_exists
         && state.output_len > 0
         && state.raw_len == raw_len
         && state.raw_modified == raw_modified;
@@ -645,10 +665,12 @@ pub fn resolve_empryo_chat_transcript_path(
         .get_or_insert_with(HashMap::new)
         .entry(mirror_path.clone())
         .or_default();
-    let (raw_path, foreign_tabs) = crate::session_chat_empryo_tabs::empryo_tab_scan(&raw_path)
-        .unwrap_or((raw_path, HashSet::new()));
-    state.raw_path = raw_path;
-    state.foreign_tabs = foreign_tabs;
+    if state.own_path != raw_path {
+        state.own_path = raw_path.clone();
+        state.raw_path = raw_path;
+        state.foreign_tabs = HashSet::new();
+        state.scanned_at = None;
+    }
     sync_mirror(&mirror_path, state)?;
     Some(mirror_path)
 }

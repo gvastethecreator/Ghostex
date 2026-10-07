@@ -94,6 +94,28 @@ pub(crate) fn find_zmx_daemon_process_id(ps_output: &str, session_name: &str) ->
     })
 }
 
+/// Whether a process under the `zmx run <session_name>` daemon has a command `matches` accepts.
+pub(crate) fn zmx_session_runs(
+    ps_output: &str,
+    session_name: &str,
+    matches: impl Fn(&str) -> bool,
+) -> bool {
+    let Some(daemon) = find_zmx_daemon_process_id(ps_output, session_name) else {
+        return false;
+    };
+    let children = group_processes_by_parent_pid(&parse_process_rows(ps_output));
+    let mut queue = VecDeque::from([daemon]);
+    while let Some(pid) = queue.pop_front() {
+        for child in children.get(&pid).into_iter().flatten() {
+            if matches(&child.command) {
+                return true;
+            }
+            queue.push_back(child.pid);
+        }
+    }
+    false
+}
+
 fn looks_like_process_terminal_name(value: &str) -> bool {
     value == "??"
         || value == "-"

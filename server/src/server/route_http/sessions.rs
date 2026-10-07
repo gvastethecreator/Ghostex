@@ -82,7 +82,10 @@ pub(super) async fn route_sessions_http(
                         true,
                     )?;
                 }
-                crate::session_chat_empryo_tabs::select_empryo_own_tab_after_start(&session);
+                crate::session_chat_empryo_tabs::select_empryo_own_tab_after_start(
+                    &session,
+                    Some((*state).clone()),
+                );
                 restore_parked_project_for_new_session(&state, db, repository, &project_id)?;
                 schedule_presentation_session_delta(
                     &state,
