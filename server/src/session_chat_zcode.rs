@@ -189,21 +189,25 @@ fn sync_mirror(db: &Path, id: &str, path: &Path) -> Option<()> {
 
 /// The `sess_…` conversation id a dead ZCode names in its exit screen's
 /// resume hint ("To continue this session, run zcode --resume sess_…"), or
-/// `None` when the tail shows no hint (a death before any conversation).
+/// `None` when the tail shows no hint (a death before any conversation) or
+/// the last hint's argument is not a valid id. Only the argument of the last
+/// hint counts: an older hint or any other `sess_…` token on screen may name
+/// a different conversation.
 pub(crate) fn zcode_resume_session_id_from_screen_tail(tail: &str) -> Option<&str> {
-    tail.rmatch_indices("zcode --resume ").find_map(|(at, _)| {
-        tail[at + "zcode --resume ".len()..]
-            .split(char::is_whitespace)
-            .find(|token| is_safe_zcode_session_id(token))
-    })
+    const HINT: &str = "zcode --resume ";
+    let at = tail.rfind(HINT)?;
+    tail[at + HINT.len()..]
+        .split_whitespace()
+        .next()
+        .filter(|token| is_safe_zcode_session_id(token))
 }
 
 /*
 CDXC:AgentScreenDetection 2026-10-06 WHY:
-ZCode never reports its conversation id through hooks (its hook payloads carry
-no session id), so a session that dies before a relaunch baked a resume
-command into its startup text stays unbound forever and Chat View keeps
-telling the user to install hooks for a corpse. The exit screen itself names
+A ZCode session whose hooks never reported its conversation (hooks not
+installed or not approved, or the hook write missed) stays unbound after the
+agent dies, and Chat View keeps telling the user to install hooks for an agent
+that can no longer report anything. The exit screen itself names
 the conversation in its resume hint, and that hint is inside every classified
 notice's screen tail, so the read path binds the conversation from the same
 capture that classified the death — through the same identity pipeline a

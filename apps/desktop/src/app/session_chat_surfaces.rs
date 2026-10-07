@@ -563,6 +563,7 @@ impl GhostexGpuiApp {
             "Chat View needs the {agent_name} hooks installed, approved, and running. \
              Check their status here. Resuming and working/done indicators also require hooks."
         );
+        let probed_key = self.agents_chat_notice_probe_key(session_id);
         let target_info = if let Some(key) = self.agents_chat_local_key_for_session(session_id) {
             Some((None, key.project_id, key.session_id))
         } else {
@@ -607,7 +608,14 @@ impl GhostexGpuiApp {
                 })
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
-                this.agents_chat_notice_probe_in_flight.remove(&session_id);
+                // A project switch clears the in-flight set and can map this
+                // terminal id to another project's session; that answer is
+                // about a session this terminal no longer shows.
+                if !this.agents_chat_notice_probe_in_flight.remove(&session_id)
+                    || this.agents_chat_notice_probe_key(session_id) != probed_key
+                {
+                    return;
+                }
                 let has_notice = read
                     .as_ref()
                     .ok()
@@ -628,6 +636,20 @@ impl GhostexGpuiApp {
             });
         })
         .detach();
+    }
+
+    /// The gxserver session a terminal id stands for right now, as
+    /// (remote machine, project, session), so a notice probe's answer is only
+    /// applied to the session it asked about.
+    fn agents_chat_notice_probe_key(
+        &self,
+        session_id: TerminalSessionId,
+    ) -> Option<(Option<String>, String, String)> {
+        if let Some(key) = self.agents_chat_local_key_for_session(session_id) {
+            return Some((None, key.project_id, key.session_id));
+        }
+        self.agents_chat_remote_key_for_session(session_id)
+            .map(|key| (Some(key.remote_machine_id), key.project_id, key.session_id))
     }
 
     /// CDXC:SessionChat 2026-09-24 DECISION:

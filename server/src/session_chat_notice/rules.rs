@@ -745,6 +745,24 @@ const ZCODE_RULES: &[NoticeRule] = &[NoticeRule {
             ],
             corroborators: &[],
         },
+        // CDXC:AgentScreenDetection 2026-10-07 WHY: ZCode draws inline (no
+        // alternate screen) and PowerShell does not clear below its prompt,
+        // so on Windows the dead TUI's composer rule and status bar stay under
+        // "PS C:\…>" and the Exit scope's last-line prompt check never holds
+        // (seen with a killed runtime: "Error: ZCode runtime exited with
+        // status 4294967295. Diagnostics: …"). The launcher line followed by
+        // a PowerShell prompt is the same "the shell is back" evidence.
+        NoticeSignature {
+            scope: NoticeScope::Banner,
+            parts: &[
+                NoticePart::Text("ZCode runtime exited with status"),
+                NoticePart::Gap(400),
+                NoticePart::Text(" PS "),
+                NoticePart::Gap(2),
+                NoticePart::Text("\\"),
+            ],
+            corroborators: &[],
+        },
     ],
     actions: &[RESTART_ZCODE, OPEN_TERMINAL],
     quote_evidence: true,
