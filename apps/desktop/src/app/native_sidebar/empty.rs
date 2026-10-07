@@ -11,7 +11,7 @@ use serde_json::json;
 /// The bordered pill both the empty list's action and the machine notice's buttons draw.
 fn empty_action_button(
     id: &'static str,
-    label: &'static str,
+    label: impl Into<gpui::SharedString>,
     icon: Option<&'static str>,
     appearance: &SidebarAppearance,
 ) -> gpui::Stateful<gpui::Div> {
@@ -33,7 +33,7 @@ fn empty_action_button(
         .when_some(icon, |row, icon| {
             row.child(titlebar_svg_icon(icon, 14.0 * scale, appearance.foreground))
         })
-        .child(label)
+        .child(label.into())
 }
 
 impl GhostexGpuiApp {
@@ -188,10 +188,21 @@ impl GhostexGpuiApp {
                 }))
                 .into_any_element();
         }
+        // `error` is the wait for this computer's Ghostex service: the core's copy says it is
+        // connecting, the stores retry on their own, and the button (Try now) retries at once.
         let error = state["error"] == true;
         let add = state["canAddProject"] == true;
         let action = if error { "loadSessions" } else { "addProject" };
         let empty_menu = json!([{ "label": "Add Project", "icon": "plus", "command": {"type": "sidebarAction", "action": "addProject"} }]);
+        let detail = state["detail"].as_str().unwrap_or_default().to_owned();
+        let action_label = if error {
+            state["actionLabel"]
+                .as_str()
+                .unwrap_or("Try now")
+                .to_owned()
+        } else {
+            "Add Project".to_owned()
+        };
         v_flex()
             .id("native-sidebar-empty")
             .items_start()
@@ -199,18 +210,25 @@ impl GhostexGpuiApp {
             .w_full()
             .mt(px(8.0 * scale))
             .pl(px(18.0 * scale))
+            .pr(px(18.0 * scale))
             .text_color(appearance.muted)
             .font_weight(FontWeight::MEDIUM)
             .child(state["copy"].as_str().unwrap_or_default().to_owned())
+            .when(!detail.is_empty(), |column| {
+                column.child(
+                    div()
+                        .mt(px(4.0 * scale))
+                        .text_size(px(12.5 * scale))
+                        .font_weight(FontWeight::NORMAL)
+                        .text_color(appearance.muted.opacity(0.8))
+                        .child(detail),
+                )
+            })
             .when(error || add, |column| {
                 column.child(
                     empty_action_button(
                         "native-sidebar-empty-action",
-                        if error {
-                            "Load Sessions"
-                        } else {
-                            "Add Project"
-                        },
+                        action_label,
                         (!error).then_some("titlebar/plus.svg"),
                         appearance,
                     )

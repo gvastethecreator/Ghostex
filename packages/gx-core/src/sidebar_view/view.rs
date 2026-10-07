@@ -514,7 +514,13 @@ pub struct OrderItem {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct EmptyState {
     pub loading: bool,
+    /// This computer's Ghostex service is not answering yet; `copy` and `detail` say so and the
+    /// button reads `action_label` (it retries now).
     pub error: bool,
     pub can_add_project: bool,
     pub copy: String,
+    /// The line under `copy`, empty when there is none.
+    pub detail: String,
+    /// The retry button's label while `error` is set.
+    pub action_label: String,
 }

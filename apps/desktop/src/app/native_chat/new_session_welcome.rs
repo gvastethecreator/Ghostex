@@ -155,13 +155,18 @@ impl NativeChatView {
                 ),
             )
             .when(state["status"] == "error", |this| {
-                this.child(self.chat_button(
-                    "retry-chat".into(),
-                    "Retry".into(),
-                    json!({"type":"retry"}),
-                    p,
-                    cx,
-                ))
+                this.child(
+                    self.chat_button(
+                        "retry-chat".into(),
+                        state["emptyState"]["action"]
+                            .as_str()
+                            .unwrap_or("Try again")
+                            .to_owned(),
+                        json!({"type":"retry"}),
+                        p,
+                        cx,
+                    ),
+                )
             })
             .into_any_element()
     }

@@ -15,6 +15,14 @@ pub const NOT_FOUND_RETRY_DELAYS_MS: [u64; 4] = [1_000, 2_000, 4_000, 8_000];
 pub const NOT_FOUND_RETRY_FIXED_DELAY_MS: u64 = 10_000;
 pub const NOT_FOUND_RETRY_WINDOW_MS: f64 = 60_000.0;
 
+/// How long the core waits before reading again after Ghostex's service did not answer at all (no
+/// connection, a timeout, or the phone's `unreachable`), as opposed to answering with a refusal.
+///
+/// CDXC:SessionChat 2026-10-08 DECISION:
+/// User: "please make these messages easier to understand and also please make it keep retrying every 2 seconds itself until gx server is there instead of just requiring the user to click". A read that got no answer is retried every 2 seconds, one read in flight at a time, with no limit while the chat is open: the 60 s seed window and the resync backoff only apply to refusals. Then, on the chat: "i dont like Loading this conversation in the state that gxserver isn't ready basically let's just show the skeleton in that state with the normal chat composer shown". So while the service is not answering the transcript shows the skeleton rows (`transcriptSkeleton`), with no text and no Try now, the composer stays as usual, and the conversation fills in silently when the service answers. Only a refusal that ends in an error gets a sentence and a button.
+/// SEE-ALSO: packages/gx-core/src/sidebar_view/daemon_wait.rs (`DAEMON_RETRY_INTERVAL_MS`), packages/gx-chat-core/src/extras/document.rs (`transcript_skeleton`), packages/gx-chat-client/src/wire.rs.
+pub const UNREACHABLE_RETRY_DELAY_MS: u64 = 2_000;
+
 /// A resync read answers from a stream position captured before it, so frames landing while it is
 /// in flight can outrun its result. One paced follow-up covers those bytes; the cap stops a
 /// continuously streaming turn from turning follow-ups into a read loop.

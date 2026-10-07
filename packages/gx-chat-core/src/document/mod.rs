@@ -25,4 +25,4 @@ pub use crate::document::question::{
 pub use crate::document::queue::{Queue, QueueCapabilities, QueuedPrompt};
 pub use crate::document::snapshot::Document;
 pub use crate::document::transcript::{ProjectedMessage, TranscriptItem};
-pub use crate::document::view::{EmptyState, NewSessionWelcome, ViewState};
+pub use crate::document::view::{EmptyState, LoadingNotice, NewSessionWelcome, ViewState};

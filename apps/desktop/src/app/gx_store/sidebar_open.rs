@@ -126,15 +126,10 @@ impl GhostexGpuiApp {
         true
     }
 
-    /// Starts the local gxserver for the Load Sessions row of the empty state.
+    /// The empty state's Try now: checks the local Ghostex service at once and starts it when it is
+    /// not running. The empty state already says it is connecting, so no toast repeats that; the
+    /// bootstrap still reports a real failure in its own toast.
     pub(crate) fn start_local_gxserver_from_sidebar(&mut self, cx: &mut gpui::Context<Self>) {
-        self.show_gpui_gxserver_bootstrap_toast(
-            "info",
-            "Loading sessions",
-            "Starting gxserver and loading projects.",
-            true,
-            cx,
-        );
         self.start_gpui_local_gxserver_bootstrap(false, cx);
     }
 }

@@ -14,6 +14,7 @@ use crate::session::constants::{
     not_found_retry_delay_ms, resync_retry_delay_ms, MAX_RESYNC_FOLLOW_UPS,
     NOT_FOUND_RETRY_WINDOW_MS, PAGE, READ_TIMEOUT_MS, RESYNC_FOLLOW_UP_DELAY_MS,
     TIMER_READ_DEADLINE, TIMER_RESYNC_FOLLOW_UP, TIMER_RESYNC_RETRY, TIMER_SEED_RETRY,
+    UNREACHABLE_RETRY_DELAY_MS,
 };
 use crate::state::{ChatContext, ChatState, OutstandingRead, ReadKind};
 use crate::wire::ChatRpcMethod;
@@ -197,22 +198,63 @@ pub fn expire_overdue_reads(state: &mut ChatState, context: &ChatContext) -> Vec
     state.messages.reads = kept;
     let mut effects = Vec::new();
     for read in overdue {
-        effects.extend(fail_read(state, context, &read));
+        // No answer in time is the service not answering, which a refusal never is.
+        effects.extend(fail_read(state, context, &read, true));
     }
     arm_read_deadline(state, context);
     effects
 }
 
-/// What each lane does with a read that failed, including by timeout.
+/// Whether a refusal means Ghostex's service never answered: the desktop's transport failures
+/// carry no code, and the phone's SSH bridge says `unreachable`. A refusal the service sent itself
+/// always has a code.
+pub fn is_unreachable(code: Option<&str>) -> bool {
+    matches!(code, None | Some("unreachable"))
+}
+
+/// Records that the service answered, or that it did not. A change publishes, because the loading
+/// hold's skeleton follows it.
+pub fn note_reachable(state: &mut ChatState, context: &ChatContext, reachable: bool) {
+    let since = &mut state.messages.unreachable_since_ms;
+    match (reachable, since.is_some()) {
+        (true, true) => *since = None,
+        (false, false) => *since = Some(context.now_ms),
+        _ => return,
+    }
+    state.core.request_publish();
+}
+
+/// What each lane does with a read that failed, including by timeout. `unreachable` is a failure
+/// the service never answered (see [`is_unreachable`]): those are retried every
+/// [`UNREACHABLE_RETRY_DELAY_MS`] without limit and never turn the view into an error.
 pub fn fail_read(
     state: &mut ChatState,
     context: &ChatContext,
     read: &OutstandingRead,
+    unreachable: bool,
 ) -> Vec<Effect> {
     if read.generation != state.messages.generation {
         return Vec::new();
     }
+    if !matches!(read.kind, ReadKind::Page) {
+        note_reachable(state, context, !unreachable);
+    }
     match read.kind {
+        ReadKind::Resync if unreachable => {
+            state.messages.resync.in_flight = false;
+            state.core.timers.arm(
+                TIMER_RESYNC_RETRY,
+                context.now_ms,
+                UNREACHABLE_RETRY_DELAY_MS as f64,
+            );
+        }
+        ReadKind::Seed if unreachable && !state.messages.position.frame_arrived => {
+            state.core.timers.arm(
+                TIMER_SEED_RETRY,
+                context.now_ms,
+                UNREACHABLE_RETRY_DELAY_MS as f64,
+            );
+        }
         ReadKind::Resync => {
             state.messages.resync.in_flight = false;
             state.session.error = Some(READ_FAILED_MESSAGE.to_string());

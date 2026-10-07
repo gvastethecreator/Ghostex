@@ -66,6 +66,9 @@ pub struct MessagesState {
     pub seed_started_at_ms: f64,
     /// How many seed reads have been retried inside that window.
     pub seed_attempt: u32,
+    /// When reads started getting no answer from Ghostex's service, while they still get none.
+    /// Cleared by any answer, a refusal included.
+    pub unreachable_since_ms: Option<f64>,
     /// `JSON.stringify([machineId, projectId, sessionId])`, the retained record's own key.
     ///
     /// The host builds it (it is the one that knows the machine) and passes it in with

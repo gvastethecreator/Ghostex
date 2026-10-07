@@ -7,10 +7,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::collections::{project_sidebar_collections, CollectionItem, CollectionsState};
+use super::daemon_wait::{DaemonWait, TRY_NOW_LABEL};
 use super::groups::{group_summary, GroupBuild, GroupKind, GroupPlan};
 use super::inputs::{
     effective_sidebar_mode, SidebarHostInputs, SidebarMode, SidebarSettings, SidebarUiState,
-    LOCAL_MACHINE_ID,
+    UnavailableState, LOCAL_MACHINE_ID,
 };
 use super::projects::ProjectMeta;
 use super::spaces::{
@@ -455,26 +456,30 @@ fn empty_state(input: &AssembleInput<'_>, selection: Option<&SpaceSelection>) ->
         // explains the connection instead.
         return EmptyState::default();
     }
-    // `unavailable` is the local placeholder group, so the loading and error branches are this
+    // `unavailable` is the local placeholder group, so the loading and waiting branches are this
     // computer's on every tab.
     let unavailable = !input.local_machine_loaded;
-    let error = unavailable
-        && (input.host.unavailable.observed_available
-            || input
-                .host
-                .unavailable
-                .since_ms
-                .is_some_and(|since| input.now_ms.saturating_sub(since) >= 20_000));
-    let loading = !error && unavailable;
+    let wait = unavailable.then(|| DaemonWait::at(input.host.unavailable, input.now_ms));
+    let error = wait.is_some_and(|wait| wait != DaemonWait::Skeleton);
+    let loading = wait == Some(DaemonWait::Skeleton);
+    if let Some(wait) = wait.filter(|_| error) {
+        let (copy, detail) = wait.copy();
+        return EmptyState {
+            loading,
+            error,
+            can_add_project,
+            copy: copy.to_string(),
+            detail: detail.to_string(),
+            action_label: TRY_NOW_LABEL.to_string(),
+        };
+    }
     // `hasKnownSidebarProjectInventory` reads `workspaceGroupIds`, which spans every machine, so a
     // user whose only projects are on a remote machine is not shown first-run copy.
     let known = input.meta.project_settings_count > 0
         || input.host.recent_project_count > 0
         || input.plans.iter().any(|plan| plan.kind != GroupKind::Chats)
         || (input.any_machine_draws_a_project)();
-    let copy = if error {
-        "Unable to load sessions."
-    } else if !known {
+    let copy = if !known {
         "No projects added yet."
     } else if selection.is_some_and(|selection| !selection.is_other()) {
         "No projects in this Space."
@@ -486,7 +491,20 @@ fn empty_state(input: &AssembleInput<'_>, selection: Option<&SpaceSelection>) ->
         error,
         can_add_project,
         copy: copy.to_string(),
+        ..EmptyState::default()
     }
+}
+
+/// The next host time the empty state's waiting copy moves on its own, while this computer has not
+/// loaded.
+pub(crate) fn empty_state_deadline_ms(
+    local_machine_loaded: bool,
+    unavailable: UnavailableState,
+    now_ms: u64,
+) -> Option<u64> {
+    (!local_machine_loaded)
+        .then(|| DaemonWait::next_change_ms(unavailable, now_ms))
+        .flatten()
 }
 
 /// The store's key for a machine tab id.

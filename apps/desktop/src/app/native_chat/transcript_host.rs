@@ -46,8 +46,8 @@ impl NativeChatView {
         );
         let content = if self.list.item_count() == 0 {
             let state = self.snapshot.clone();
-            if let Some(stage) = self.transcript_loading_stage(&state) {
-                return self.render_loading_hold(stage, &p, cx);
+            if self.transcript_loading_stage(&state).is_some() {
+                return self.render_loading_hold(&state, &p, cx);
             }
             self.render_empty_transcript_region(&state, &p, cx)
         } else {

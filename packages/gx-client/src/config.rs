@@ -6,9 +6,13 @@ use std::time::Duration;
 
 use ghostex_gx_core::MachineId;
 
-/// Delay before reconnect attempt `n` (the last entry repeats). The same ladder the TypeScript
-/// client uses, so a daemon restart is met by one client behaviour, not two.
-pub const RECONNECT_LADDER_MS: [u64; 6] = [250, 1000, 2000, 4000, 8000, 16000];
+/// Delay before reconnect attempt `n` (the last entry repeats).
+///
+/// CDXC:Sidebar 2026-10-08 WHY: the ladder used to climb to 16 s, so a sidebar that started while
+/// the daemon was down said "Unable to load sessions." long after the daemon was back. It now
+/// stops at the user's 2 s retry interval, one connect attempt at a time, for as long as the client
+/// runs. SEE-ALSO: packages/gx-core/src/sidebar_view/daemon_wait.rs (`DAEMON_RETRY_INTERVAL_MS`).
+pub const RECONNECT_LADDER_MS: [u64; 3] = [250, 1000, ghostex_gx_core::DAEMON_RETRY_INTERVAL_MS];
 
 /// The ladder restarts from its first step only when the stream had been acknowledged for at
 /// least this long before it dropped. A stream that flaps faster keeps escalating.

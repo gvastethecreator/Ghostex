@@ -362,6 +362,8 @@ pub(super) fn snapshot_from_view(
             "error": view.empty_state.error,
             "canAddProject": view.empty_state.can_add_project,
             "copy": view.empty_state.copy,
+            "detail": view.empty_state.detail,
+            "actionLabel": view.empty_state.action_label,
         }),
         machine_notice: view.machine_notice.clone(),
         hud: std::sync::Arc::clone(input.hud),

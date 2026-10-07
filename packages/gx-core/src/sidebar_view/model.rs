@@ -13,7 +13,7 @@ use crate::core::Core;
 use crate::keys::{MachineId, ProjectKey, SessionKey, CHATS_GROUP_ID};
 use crate::presentation_store::PresentationStore;
 
-use super::assemble::{assemble, AssembleInput};
+use super::assemble::{assemble, empty_state_deadline_ms, AssembleInput};
 use super::collections::CollectionsState;
 use super::groups::{
     build_group, FocusKey, GroupBuild, GroupKind, GroupPlan, ProjectContextInput, RowRef,
@@ -745,6 +745,15 @@ impl SidebarViewModel {
             },
             now_ms,
         });
+        // The waiting copy of an empty sidebar moves with the clock alone.
+        state.next_deadline_ms = min_deadline(
+            state.next_deadline_ms,
+            empty_state_deadline_ms(
+                store.loaded(&MachineId::Local).is_some(),
+                effective.host.unavailable,
+                now_ms,
+            ),
+        );
         state.work.group_count = state.view.groups.len();
         state.work.row_count = state
             .view

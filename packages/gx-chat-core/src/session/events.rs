@@ -272,8 +272,9 @@ pub fn boot_read(
 /// One accepted frame.
 fn frame_arrived(state: &mut ChatState, frame: &ChatFrame, context: &ChatContext) -> Vec<Effect> {
     // Liveness is "a frame reached us", not "a frame changed something": a dropped or duplicate
-    // frame still proves the stream is alive.
+    // frame still proves the stream is alive, and that Ghostex's service is answering.
     state.messages.last_frame_at_ms = context.now_ms;
+    crate::session::reads::note_reachable(state, context, true);
     // CDXC:SessionChat 2026-09-22 WHY:
     // An authoritative frame behind the one already accepted, on the same daemon generation, is a
     // late duplicate and rolls the whole transcript backwards for one frame. `snapshot_is_stale`
@@ -500,6 +501,14 @@ fn rpc_settled(
     outcome: &RpcOutcome,
     context: &ChatContext,
 ) -> Vec<Effect> {
+    // Any answer, a refusal included, means the service is there again.
+    let answered = match outcome {
+        RpcOutcome::Ok { .. } => true,
+        RpcOutcome::Err { code, .. } => !crate::session::reads::is_unreachable(code.as_deref()),
+    };
+    if answered {
+        crate::session::reads::note_reachable(state, context, true);
+    }
     match outcome {
         RpcOutcome::Ok { result } => {
             let Some(read) = parse_read(result) else {
@@ -529,7 +538,7 @@ fn rpc_settled(
             else {
                 return Vec::new();
             };
-            let effects = fail_read(state, context, &request);
+            let effects = fail_read(state, context, &request, !answered);
             arm_read_deadline(state, context);
             effects
         }
@@ -770,7 +779,11 @@ fn stall_watchdog(state: &mut ChatState, context: &ChatContext) -> Vec<Effect> {
     // blank loading hold forever, and only a new subscription can re-request the snapshot that was
     // lost. Rebuilding restamps `last_frame_at_ms`, so the next tick starts a fresh window rather
     // than firing again immediately.
+    // A service that is not answering at all is already being read every 2 s, and the socket
+    // reconnects on its own ladder: a recycle then only puts a second read in flight and spends
+    // one of the two recycles the stream may need once the service is back.
     if !state.messages.position.frame_arrived
+        && state.messages.unreachable_since_ms.is_none()
         && loading_hold(state)
         && state.messages.auto_reconnects < MAX_AUTOMATIC_RECONNECTS
         && now - state.messages.last_frame_at_ms > INITIAL_STALL_THRESHOLD_MS

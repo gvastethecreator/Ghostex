@@ -8,8 +8,14 @@ use ghostex_gx_protocol::{
 };
 use serde_json::Value;
 
-/// Delay before reconnect attempt `n`; the last entry repeats. `socket.ts`'s ladder, unchanged.
-pub const RECONNECT_DELAYS_MS: [u64; 5] = [500, 1_000, 2_000, 5_000, 10_000];
+/// Delay before reconnect attempt `n`; the last entry repeats.
+///
+/// CDXC:SessionChat 2026-10-08 WHY: `socket.ts`'s ladder climbed to 10 s, so a chat opened while
+/// Ghostex's service was down kept streaming nothing for up to 10 s after its transcript loaded.
+/// It now stops at the user's 2 s retry interval (`UNREACHABLE_RETRY_DELAY_MS` in
+/// packages/gx-chat-core/src/session/constants.rs), one connect attempt at a time, for as long as
+/// a chat follows the machine.
+pub const RECONNECT_DELAYS_MS: [u64; 3] = [500, 1_000, 2_000];
 
 /// The four chat frame types a chat-only stream carries.
 const FRAME_TYPES: [&str; 4] = [

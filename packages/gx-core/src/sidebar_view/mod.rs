@@ -11,6 +11,7 @@
 pub(crate) mod agents;
 mod armed_actions;
 mod close_after_done;
+mod daemon_wait;
 mod drop_landing;
 mod assemble;
 pub(crate) mod close_successor;
@@ -48,6 +49,7 @@ pub use close_successor::{
     close_project_successor_group_order, first_awake_successor_session_id, is_awake_successor_row,
 };
 pub use collections::{Collection, CollectionsState};
+pub use daemon_wait::DAEMON_RETRY_INTERVAL_MS;
 pub use drop_landing::{DropLanding, DropWrites, TreeDropTarget};
 pub use project_drop_landing::{ProjectDropLanding, ProjectDropRow};
 pub use inputs::{

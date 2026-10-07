@@ -23,7 +23,8 @@ use serde_json::{Map, Value};
 use crate::document::{
     AccountStatus, AsyncQuestions, ComposerActions, ComposerChrome, ComposerOverflow,
     DeferredWorkRow, Draft, EmptyState, HostAction, IncomingDraft, Interaction, InterruptToast,
-    NewSessionWelcome, Note, QuestionCard, Queue, TerminalTail, ViewState, WorkingStrip,
+    LoadingNotice, NewSessionWelcome, Note, QuestionCard, Queue, TerminalTail, ViewState,
+    WorkingStrip,
 };
 
 /// Everything the chat renderer draws, in one value.
@@ -200,6 +201,11 @@ pub struct Document {
     pub new_session_welcome: Option<NewSessionWelcome>,
     /// `blank`, `indicator` or `retry` while the transcript loads; `null` otherwise.
     pub loading_stage: Option<String>,
+    /// What the loading hold says, with its Try now button; `null` while it stays blank.
+    pub loading_notice: Option<LoadingNotice>,
+    /// The loading hold draws the transcript skeleton rows (`visual/transcript-skeleton.json`):
+    /// Ghostex's service is not answering and the core is retrying it.
+    pub transcript_skeleton: bool,
     pub skills_loading: bool,
     pub files_loading: bool,
 

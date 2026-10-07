@@ -76,6 +76,19 @@ impl SidebarList {
             .machine(&ghostex_gx_core::MachineId::Local)
             .and_then(|machine| machine.side_state().spaces_enabled)
             .unwrap_or(false);
+        // How long this computer's Ghostex service has been away, which the empty list's waiting
+        // copy reads, as the desktop's `note_machine_state` tracks it.
+        let loaded = core
+            .presentation()
+            .machine(&ghostex_gx_core::MachineId::Local)
+            .is_some_and(|machine| machine.loaded().is_some());
+        let unavailable = &mut self.last_inputs.host.unavailable;
+        if loaded {
+            unavailable.since_ms = None;
+            unavailable.observed_available = true;
+        } else if unavailable.since_ms.is_none() {
+            unavailable.since_ms = Some(now_ms);
+        }
         let changes = std::mem::take(&mut self.changes);
         self.model.update(core, &self.last_inputs, &changes, now_ms);
         let menus = SidebarMenus::new(

@@ -66,6 +66,8 @@ pub(crate) struct GxStoreHost {
     pub(crate) agentbox_locations: Vec<ghostex_gx_core::AgentboxLocation>,
     /// The launcher state behind those pages (`web_commands.rs`); its account pages stay unused.
     pub(crate) launcher_box_pages: ghostex_gx_core::SidebarAccountMenus,
+    /// Cuts the connect loop's current wait short (`gx_store_retry_now`).
+    pub(crate) retry_now: Option<mpsc::UnboundedSender<()>>,
 }
 
 /// The desktop's `GxClient`, as far as the shared files use it: ask for a fresh full snapshot.
@@ -88,6 +90,27 @@ impl WebStoreClient {
 
 pub(crate) fn now_ms() -> u64 {
     js_sys::Date::now() as u64
+}
+
+/// What the page's centre says while it waits for Ghostex, with the browser's own reason last.
+fn waiting_status(error: &str) -> String {
+    format!("Loading sessions\u{2026} ({error})")
+}
+
+/// Waits before the next connect attempt: 1 s after the first failure, then the user's 2 s retry
+/// interval, or less when Try now asks. Requests that arrived during the attempt that just failed
+/// are dropped first, so one click is one retry.
+async fn wait_for_retry(
+    cx: &mut gpui::AsyncApp,
+    retry_requests: &mut mpsc::UnboundedReceiver<()>,
+    attempt: u32,
+) {
+    while let Ok(Some(())) = retry_requests.try_next() {}
+    let delay = (1_000 * u64::from(attempt.max(1))).min(ghostex_gx_core::DAEMON_RETRY_INTERVAL_MS);
+    let timer = cx
+        .background_executor()
+        .timer(std::time::Duration::from_millis(delay));
+    let _ = futures::future::select(Box::pin(timer), retry_requests.next()).await;
 }
 
 impl GhostexGpuiApp {
@@ -115,18 +138,31 @@ impl GhostexGpuiApp {
         .detach();
     }
 
-    /// Bootstraps, connects and pumps until the page goes away, reconnecting on a close.
+    /// Bootstraps, connects and pumps until the page goes away, trying again every
+    /// `DAEMON_RETRY_INTERVAL_MS` while Ghostex is not answering (CDXC:Sidebar 2026-10-08 in
+    /// `packages/gx-core/src/sidebar_view/daemon_wait.rs`). One attempt runs at a time, and the
+    /// empty list's Try now cuts the current wait short (`gx_store_retry_now`).
     pub(crate) fn gx_store_start(&mut self, cx: &mut gpui::Context<Self>) {
         self.gx_store_restore_sidebar_ui();
+        let (retry_now, mut retry_requests) = mpsc::unbounded::<()>();
+        self.gx_store.retry_now = Some(retry_now);
         cx.spawn(async move |app, cx| {
-            let endpoint = match web_transport::bootstrap().await {
-                Ok(endpoint) => endpoint,
-                Err(error) => {
-                    let _ = app.update(cx, |app, cx| {
-                        app.gx_store.status = Some(format!("Could not reach Ghostex: {error}"));
-                        cx.notify();
-                    });
-                    return;
+            let mut attempt = 0u32;
+            let endpoint = loop {
+                match web_transport::bootstrap().await {
+                    Ok(endpoint) => break endpoint,
+                    Err(error) => {
+                        attempt += 1;
+                        let alive = app.update(cx, |app, cx| {
+                            app.gx_store.status = Some(waiting_status(&error));
+                            // The list's waiting copy counts from the first failure.
+                            app.gx_store_sidebar_state_changed(cx);
+                        });
+                        if alive.is_err() {
+                            return;
+                        }
+                        wait_for_retry(cx, &mut retry_requests, attempt).await;
+                    }
                 }
             };
             // The chat host's socket connects to the same daemon (`app/gx_chat/`).
@@ -136,13 +172,14 @@ impl GhostexGpuiApp {
                 &endpoint.auth_token,
             );
             let _ = app.update(cx, |app, cx| {
+                app.gx_store.status = None;
                 app.gx_store.endpoint = Some(endpoint.clone());
                 app.web_read_agentbox_locations(cx);
             });
-            let mut attempt = 0u32;
+            attempt = 0;
             loop {
                 let (sender, mut receiver) = mpsc::unbounded();
-                let _ = app.update(cx, |app, cx| {
+                let opened = app.update(cx, |app, cx| {
                     app.gx_store_handle(
                         Event::Connection {
                             machine: MachineId::Local,
@@ -151,29 +188,52 @@ impl GhostexGpuiApp {
                         cx,
                     );
                     match web_transport::open_events(&endpoint, sender) {
-                        Ok(socket) => app.gx_store.client = Some(WebStoreClient { socket }),
-                        Err(error) => app.gx_store.status = Some(error),
+                        Ok(socket) => {
+                            app.gx_store.client = Some(WebStoreClient { socket });
+                            true
+                        }
+                        Err(error) => {
+                            app.gx_store.status = Some(waiting_status(&error));
+                            false
+                        }
                     }
                 });
-                while let Some(event) = receiver.next().await {
-                    let closed = matches!(event, StreamEvent::Closed);
-                    if app
-                        .update(cx, |app, cx| app.gx_store_stream_event(event, cx))
-                        .is_err()
-                    {
-                        return;
-                    }
-                    if closed {
-                        break;
+                match opened {
+                    Err(_) => return,
+                    // A socket that could not even be created sends no close event.
+                    Ok(false) => {}
+                    Ok(true) => {
+                        while let Some(event) = receiver.next().await {
+                            let closed = matches!(event, StreamEvent::Closed);
+                            // A socket that opened starts the short first steps over for its next drop.
+                            if matches!(event, StreamEvent::Open) {
+                                attempt = 0;
+                            }
+                            if app
+                                .update(cx, |app, cx| app.gx_store_stream_event(event, cx))
+                                .is_err()
+                            {
+                                return;
+                            }
+                            if closed {
+                                break;
+                            }
+                        }
                     }
                 }
                 attempt += 1;
-                cx.background_executor()
-                    .timer(std::time::Duration::from_secs(u64::from(attempt.min(5))))
-                    .await;
+                wait_for_retry(cx, &mut retry_requests, attempt).await;
             }
         })
         .detach();
+    }
+
+    /// The empty list's Try now: the connect loop stops waiting and tries again at once. A request
+    /// made while an attempt is already running is dropped, so retries never stack.
+    pub(crate) fn gx_store_retry_now(&mut self) {
+        if let Some(retry_now) = &self.gx_store.retry_now {
+            let _ = retry_now.unbounded_send(());
+        }
     }
 
     fn gx_store_stream_event(&mut self, event: StreamEvent, cx: &mut gpui::Context<Self>) {

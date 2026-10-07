@@ -24,6 +24,20 @@ pub struct ViewState {
 pub struct EmptyState {
     pub title: String,
     pub detail: String,
+    /// The retry button's label, present when the region offers one (a conversation that could
+    /// not be loaded).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+}
+
+/// What the loading hold says once it has something to say, above its Try now button.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadingNotice {
+    pub title: String,
+    /// The line under the title, empty when there is none.
+    pub detail: String,
+    pub action: String,
 }
 
 /// The greeting a brand new session shows instead of the empty copy.

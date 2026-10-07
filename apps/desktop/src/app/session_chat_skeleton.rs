@@ -18,8 +18,8 @@ struct TranscriptSkeleton {
 
 /// CDXC:SessionChat 2026-09-24 SEE-ALSO:
 /// The shared packages/gx-chat-core/visual/transcript-skeleton.json that React's SessionChatLoadingState
-/// draws; the GPUI chat no longer draws transcript skeleton rows (native_chat/transcript_reveal.rs), and only its tint
-/// and pulse are still read here, by the other GPUI skeletons.
+/// draws; the GPUI chat draws its rows only while Ghostex's service is not answering (native_chat/transcript_reveal.rs),
+/// and only its tint and pulse are read here, by the other GPUI skeletons.
 static SKELETON: LazyLock<TranscriptSkeleton> = LazyLock::new(|| {
     serde_json::from_str(include_str!(
         "../../../../packages/gx-chat-core/visual/transcript-skeleton.json"

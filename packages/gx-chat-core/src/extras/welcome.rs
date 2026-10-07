@@ -8,7 +8,7 @@
 //! "Loading conversation… / Reading the agent transcript." forever instead of the welcome.
 //! SEE-ALSO: apps/desktop/src/app/native_chat/new_session_welcome.rs.
 
-use crate::document::EmptyState;
+use crate::document::{EmptyState, LoadingNotice};
 use crate::extras::agent_tasks::js_trim;
 use crate::extras::agents::{agent_icon_id, default_agent_by_id, is_sidebar_agent_icon};
 
@@ -22,6 +22,16 @@ use crate::extras::agents::{agent_icon_id, default_agent_by_id, is_sidebar_agent
 pub const LOADING_INDICATOR_DELAY_MS: i64 = 0;
 /// How long a transcript read runs before the empty region offers Retry.
 pub const LOADING_RETRY_DELAY_MS: i64 = 12_000;
+/// What the loading hold says once a read that the service IS answering runs long: one line and a
+/// Try now button, which rebuilds the subscription. A service that is not answering at all gets
+/// the skeleton and no notice instead (`transcript_skeleton` in `extras/document.rs`).
+pub fn loading_notice(stage: &str) -> Option<LoadingNotice> {
+    (stage == crate::state::LOADING_STAGE_RETRY).then(|| LoadingNotice {
+        title: "This conversation is taking longer than usual to load.".to_string(),
+        detail: String::new(),
+        action: "Try now".to_string(),
+    })
+}
 
 /// `sessionChatShowsNewSessionWelcome`: a new agent reports `starting` until its first transcript
 /// file exists, and `empty` once the file is there but still has no turns. The welcome owns both.
@@ -99,22 +109,25 @@ pub fn empty_state_copy(kind: &str, agent_label: Option<&str>) -> EmptyState {
             EmptyState {
                 title: format!("Start a chat with {agent}"),
                 detail: format!("Ask {agent} to inspect code, explain output, or make a change."),
+                action: None,
             }
         }
         "error" => EmptyState {
-            title: "Could not load conversation".to_string(),
-            detail:
-                "The transcript could not be read. Toggle back to the terminal to keep working."
-                    .to_string(),
+            title: "Couldn\u{2019}t load this conversation".to_string(),
+            detail: "Ghostex couldn\u{2019}t read this agent\u{2019}s transcript. Switch to the terminal to keep working, or try again."
+                .to_string(),
+            action: Some("Try again".to_string()),
         },
         "unsupported" => EmptyState {
             title: "No conversation here".to_string(),
             detail: "This terminal is not running a recognized coding agent.".to_string(),
+            action: None,
         },
         // `starting` falls through to `loading`, and so does anything else the view reports.
         _ => EmptyState {
             title: "Loading conversation\u{2026}".to_string(),
             detail: "Reading the agent transcript.".to_string(),
+            action: None,
         },
     }
 }

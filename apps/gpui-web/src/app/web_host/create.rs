@@ -103,18 +103,14 @@ impl GhostexGpuiApp {
         self.dispatch_gpui_workspace_action_toast(level, title, description, cx);
     }
 
-    /// Starting the local gxserver is the app's job; a page is served by a running one and cannot start it.
+    /// The empty list's Try now. Starting Ghostex is the app's job and a page cannot do it, so the
+    /// page only stops waiting and connects again at once.
     pub(crate) fn start_gpui_local_gxserver_bootstrap(
         &mut self,
         _show_loading_toast: bool,
-        cx: &mut Context<Self>,
+        _cx: &mut Context<Self>,
     ) {
-        self.dispatch_gpui_workspace_action_toast(
-            "warning",
-            "Start gxserver from the Ghostex app",
-            "A browser page cannot start the Ghostex daemon.",
-            cx,
-        );
+        self.gx_store_retry_now();
     }
 
     /// The desktop's Resources panel; the page has none.

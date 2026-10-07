@@ -6,8 +6,8 @@ use serde_json::Value;
 
 use crate::document::{Document, NewSessionWelcome};
 use crate::extras::welcome::{
-    empty_state_copy, new_session_welcome_title, shows_new_session_welcome, welcome_agent_icon,
-    welcome_agent_name,
+    empty_state_copy, loading_notice, new_session_welcome_title, shows_new_session_welcome,
+    welcome_agent_icon, welcome_agent_name,
 };
 use crate::extras::{
     coordinator_threads, panels, save_markdown, search, subagent, terminal_tail, working_strip,
@@ -81,6 +81,15 @@ pub fn document(state: &ChatState, context: &ChatContext, into: &mut Document) {
     });
     into.loading_stage =
         (view_kind == "loading" && !show_welcome).then(|| extras.loading_stage.clone());
+    // CDXC:SessionChat 2026-10-08 in `session/constants.rs`: while Ghostex's service is not
+    // answering, the hold draws the skeleton rows and says nothing; the core is retrying.
+    let unreachable = state.messages.unreachable_since_ms.is_some();
+    into.transcript_skeleton = into.loading_stage.is_some() && unreachable;
+    into.loading_notice = into
+        .loading_stage
+        .as_deref()
+        .filter(|_| !unreachable)
+        .and_then(loading_notice);
 }
 
 /// A notice or a question card is on screen, which is what the welcome gives its headline up for.
