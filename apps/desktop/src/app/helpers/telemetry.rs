@@ -29,14 +29,9 @@ const GPUI_CLIENT_EVENT_PATH: &str = "/api/recordClientEvent";
 const GPUI_CLIENT_EVENT_TIMEOUT: Duration = Duration::from_secs(2);
 const GPUI_SURFACE_OPENED_THROTTLE: Duration = Duration::from_secs(60 * 60);
 
-/// Shipping marketing version baked in by `apps/desktop/build.rs`; dev builds
-/// have no `GHOSTEX_GPUI_MARKETING_VERSION` in the environment and report the
-/// crate version instead. Same pattern as `bin/ghostex_windows_installer.rs`.
-pub(crate) const GPUI_APP_MARKETING_VERSION: &str =
-    match option_env!("GHOSTEX_BUILD_MARKETING_VERSION") {
-        Some(version) => version,
-        None => env!("CARGO_PKG_VERSION"),
-    };
+/// The app version baked in by `apps/desktop/build.rs` (the release version, or the root
+/// `package.json` version for dev builds), never the placeholder crate version.
+pub(crate) const GPUI_APP_MARKETING_VERSION: &str = env!("GHOSTEX_BUILD_MARKETING_VERSION");
 
 /// The complete surface vocabulary the desktop app may report. Anything not in
 /// this list is not sent — internal mode ids, extension ids, and modal ids are

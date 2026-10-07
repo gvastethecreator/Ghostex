@@ -15,10 +15,7 @@ const BUNDLED_SETUP_LENGTH_LEN: usize = 8;
 const BUNDLED_SETUP_SEARCH_LEN: u64 = 1024 * 1024;
 const INSTALL_ROOT_NAME: &str = "Ghostex";
 const INSTALLED_LAUNCHER_NAME: &str = "Ghostex.exe";
-const INSTALLER_VERSION: &str = match option_env!("GHOSTEX_BUILD_MARKETING_VERSION") {
-    Some(version) => version,
-    None => env!("CARGO_PKG_VERSION"),
-};
+const INSTALLER_VERSION: &str = env!("GHOSTEX_BUILD_MARKETING_VERSION");
 
 fn main() -> ExitCode {
     match run() {

@@ -10,7 +10,7 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::{
     AnyView, App, AppContext as _, ClickEvent, Context, Entity, FontWeight,
     InteractiveElement as _, IntoElement, ParentElement as _, Render, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Window, div, px,
+    StatefulInteractiveElement as _, Styled as _, Window, div, img, px,
 };
 use gpui_component::{h_flex, v_flex};
 use serde_json::json;
@@ -22,12 +22,8 @@ const GHOSTEX_GITHUB_URL: &str = "https://github.com/maddada/Ghostex";
 /// `GHOSTEX_SPONSOR_URL`.
 const GHOSTEX_SPONSOR_URL: &str = "https://github.com/sponsors/maddada";
 
-/// The shipped version the About page names: release builds bake the `package.json` version in
-/// (`GHOSTEX_GPUI_MARKETING_VERSION`, see apps/desktop/build.rs), as the React page imported it.
-const APP_VERSION: &str = match option_env!("GHOSTEX_BUILD_MARKETING_VERSION") {
-    Some(version) => version,
-    None => env!("CARGO_PKG_VERSION"),
-};
+/// The app version the About page names, baked in by apps/desktop/build.rs (`package.json`).
+const APP_VERSION: &str = env!("GHOSTEX_BUILD_MARKETING_VERSION");
 
 const LINKS: [(&str, &str, &str); 3] = [
     (
@@ -164,19 +160,7 @@ impl Render for AboutTab {
                 h_flex()
                     .items_center()
                     .gap(px(14.0))
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .size(px(52.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded(px(12.0))
-                            .bg(hsla(p.foreground))
-                            .text_color(hsla(p.surface))
-                            .text_size(px(18.0))
-                            .child("G"),
-                    )
+                    .child(img("app-icon.png").flex_shrink_0().size(px(52.0)))
                     .child(
                         v_flex()
                             .child(
