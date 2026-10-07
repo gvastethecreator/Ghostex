@@ -33,9 +33,7 @@ pub fn recent_session_user_prompts(
         return Vec::new();
     };
     if agent == "empryo" {
-        return fs::read(&transcript_path)
-            .map(|raw| crate::session_chat_empryo_mirror::empryo_user_prompts(&raw))
-            .unwrap_or_default();
+        return crate::session_chat_empryo_mirror::empryo_user_prompts(&transcript_path);
     }
     let Some(lines) = read_lines_lossy(&transcript_path) else {
         return Vec::new();

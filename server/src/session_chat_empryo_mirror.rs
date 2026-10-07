@@ -673,9 +673,16 @@ fn build_mirror(raw: &[u8], foreign_tabs: HashSet<String>) -> Vec<u8> {
 }
 
 /// The visible prompts of the followed tab, oldest first: Generate Name's history source
-/// (`agent_transcripts.rs`), read through the same rows the chat shows.
-pub(crate) fn empryo_user_prompts(raw: &[u8]) -> Vec<String> {
-    mirror_rows(raw, HashSet::new())
+/// (`agent_transcripts.rs`), read through the same rows the chat shows: from the log that holds
+/// the session's own tab, without the tabs other Ghostex sessions own (a shared engine logs them
+/// all in one session, so the newest prompt there can be another session's).
+pub(crate) fn empryo_user_prompts(session_log: &Path) -> Vec<String> {
+    let (log, foreign_tabs) = crate::session_chat_empryo_tabs::empryo_tab_scan(session_log)
+        .unwrap_or_else(|| (session_log.to_path_buf(), HashSet::new()));
+    let Ok(raw) = fs::read(&log) else {
+        return Vec::new();
+    };
+    mirror_rows(&raw, foreign_tabs)
         .iter()
         .filter(|row| row.get("row").and_then(Value::as_str) == Some("user"))
         .filter_map(|row| extract_string(row.get("text")))

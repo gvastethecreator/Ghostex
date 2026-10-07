@@ -63,13 +63,14 @@ fn title_command_for_agent(agent_id: &str) -> &'static str {
     }
 }
 
-const TITLE_GENERATION_AGENTS: [&str; 7] = [
+const TITLE_GENERATION_AGENTS: [&str; 8] = [
     "codex",
     "cursor",
     "claude",
     "grok",
     "pi",
     "antigravity",
+    "empryo",
     "custom",
 ];
 

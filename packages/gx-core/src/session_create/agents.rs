@@ -176,7 +176,14 @@ impl TitleGenerationSettings {
             .filter(|agent| {
                 matches!(
                     *agent,
-                    "codex" | "cursor" | "claude" | "grok" | "pi" | "antigravity" | "custom"
+                    "codex"
+                        | "cursor"
+                        | "claude"
+                        | "grok"
+                        | "pi"
+                        | "antigravity"
+                        | "empryo"
+                        | "custom"
                 )
             })
             .unwrap_or("codex")

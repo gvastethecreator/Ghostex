@@ -554,7 +554,12 @@ pub(super) async fn run_session_chat_send_worker(
                     )
                     .await
                     {
-                        outcome = Err(SessionChatSendError::not_attempted(message));
+                        // Nothing was typed and the window is not showing this session yet, which
+                        // a queue holds and retries like an input box that is not up.
+                        outcome = Err(SessionChatSendError::new(
+                            SessionChatSendFailure::ComposerNotReady,
+                            message,
+                        ));
                         break;
                     }
                 }

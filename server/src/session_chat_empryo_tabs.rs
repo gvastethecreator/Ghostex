@@ -2,7 +2,7 @@
 //! Coordinator for Sven: "right after a window joins, Ghostex makes Empryo show this session's own tab … a send must never land in another session's tab: hold it until the right tab shows."
 //!
 //! CDXC:SessionChat 2026-10-07 WHY:
-//! Empryo 3.9.1-beta runs one engine per repository for every window in it. A window that starts while the engine is up joins it, adds its own tab, and opens on the engine's first tab instead (`tabs.find(own) ?? tabs[0]` in its engine boot), so the coordinator's `/agent` line and chat messages typed there went into another session's conversation (seen live 2026-10-07). Every window rewrites `.empryo/tabs.json` with the engine's tabs in bar order, so a session's own tab (the first tab of its own folder) has a known place in the bar, and Empryo's Ctrl+] / Ctrl+\ step to it. The tab's turns are then logged in the engine's session (session_chat_empryo_mirror.rs follows them there).
+//! Empryo 3.9.1-beta runs one engine per repository for every window in it. A window that starts while the engine is up joins it, holds the engine's tabs plus its own, and opens on `tabs.find(own) ?? tabs[0]` (its engine boot), so the coordinator's `/agent` line and chat messages typed there went into another session's conversation (seen live 2026-10-07). A window never learns of tabs added after it joined, so every bar is a prefix of the engine's tab order, and `.empryo/tabs.json` (the last window to change tabs writes its own bar there once it holds two or more) or the engine's own session `meta.json` gives a session's own tab (the first tab of its own folder) its place in any bar that holds it; Empryo's Ctrl+] / Ctrl+\ step to it. The tab's turns are then logged in the engine's session (session_chat_empryo_mirror.rs follows them there).
 //! SEE-ALSO: server/src/session_chat_composer_input.rs `empryo_tab_bar`, server/src/session_chat_send/steps.rs (`SelectEmpryoTab`), server/src/zmx/provider.rs (the start that selects it), proxysoul/Empryo#236.
 
 use std::cmp::Ordering;
@@ -23,7 +23,8 @@ const EMPRYO_NEXT_TAB: &str = "\u{1d}";
 const EMPRYO_PREVIOUS_TAB: &str = "\u{1c}";
 /// How long one press may take to repaint the bar.
 const EMPRYO_TAB_POLL: Duration = Duration::from_millis(150);
-/// How long a send waits for the bar to show its tab before it is held.
+/// How long one send attempt waits for its window to show its own tab; a queued message is then
+/// held and retried like one whose input box is not up yet.
 pub(crate) const EMPRYO_SEND_TAB_WAIT_MS: u64 = 5_000;
 /// A started window draws its input box before it has joined the engine and named its tab in
 /// `tabs.json`, so the selection after a start waits longer.
@@ -35,20 +36,35 @@ const EMPRYO_START_POLL: Duration = Duration::from_millis(500);
 /// draws the bar a moment after the box, so one still missing then never opened its own tab.
 const EMPRYO_JOIN_BAR_GRACE: Duration = Duration::from_secs(5);
 
-const EMPRYO_OTHER_TAB_MESSAGE: &str =
-    "Empryo is showing another session's tab, so nothing was sent.";
+/// The window shows only another session's tab and does not hold its own, so no key reaches it.
+const EMPRYO_TAB_MISSING_MESSAGE: &str = "Empryo opened this window on another session's tab without this session's own, so nothing was sent. Sleep and wake the session to reopen its tab.";
+/// The window holds the session's tab, but stepping the bar to it did not take.
+const EMPRYO_TAB_NOT_SELECTED_MESSAGE: &str =
+    "Empryo did not switch to this session's tab, so nothing was sent.";
+
+fn read_json(path: &Path) -> Option<Value> {
+    serde_json::from_slice(&std::fs::read(path).ok()?).ok()
+}
+
+fn tab_id(tab: &Value) -> Option<&str> {
+    tab.get("id").and_then(Value::as_str)
+}
+
+/// The tabs a session folder's `meta.json` lists, in order.
+fn meta_tabs(folder: &Path) -> Vec<Value> {
+    match read_json(&folder.join("meta.json"))
+        .and_then(|mut meta| meta.get_mut("tabs").map(Value::take))
+    {
+        Some(Value::Array(tabs)) => tabs,
+        _ => Vec::new(),
+    }
+}
 
 /// The tab ids a session folder's `meta.json` lists, in order.
 fn tab_ids(folder: &Path) -> Vec<String> {
-    let meta = std::fs::read(folder.join("meta.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
-    meta.as_ref()
-        .and_then(|meta| meta.get("tabs"))
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|tab| tab.get("id").and_then(Value::as_str).map(str::to_string))
+    meta_tabs(folder)
+        .iter()
+        .filter_map(|tab| tab_id(tab).map(str::to_string))
         .collect()
 }
 
@@ -57,55 +73,88 @@ fn own_tab(session_log: &Path) -> Option<String> {
     tab_ids(session_log.parent()?).into_iter().next()
 }
 
-/// The place of `tab` in its window's tab bar, as `(position, tab count)`, from the
-/// `.empryo/tabs.json` every window rewrites in bar order whenever it holds two or more tabs.
-/// `None` while that list does not name the tab yet.
-fn tab_place(session_log: &Path, tab: &str) -> Option<(usize, usize)> {
-    let ids = bar_ids(session_log)?;
-    Some((ids.iter().position(|id| id == tab)?, ids.len()))
+/// The place of `tab` in the bar of any window that holds it: its place among the tabs of the
+/// engine's own session, or else in `.empryo/tabs.json`. `None` while neither names it.
+fn tab_position(session_log: &Path, tab: &str) -> Option<usize> {
+    let position = |ids: Vec<String>| ids.iter().position(|id| id == tab);
+    engine_folder(session_log)
+        .and_then(|folder| position(tab_ids(&folder)))
+        .or_else(|| position(bar_ids(session_log)?))
 }
 
-/// `.empryo/tabs.json` beside a session folder: the engine's tab ids in bar order.
+/// `.empryo/tabs.json` beside a session folder: the tab ids of the last window that changed tabs,
+/// in its bar order.
 fn tabs_json(session_log: &Path) -> Option<PathBuf> {
     Some(session_log.parent()?.parent()?.parent()?.join("tabs.json"))
 }
 
 fn bar_ids(session_log: &Path) -> Option<Vec<String>> {
-    let bar: Value = serde_json::from_slice(&std::fs::read(tabs_json(session_log)?).ok()?).ok()?;
     Some(
-        bar.as_array()?
+        read_json(&tabs_json(session_log)?)?
+            .as_array()?
             .iter()
-            .filter_map(|tab| tab.get("id").and_then(Value::as_str).map(str::to_string))
+            .filter_map(|tab| tab_id(tab).map(str::to_string))
             .collect(),
     )
 }
 
-/// Whether the session's Empryo runs the engine it talks to (`empryo engine --engine` under its
-/// window), which is the window that never draws the tabs other windows add. `None` when the
-/// process table cannot be read.
-async fn window_runs_own_engine(zmx_name: &str) -> Option<bool> {
-    #[cfg(unix)]
-    {
-        let zmx_name = zmx_name.to_string();
-        tokio::task::spawn_blocking(move || {
-            let table = crate::zmx::read_process_snapshot().ok()?;
-            Some(crate::zmx::zmx_session_runs(&table, &zmx_name, |command| {
-                let mut words = command.split_whitespace();
-                words
-                    .next()
-                    .is_some_and(|program| program.ends_with("empryo"))
-                    && words.any(|word| word == "--engine")
-            }))
+/// CDXC:SessionChat 2026-10-07 WHY:
+/// A running engine holds `writer.lock` (its pid) in the folder of the session it was started for, and logs every tab there. When that is the session's own folder, a window without a tab bar shows the session's own tab: it started the engine, or rejoined the engine an earlier window of the session started (an engine outlives its window by ten idle minutes, so a session woken soon after it slept joins it, says "joined a running engine" and draws no bar). Reading the engine's process off the window's process tree missed that rejoin and held every send to it (seen live 2026-10-07).
+fn hosts_engine(folder: &Path) -> bool {
+    read_json(&folder.join("writer.lock"))
+        .and_then(|lock| lock.get("pid").and_then(Value::as_u64))
+        .and_then(|pid| u32::try_from(pid).ok())
+        .is_some_and(crate::runtime::is_process_running)
+}
+
+/// [`hosts_engine`] for the folder of the session's own log.
+fn hosts_own_engine(session_log: &Path) -> bool {
+    session_log.parent().is_some_and(hosts_engine)
+}
+
+/// The session folder the running engine of `session_log`'s checkout logs to.
+fn engine_folder(session_log: &Path) -> Option<PathBuf> {
+    let own = session_log.parent()?;
+    if hosts_engine(own) {
+        return Some(own.to_path_buf());
+    }
+    std::fs::read_dir(own.parent()?)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|folder| hosts_engine(folder))
+}
+
+/// The `/agent` profile the engine runs the session's own tab under (`Some(None)` without one),
+/// from the `meta.json` of the engine's session, or of the session's own folder while no engine
+/// runs. `None` while neither lists the tab.
+pub(crate) fn empryo_tab_agent(session_log: &Path) -> Option<Option<String>> {
+    let own = session_log.parent()?;
+    let tab = own_tab(session_log)?;
+    engine_folder(session_log)
+        .filter(|folder| folder != own)
+        .into_iter()
+        .chain([own.to_path_buf()])
+        .find_map(|folder| {
+            let tabs = meta_tabs(&folder);
+            let entry = tabs
+                .iter()
+                .find(|entry| tab_id(entry) == Some(tab.as_str()))?;
+            Some(
+                entry
+                    .get("agent")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+            )
         })
-        .await
-        .ok()
-        .flatten()
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = zmx_name;
-        None
-    }
+}
+
+/// Whether the window's header (its top rows) says it joined an engine it did not start.
+fn shows_joined_engine(screen: &str) -> bool {
+    crate::session_chat_agent_fleet::normalized_screen_lines(screen)
+        .iter()
+        .take(3)
+        .any(|line| line.contains("joined a running engine") || line.contains("joined \u{b7} "))
 }
 
 /// The `session.jsonl` of a Ghostex session's Empryo, read from the state database.
@@ -133,36 +182,36 @@ pub(crate) async fn select_empryo_own_tab(
         return Ok(());
     };
     let deadline = Instant::now() + Duration::from_millis(wait_ms);
-    // Read once: which engine a window talks to does not change while it runs.
-    let mut own_engine: Option<Option<bool>> = None;
+    let mut held = EMPRYO_TAB_MISSING_MESSAGE;
     loop {
         let bar = capture_session_terminal_text_vt(zmx_name)
             .await
             .map(|screen| crate::session_chat_composer::empryo_tab_bar(&screen));
-        match (tab_place(&log, &tab), bar) {
-            // No tab bar: the window shows only this session's tab when it runs its own engine
-            // (that window never draws the tabs other windows add). A window that joined another
-            // engine shows that engine's tab until its bar is up, so its send waits for the bar.
-            (_, Some(None)) => {
-                if own_engine.is_none() {
-                    own_engine = Some(window_runs_own_engine(zmx_name).await);
-                }
-                if own_engine.flatten() != Some(false) {
+        match bar {
+            // No tab bar: the window holds one tab, the session's own when its folder hosts the
+            // engine. Otherwise it shows the one tab of another session's engine, or has not
+            // joined its own yet, and the send waits.
+            Some(None) => {
+                if hosts_own_engine(&log) {
                     return Ok(());
                 }
             }
-            (Some((target, count)), Some(Some((shown, Some(active))))) if shown == count => {
-                let key = match target.cmp(&active) {
-                    Ordering::Equal => return Ok(()),
-                    Ordering::Greater => EMPRYO_NEXT_TAB,
-                    Ordering::Less => EMPRYO_PREVIOUS_TAB,
-                };
-                write_session_chat_payload(project_id, session_id, zmx_name, source, key).await?;
+            Some(Some((shown, Some(active)))) => {
+                if let Some(target) = tab_position(&log, &tab).filter(|target| *target < shown) {
+                    held = EMPRYO_TAB_NOT_SELECTED_MESSAGE;
+                    let key = match target.cmp(&active) {
+                        Ordering::Equal => return Ok(()),
+                        Ordering::Greater => EMPRYO_NEXT_TAB,
+                        Ordering::Less => EMPRYO_PREVIOUS_TAB,
+                    };
+                    write_session_chat_payload(project_id, session_id, zmx_name, source, key)
+                        .await?;
+                }
             }
             _ => {}
         }
         if Instant::now() >= deadline {
-            return Err(EMPRYO_OTHER_TAB_MESSAGE.to_string());
+            return Err(held.to_string());
         }
         tokio::time::sleep(EMPRYO_TAB_POLL).await;
     }
@@ -174,7 +223,7 @@ pub(crate) async fn select_empryo_own_tab(
 /// sends next, so the window shows this session's own conversation as soon as it is up.
 ///
 /// CDXC:SessionChat 2026-10-07 WHY:
-/// Empryo 3.9.1-beta sometimes joins a window to the running engine without opening the window's own tab (two threads started a second apart; seen live 2026-10-07): the window shows only the engine's first tab, so its brief went into the coordinator's conversation. Such a window has no tab bar although it runs no engine of its own; with `state` (a create) it is restarted once through sleep and wake, the cycle the sidebar uses, and the wake selects the tab again. Without one its sends stay held.
+/// Empryo 3.9.1-beta sometimes joins a window to the running engine without opening the window's own tab (two threads started a second apart; seen live 2026-10-07): the window shows only the engine's first tab, so its brief went into the coordinator's conversation. Such a window says it joined a running engine, has no tab bar, and its folder does not host the engine; with `state` (a create) it is restarted once through sleep and wake, the cycle the sidebar uses, and the wake selects the tab again. Without one its sends stay held. A window that has not said it joined is still starting its own engine and is waited for, never restarted.
 pub(crate) fn select_empryo_own_tab_after_start(
     session: &Value,
     state: Option<crate::server::AppState>,
@@ -198,6 +247,7 @@ pub(crate) fn select_empryo_own_tab_after_start(
     runtime.spawn(async move {
         let deadline = Instant::now() + EMPRYO_START_WAIT;
         let mut box_since: Option<Instant> = None;
+        let mut log: Option<PathBuf> = None;
         while Instant::now() < deadline {
             let screen = capture_session_terminal_text_vt(&zmx_name).await;
             let input_box = screen.as_deref().is_some_and(|screen| {
@@ -212,7 +262,10 @@ pub(crate) fn select_empryo_own_tab_after_start(
             let bar = screen.as_deref().is_some_and(|screen| {
                 crate::session_chat_composer::empryo_tab_bar(screen).is_some()
             });
-            if bar || window_runs_own_engine(&zmx_name).await != Some(false) {
+            if !bar && log.is_none() {
+                log = empryo_session_log_for(&project_id, &session_id);
+            }
+            if bar || log.as_deref().is_none_or(hosts_own_engine) {
                 if let Err(error) = execute_session_chat_send(
                     &project_id,
                     &session_id,
@@ -233,13 +286,15 @@ pub(crate) fn select_empryo_own_tab_after_start(
                 }
                 return;
             }
-            if since.elapsed() >= EMPRYO_JOIN_BAR_GRACE {
+            if since.elapsed() >= EMPRYO_JOIN_BAR_GRACE
+                && screen.as_deref().is_some_and(shows_joined_engine)
+            {
                 let Some(state) = state else {
                     record(
                         &project_id,
                         &session_id,
                         "sessionChatEmpryoTabMissing",
-                        EMPRYO_OTHER_TAB_MESSAGE,
+                        EMPRYO_TAB_MISSING_MESSAGE,
                     );
                     return;
                 };

@@ -288,7 +288,7 @@ How to use this file:
 - **Agent approvals** `acceptAll` (Settings UI row without a settings key; use `ghostex settings open`): Choose whether supported agents ask before editing files or running commands. Per-agent settings can override this default.
 - **Agent approvals: accept all** `agentAcceptAllEnabled` (boolean, default false): Start supported agents with approvals turned off (full access) by default. Off keeps each agent CLI default approval mode. Projects can override it.
 - **Default Prompt Agent** `defaultPromptAgentId` (text, default codex): Agent id used when Ghostex sends a prompt on your behalf (for example PR review). Use an id from the configured agents.
-- **Title Generation Agent** `sessionTitleGenerationAgent` (one of codex | cursor | claude | grok | pi | antigravity | custom; default codex): Headless agent Ghostex uses for first-prompt session title generation. Option labels: codex = Codex, cursor = Cursor CLI, claude = Claude, grok = Grok Build, pi = Pi Agent, antigravity = Antigravity CLI, custom = Custom.
+- **Title Generation Agent** `sessionTitleGenerationAgent` (one of codex | cursor | claude | grok | pi | antigravity | empryo | custom; default codex): Headless agent Ghostex uses for first-prompt session title generation. Option labels: codex = Codex, cursor = Cursor CLI, claude = Claude, grok = Grok Build, pi = Pi Agent, antigravity = Antigravity CLI, empryo = Empryo, custom = Custom.
 - **Custom Title Command** `customSessionTitleGenerationCommand` (text, default (empty)): Custom command run with the title prompt on stdin when Title Generation Agent is custom. It should print only the title.
 ### Agents
 

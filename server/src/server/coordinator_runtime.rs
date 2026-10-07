@@ -448,7 +448,7 @@ const EMPRYO_ROLE_CHECK_EVERY_MS: i64 = 30_000;
 const EMPRYO_ROLE_RETYPES: usize = 3;
 
 /// CDXC:Coordinators 2026-10-07 WHY:
-/// Empryo 3.9.1-beta sets `/agent` on the window's current chat only: a first window draws its input box before its engine has restored the tab, and the restore (or another window joining the engine) writes the tab back without the agent, so a coordinator queued its `/agent ghostex-coordinator` line, saw it accepted, and still ran without its role (seen live 2026-10-07). The role shows on the input box border as `as ghostex-coordinator`, so an idle Empryo coordinator whose border lacks it gets the line again, a few times at most.
+/// Empryo 3.9.1-beta sets `/agent` on the window's current chat only: a first window draws its input box before its engine has restored the tab, and the restore (or another window joining the engine) writes the tab back without the agent, so a coordinator queued its `/agent ghostex-coordinator` line, saw it accepted, and still ran without its role (seen live 2026-10-07). The engine records the tab's profile in its session's `meta.json` (and logs `"agent":null` after every turn of a tab without one), which a narrow window's border cannot show (it shortens the `as ghostex-coordinator` segment to a glyph or drops it), so the role is read there, not off the border. An idle coordinator without it gets the line again, a few times at most, typed straight into its terminal: never through the chat queue, which piled duplicates behind a busy coordinator and drew a chat row for every one (seen live 2026-10-07).
 fn repair_empryo_coordinator_roles(
     state: &AppState,
     db: &rusqlite::Connection,
@@ -459,12 +459,14 @@ fn repair_empryo_coordinator_roles(
         return;
     };
     let now = now_ms();
-    let role = format!("as {}", coordinators::EMPRYO_COORDINATOR_AGENT_NAME);
     let keys: HashSet<SessionKey> = coordinators
         .into_iter()
         .map(|coordinator| (coordinator.project_id, coordinator.session_id))
         .collect();
     memory.empryo_roles.retain(|key, _| keys.contains(key));
+    let Some(command) = coordinators::coordinator_role_queued_command("empryo") else {
+        return;
+    };
     for key in keys {
         let check = memory.empryo_roles.entry(key.clone()).or_default();
         if now - check.checked_at < EMPRYO_ROLE_CHECK_EVERY_MS {
@@ -477,30 +479,48 @@ fn repair_empryo_coordinator_roles(
         if !is_running_empryo(&session) {
             continue;
         }
-        let Ok(screen) = crate::zmx::read_zmx_session_history_capture(repository, &key.0, &key.1)
+        let Some(agent) = crate::session_chat_pi_models::empryo_session_log(repository, &session)
+            .and_then(|log| crate::session_chat_empryo_tabs::empryo_tab_agent(&log))
         else {
             continue;
         };
-        let lines: Vec<String> = screen
-            .text
-            .lines()
-            .map(crate::session_chat_options::strip_ansi_sgr)
-            .collect();
-        let Some(head) = crate::session_chat_composer::empryo_input_head(&lines) else {
-            continue;
-        };
-        if lines[head].contains(&role) {
+        if agent.as_deref() == Some(coordinators::EMPRYO_COORDINATOR_AGENT_NAME) {
             check.retyped = 0;
             continue;
         }
         if check.retyped >= EMPRYO_ROLE_RETYPES
-            || crate::session_chat_composer::empryo_composer_busy(&screen.text) != Some(false)
+            || crate::session_chat_queue::session_has_pending_session_chat_queue(db, &key.0, &key.1)
+            || memory
+                .transcript_gates
+                .entry(key.clone())
+                .or_default()
+                .is_working(&session)
         {
             continue;
         }
-        check.retyped += 1;
-        if let Some(command) = coordinators::coordinator_role_queued_command("empryo") {
-            let _ = queue_coordinator_role_command(state, &key.0, &key.1, &command, false);
+        let idle = crate::zmx::read_zmx_session_history_capture(repository, &key.0, &key.1)
+            .is_ok_and(|screen| {
+                crate::session_chat_composer::empryo_composer_busy(&screen.text) == Some(false)
+            });
+        if !idle || coordinators::ensure_empryo_coordinator_agent_file(&state.paths).is_err() {
+            continue;
+        }
+        let steps = crate::session_chat_send::build_session_chat_message_steps(
+            Some("empryo"),
+            &command,
+            &[],
+            false,
+        );
+        if crate::session_chat_send::enqueue_session_write_sequence(
+            &session,
+            &key.0,
+            &key.1,
+            "coordinator-role",
+            steps,
+        )
+        .is_ok()
+        {
+            check.retyped += 1;
         }
     }
 }

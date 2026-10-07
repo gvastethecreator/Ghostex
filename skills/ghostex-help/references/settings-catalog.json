@@ -8174,6 +8174,10 @@
           "value": "antigravity"
         },
         {
+          "label": "Empryo",
+          "value": "empryo"
+        },
+        {
           "label": "Custom",
           "value": "custom"
         }
@@ -8260,6 +8264,10 @@
         {
           "label": "Antigravity CLI",
           "value": "antigravity"
+        },
+        {
+          "label": "Empryo",
+          "value": "empryo"
         },
         {
           "label": "Custom",

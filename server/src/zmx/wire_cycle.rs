@@ -427,7 +427,7 @@ fn wait_for_process_exit(process_id: i64, grace: Duration) -> bool {
 /// Raw process table, read without a shell so a wedged daemon cannot be reached
 /// through `zmx list` on the way.
 #[cfg(unix)]
-pub(crate) fn read_process_snapshot() -> Result<String, String> {
+fn read_process_snapshot() -> Result<String, String> {
     let output = Command::new("ps")
         .args(["-axo", "pid=,ppid=,command="])
         .stdin(Stdio::null())
