@@ -742,7 +742,9 @@ fn setting_status_label(message: &ChatMessage, text: &str) -> Option<String> {
 /// A model or effort change the agent's transcript recorded as its own row, which stays in view
 /// where it happened instead of folding into the turn's work.
 pub fn is_setting_status(message: &ChatMessage) -> bool {
-    setting_status_label(message, js_trim(&joined_text(&message.blocks))).is_some()
+    message.role == ChatRole::System
+        && message.source == ChatSource::Transcript
+        && setting_status_label(message, js_trim(&joined_text(&message.blocks))).is_some()
 }
 
 /// A row after a turn's reply that belongs between turns rather than in the turn's work: a

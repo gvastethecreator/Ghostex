@@ -19,7 +19,7 @@ fn event_rows(screen: &str) -> Vec<String> {
                 .or_else(|| row.strip_prefix("╰─ "))?;
             let row: String = row
                 .chars()
-                .filter(|ch| !matches!(*ch as u32, 0xE000..=0xF8FF | 0xF0000..=0x10FFFF))
+                .filter(|ch| !crate::session_chat_options::is_nerd_font_icon(*ch))
                 .collect();
             let row = row.split_whitespace().collect::<Vec<_>>().join(" ");
             (!row.is_empty()).then_some(row)

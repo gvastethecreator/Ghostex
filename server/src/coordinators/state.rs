@@ -158,8 +158,8 @@ pub fn thread_needs_user_approval(session: &Value) -> bool {
     if screen.as_ref().is_some_and(|wait| wait.blocking) {
         return true;
     }
-    if let Some(prompt) =
-        session_chat_prompt_setting(session).and_then(|stored| parse_stored_session_chat_prompt(&stored))
+    if let Some(prompt) = session_chat_prompt_setting(session)
+        .and_then(|stored| parse_stored_session_chat_prompt(&stored))
     {
         return matches!(prompt, SessionChatInteractivePrompt::Approval { .. });
     }
@@ -252,19 +252,16 @@ impl ThreadScreenWait {
     ) -> Option<Self> {
         if let Some(notice) = notice.filter(|notice| notice.blocks_input() && !notice.auto_trust) {
             let title = notice.title.trim();
-            let summary = match notice
+            let detail = notice
                 .detail
                 .as_deref()
                 .map(str::trim)
                 .filter(|detail| !detail.is_empty())
-            {
-                Some(detail) => format!(
-                    "Its screen shows: {title}\n\n{detail}\n\nSomeone has to answer it in that thread."
-                ),
-                None => {
-                    format!("Its screen shows: {title}\n\nSomeone has to answer it in that thread.")
-                }
-            };
+                .map(|detail| format!("{detail}\n\n"))
+                .unwrap_or_default();
+            let summary = format!(
+                "Its screen shows: {title}\n\n{detail}Someone has to answer it in that thread."
+            );
             return Some(Self {
                 prompt: ThreadPrompt {
                     key: format!("notice:{}:{}", notice.kind, notice.title),
