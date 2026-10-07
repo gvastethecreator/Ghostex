@@ -150,18 +150,32 @@ impl GhostexGpuiApp {
         );
         // CDXC:Docs 2026-10-01 WHY: the Show files button is the header row's last control, not a corner overlay drawn over the row's right end; a guessed reserve for the overlay let it cover the actions (the Open With arrow and Reload) whenever the row and the overlay disagreed.
         let restore = (!layout.visible()).then(|| self.render_native_docs_restore_button(p, cx));
-        let copy_title = title.clone();
+        // CDXC:Docs 2026-10-08 DECISION:
+        // User: "when i click here please lets copy the whole path not the file name". Clicking the top bar's file name copies the file's full path on its computer (the project folder joined with a project-relative path), supersedes the 2026-09-07 rule of copying the displayed name.
+        let copy_title: SharedString = {
+            let file = std::path::Path::new(&path);
+            if file.is_absolute() {
+                path.clone()
+            } else {
+                self.native_docs
+                    .project
+                    .as_ref()
+                    .map(|project| project.project_path.join(file).to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.clone())
+            }
+        }
+        .into();
         let tooltip: SharedString = if copied {
             "Copied!".into()
         } else if dirty {
             if cfg!(target_os = "macos") {
-                "Unsaved changes. Press ⌘S to save. Click to copy file name"
+                "Unsaved changes. Press ⌘S to save. Click to copy the full path"
             } else {
-                "Unsaved changes. Press Ctrl+S to save. Click to copy file name"
+                "Unsaved changes. Press Ctrl+S to save. Click to copy the full path"
             }
             .into()
         } else {
-            "Copy file name".into()
+            "Copy full path".into()
         };
         let reload_path = path.clone();
         let note_actions = if kind == DocsFileKind::Markdown {
