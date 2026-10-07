@@ -527,6 +527,8 @@ impl NativeChatView {
             SharedString::from(format!("{key}:text")),
             verbatim_fence(&content),
         )
+        // A row's first height must be its real one (`rich_markdown.rs`, `text_view`).
+        .parse_synchronously(true)
         .selectable(true)
         .style(style)
         .min_w_0()

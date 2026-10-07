@@ -409,6 +409,8 @@ impl NativeChatView {
         cx.notify();
     }
 
+    /// CDXC:SessionChat 2026-10-08 WHY:
+    /// User: scrolling up "just above the last message" jumped "to the top of the message above it". gpui's list measures a row once in the overdraw above the viewport and scrolls by that height, and a TextView over 4KB parsed in the background, so its first layout (and every one after its row left the list's drawn range, which drops the view's state) was empty and the long reply was cached a few pixels tall; the first wheel step into it landed near its top. Chat text therefore parses on the UI thread, so a row's first height is its real one.
     fn text_view(
         &self,
         id: String,
@@ -438,6 +440,7 @@ impl NativeChatView {
         };
         let header_wraps = wraps.clone();
         TextView::markdown(id, content)
+            .parse_synchronously(true)
             .when_some(self.row_find.clone(), |view, find| view.find(find))
             .min_w_0()
             .max_w(gpui::relative(1.0))
