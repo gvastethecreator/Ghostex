@@ -129,6 +129,10 @@ CDXC:Build 2026-09-23 WHY:
 The server removes its HTTP endpoint before its workers finish shutting down, and its mapped image can outlive process-path discovery. Retire a changed image outside the mirror, as with the persistent session provider, so installation does not depend on worker exit or race a reconnecting client. Keep an identical server executable out of the mirror.
 #>
 $RetiredNativeDir = Join-Path $InstallDir ".retired-native"
+# Images retired by earlier installs go once nothing runs them any more; Windows refuses to delete one still in use.
+if (Test-Path -LiteralPath $RetiredNativeDir -PathType Container) {
+    Get-ChildItem -LiteralPath $RetiredNativeDir -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+}
 $InstalledServer = Join-Path $InstallDir "resources/native/gxserver.exe"
 $StagedServer = Join-Path $StagedAppPath "resources/native/gxserver.exe"
 $KeepInstalledServer = (Test-Path -LiteralPath $InstalledServer -PathType Leaf) -and
@@ -158,13 +162,79 @@ if ((Test-Path -LiteralPath $StagedWmx -PathType Leaf) -and (Test-Path -LiteralP
 }
 # Exclude both trees when a staged app also contains retained runtime images.
 $MirrorExclusions = @('/XD', '.retired-native')
+$KeptFiles = @()
 if ($KeepInstalledServer) {
-    $MirrorExclusions += @('/XF', $StagedServer)
+    $KeptFiles += $StagedServer
 }
-& robocopy.exe $StagedAppPath $InstallDir /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:1 /NFL /NDL /NJH /NJS /NP @MirrorExclusions
+<#
+CDXC:Build 2026-10-07 WHY:
+Any helper can keep a binary of this install running or loaded after the app closes: a `ghostex web` server another session started from resources\native\ghostex.exe failed a whole install with robocopy exit code 11. Windows lets an in-use image be moved but not overwritten or deleted, so every executable, DLL or Node addon that the mirror would replace or remove and that cannot be opened for writing moves to .retired-native first, and the helper keeps running from there; one identical to the staged copy stays out of the mirror instead. gxserver.exe and wmx.exe keep their own rules above, and Ghostex.exe is never retired, so a still-running app fails the install by name.
+#>
+function Test-FileInUse([string]$Path) {
+    try {
+        [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None).Dispose()
+        return $false
+    } catch {
+        return $true
+    }
+}
+$InstallPrefix = $InstallDir + '\'
+$RetiredRunDir = Join-Path $RetiredNativeDir ([Guid]::NewGuid().ToString("N"))
+$OwnRules = @(".retired-native", "Ghostex.exe", "resources\native\gxserver.exe", "resources\native\wmx.exe")
+foreach ($InstalledPath in @([IO.Directory]::EnumerateFiles($InstallDir, "*", [IO.SearchOption]::AllDirectories))) {
+    if ([IO.Path]::GetExtension($InstalledPath) -notin @(".exe", ".dll", ".node")) { continue }
+    $Relative = $InstalledPath.Substring($InstallPrefix.Length)
+    if ($Relative -in $OwnRules -or $Relative.StartsWith(".retired-native\", [StringComparison]::OrdinalIgnoreCase)) { continue }
+    $StagedPath = Join-Path $StagedAppPath $Relative
+    $HasStaged = Test-Path -LiteralPath $StagedPath -PathType Leaf
+    $Installed = [IO.FileInfo]::new($InstalledPath)
+    if ($HasStaged) {
+        $Staged = [IO.FileInfo]::new($StagedPath)
+        # Robocopy skips a file with the same size and time, so it is never written.
+        if ($Staged.Length -eq $Installed.Length -and $Staged.LastWriteTimeUtc -eq $Installed.LastWriteTimeUtc) { continue }
+    }
+    if (-not (Test-FileInUse $InstalledPath)) { continue }
+    if ($HasStaged -and (Get-FileHash -LiteralPath $InstalledPath -Algorithm SHA256).Hash -eq (Get-FileHash -LiteralPath $StagedPath -Algorithm SHA256).Hash) {
+        $KeptFiles += $StagedPath
+        Write-Host "Kept $Relative in place: it is in use and already matches the rebuilt file"
+        continue
+    }
+    $RetiredPath = Join-Path $RetiredRunDir $Relative
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $RetiredPath) | Out-Null
+    try {
+        Move-Item -LiteralPath $InstalledPath -Destination $RetiredPath
+    } catch {
+        throw "$InstalledPath is in use and could not be moved aside before installing: $($_.Exception.Message)"
+    }
+    $Holders = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [string]::Equals($_.Path, $InstalledPath, [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { "$($_.ProcessName) (pid $($_.Id))" })
+    $HeldBy = if ($Holders.Count -gt 0) { " (in use by $($Holders -join ', '))" } else { " (in use)" }
+    Write-Host "Moved $Relative to $RetiredRunDir$HeldBy; it keeps running from there"
+}
+if ($KeptFiles.Count -gt 0) {
+    $MirrorExclusions += @('/XF') + $KeptFiles
+}
+$RobocopyOutput = @(& robocopy.exe $StagedAppPath $InstallDir /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:1 /NFL /NDL /NJH /NJS /NP @MirrorExclusions | ForEach-Object { "$_" })
 $RobocopyExitCode = $LASTEXITCODE
 if ($RobocopyExitCode -gt 7) {
-    throw "Installing Ghostex into $InstallDir failed with robocopy exit code $RobocopyExitCode."
+    # Robocopy reports each failure as "<time> ERROR <code> (0x...) <action> <path>" followed by the Windows message.
+    $Failures = @()
+    for ($Index = 0; $Index -lt $RobocopyOutput.Count; $Index++) {
+        $Match = [regex]::Match($RobocopyOutput[$Index], 'ERROR \d+ \(0x[0-9A-Fa-f]+\) (?<what>.+)$')
+        if (-not $Match.Success) { continue }
+        # "Copying File" names the staged source; the file that failed is its installed copy.
+        $What = $Match.Groups["what"].Value.Trim().Replace($StagedAppPath.TrimEnd('\') + '\', $InstallPrefix)
+        $Reason = if ($Index + 1 -lt $RobocopyOutput.Count) { $RobocopyOutput[$Index + 1].Trim() } else { "" }
+        $Failure = "  $What"
+        if ($Reason) { $Failure += ": $Reason" }
+        $FailedPath = [regex]::Match($What, '[A-Za-z]:\\.+$').Value
+        if ($FailedPath) {
+            $Holders = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and [string]::Equals($_.Path, $FailedPath, [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { "$($_.ProcessName) (pid $($_.Id))" })
+            if ($Holders.Count -gt 0) { $Failure += " Held by $($Holders -join ', ')." }
+        }
+        if ($Failures -notcontains $Failure) { $Failures += $Failure }
+    }
+    $Detail = if ($Failures.Count -gt 0) { "`n" + ($Failures -join "`n") } else { "`n" + (($RobocopyOutput | Where-Object { $_.Trim() }) -join "`n") }
+    throw "Installing Ghostex into $InstallDir failed with robocopy exit code $RobocopyExitCode.$Detail"
 }
 if (-not (Test-Path -LiteralPath $InstalledExecutable -PathType Leaf)) {
     throw "The installed Ghostex executable is missing: $InstalledExecutable"
