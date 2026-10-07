@@ -144,6 +144,10 @@ pub(super) fn hermes_input_region(lines: &[String]) -> Option<Range<usize>> {
 /// OMP's box composer draws its statusline into the top border, and that line changes with the symbol preset (`π >` with Unicode symbols, `󰵗` and powerline glyphs with Nerd Font) and turns into a spinner mid-turn. Requiring `π` and `>` there read a Nerd Font OMP as never ready, so its first chat message waited in the queue forever.
 /// The frame is the signature instead: OMP merges the input's last row into the foot (`╰─ text ─╯`), while its dialogs and welcome card close with a solid box rule.
 pub(super) fn omp_input_region(lines: &[String]) -> Option<Range<usize>> {
+    omp_box_input_region(lines).or_else(|| omp_band_input_region(lines))
+}
+
+fn omp_box_input_region(lines: &[String]) -> Option<Range<usize>> {
     let foot = lines.iter().rposition(|line| !line.trim().is_empty())?;
     let interior = lines[foot].trim().strip_prefix('╰')?.strip_suffix('╯')?;
     if !interior.starts_with('─')
@@ -164,6 +168,37 @@ pub(super) fn omp_input_region(lines: &[String]) -> Option<Range<usize>> {
         return None;
     }
     Some(head + 1..foot + 1)
+}
+
+/// The cue OMP's status band composer draws at column 0 of the input's first row; later rows are indented three spaces.
+const OMP_BAND_CUE: &str = "╰─";
+
+/// CDXC:AgentScreenDetection 2026-10-07 WHY:
+/// OMP 18.0.10 made the status band its default composer shape (`composer.shape: band`, also offered first by its setup wizard): the statusline is a flush row above an unframed input whose first row starts with `╰─ ` and has no `╭` head or `╯` corner. Reading only the rounded box called every default OMP "not on screen yet", so chat messages never reached its terminal and users pasted them in by hand.
+/// The cue is OMP's own literal gutter, not a themed glyph, and its overlays and tool frames close with `╰───╯` rules, so a `╰─` row whose rest is not a rule, with no frame drawn under it, is the live input. The row above it is the band (empty while the statusline starts). The slash-command list OMP opens under the input is not indented, so the input ends at the last indented row.
+fn omp_band_input_region(lines: &[String]) -> Option<Range<usize>> {
+    let last = lines.iter().rposition(|line| !line.trim().is_empty())?;
+    let cue = lines[..=last]
+        .iter()
+        .rposition(|line| line.starts_with(OMP_BAND_CUE))?;
+    let rest = lines[cue][OMP_BAND_CUE.len()..].trim_end();
+    if cue == 0
+        || rest.starts_with(|c| ('\u{2500}'..='\u{257f}').contains(&c))
+        || rest.ends_with('╯')
+        || lines[cue + 1..=last]
+            .iter()
+            .any(|line| line.trim_start().starts_with(['╭', '╰', '│']))
+    {
+        return None;
+    }
+    let rows = lines[cue + 1..=last]
+        .iter()
+        .take_while(|line| line.starts_with("   ") || line.trim().is_empty())
+        .count();
+    let end = (cue + 1..=cue + rows)
+        .rfind(|&row| !lines[row].trim().is_empty())
+        .unwrap_or(cue);
+    Some(cue..end + 1)
 }
 
 /// CDXC:AgentScreenDetection 2026-10-01 WHY:
@@ -587,17 +622,26 @@ pub fn session_chat_composer_input(agent: &str, screen: &str) -> Option<SessionC
     }
     let plain: Vec<_> = lines.iter().map(|line| line.text.clone()).collect();
     if matches!(agent, "pi" | "omp" | "zcode") {
-        let region = if agent == "zcode" {
-            zcode_input_region(&plain)?
+        let (region, omp_band) = if agent == "zcode" {
+            (zcode_input_region(&plain)?, false)
         } else if agent == "pi" {
-            unmarked_rule_input_region(&plain)?
+            (unmarked_rule_input_region(&plain)?, false)
+        } else if let Some(region) = omp_box_input_region(&plain) {
+            (region, false)
         } else {
-            omp_input_region(&plain)?
+            (omp_band_input_region(&plain)?, true)
         };
         let text = plain[region.clone()]
             .iter()
             .map(|line| {
-                if agent == "omp" {
+                if omp_band {
+                    // The band's first row carries the `╰─ ` cue, later rows a three-space indent.
+                    let row = match line.strip_prefix(OMP_BAND_CUE) {
+                        Some(row) => row.strip_prefix(' ').unwrap_or(row),
+                        None => line.strip_prefix("   ").unwrap_or(line),
+                    };
+                    row.trim_end().to_string()
+                } else if agent == "omp" {
                     // OMP merges its final input row into ╰─ text ─╯.
                     let line = line.trim();
                     let inner = line

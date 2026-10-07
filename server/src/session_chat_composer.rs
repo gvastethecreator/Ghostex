@@ -65,7 +65,7 @@ pub(crate) fn hermes_composer_row(screen_text: &str) -> Option<usize> {
     input::hermes_input_region(&raw_lines).map(|region| region.start)
 }
 
-/// The row OMP's live box composer's `╭` top border sits on, found by the frame shape `omp_input_region` reads, or `None` when it is not on screen.
+/// The row above OMP's live composer (the box's `╭` top border, or the status band over the band shape's `╰─` row), found by the shape `omp_input_region` reads, or `None` when it is not on screen.
 pub(crate) fn omp_composer_head_row(lines: &[String]) -> Option<usize> {
     input::omp_input_region(lines).map(|region| region.start - 1)
 }
@@ -301,7 +301,8 @@ fn composer_signature(agent: &str) -> Option<ComposerSignature> {
         "cursor" => ComposerSignature::HalfBlockFrame { marker: '\u{2192}' },
         // `┃` rows over a `╹▀▀▀▀` foot; mid-screen when fresh.
         "opencode" => ComposerSignature::HeavyBarFoot,
-        // Two-line rounded box at the bottom with the statusline in its border.
+        // Two-line rounded box at the bottom with the statusline in its border;
+        // readiness reads the box and the default band shape through `omp_input_region`.
         "omp" => ComposerSignature::TrailingRoundedFoot,
         // Three-line rounded box with a `>` input marker.
         "gemini" => ComposerSignature::ShortRoundedBoxMarker { marker: '>' },
