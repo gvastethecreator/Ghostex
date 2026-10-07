@@ -272,9 +272,18 @@ fn read_session_chat_statusline_selection(
     hook_state_directory: &Path,
     agent_session_id: Option<&str>,
 ) -> Option<SessionChatDetectedSelection> {
+    read_claude_statusline_reading(hook_state_directory, agent_session_id?)
+        .map(|(selection, _)| selection)
+}
+
+/// Claude's last statusline payload as a selection, with the time Ghostex stored it.
+pub(crate) fn read_claude_statusline_reading(
+    hook_state_directory: &Path,
+    agent_session_id: &str,
+) -> Option<(SessionChatDetectedSelection, String)> {
     let stored = crate::agent_hooks::statusline::read_claude_statusline_payload(
         hook_state_directory,
-        agent_session_id?,
+        agent_session_id,
     )?;
     let payload = &stored.payload;
     let choice = |value: &str, label: &str| SessionChatDetectedChoice {
@@ -325,7 +334,7 @@ fn read_session_chat_statusline_selection(
         || selection.effort.is_some()
         || selection.context_usage.is_some()
         || selection.claude_status.is_some())
-    .then_some(selection)
+    .then_some((selection, stored.updated_at))
 }
 
 /*
@@ -808,7 +817,15 @@ pub(crate) fn detect_session_chat_stored_options(
     );
     let launch =
         read_session_chat_launch_selection(repository, project_id, session_id, Some(agent));
+    let remembered =
+        read_session_chat_remembered_selection(repository, project_id, session_id, agent);
     merge_session_chat_option_selections(launch, transcript, statusline, None)
+        .map(|mut selection| {
+            if let Some(remembered) = remembered {
+                overlay_session_chat_option_selection(&mut selection, remembered);
+            }
+            selection
+        })
         .map(|mut selection| {
             crate::session_chat_hermes_status::restore_hermes_model_id(&mut selection);
             selection

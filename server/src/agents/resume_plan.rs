@@ -316,10 +316,12 @@ pub(crate) fn to_agent_resume_input(
     }
 }
 
-/// A resumed or woken Claude, Codex or Cursor session whose command names no model comes back on
-/// the model it last reported, or else the remembered default, so the pill shows it at once and the
-/// agent runs exactly that (CDXC:AgentProviders 2026-10-07 in agent_model_pins.rs). A command that
-/// names one is the session's own choice: a chat pick rewrites it, and it is kept.
+/// A resumed or woken Claude, Codex or Cursor session comes back on the conversation's own model
+/// and effort (CDXC:SessionChat 2026-10-08 in agent_model_pins.rs), which replace the flags its
+/// saved command was launched with: a `/model` typed in its terminal, or a chat pick on a session
+/// whose account command a pick never rewrote, otherwise came back on the launch model. With
+/// nothing remembered, a command that names a model keeps it, and one that names none starts on
+/// the agent's default (CDXC:AgentProviders 2026-10-07).
 fn with_resume_model_pin(
     family: Option<&str>,
     project: &Value,
@@ -329,17 +331,27 @@ fn with_resume_model_pin(
     let Some(family) = family.and_then(crate::agent_model_pins::pin_family) else {
         return command;
     };
-    if command_names_model(&command, family) {
-        return command;
-    }
-    let reading = read_text_value(session, "projectId")
+    let agent_session_id = session
+        .pointer("/runtimeSettings/agentSessionId")
+        .and_then(Value::as_str);
+    let remembered = read_text_value(session, "projectId")
         .or_else(|| read_text_value(project, "projectId"))
         .zip(read_text_value(session, "sessionId"))
         .and_then(|(project_id, session_id)| {
-            crate::agent_model_pins::session_reading(&project_id, &session_id)
+            crate::agent_model_pins::session_choice(
+                &project_id,
+                &session_id,
+                family,
+                agent_session_id,
+            )
         });
-    let Some(pin) = reading.or_else(|| crate::agent_model_pins::launch_default(family)) else {
-        return command;
+    let pin = match remembered {
+        Some(pin) => pin,
+        None if command_names_model(&command, family) => return command,
+        None => match crate::agent_model_pins::launch_default(family) {
+            Some(pin) => pin,
+            None => return command,
+        },
     };
     let effort = pin.effort.as_deref().filter(|_| family != "cursor");
     with_agent_model_options(&command, family, Some(&pin.model), effort).unwrap_or(command)

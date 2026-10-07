@@ -23,10 +23,11 @@ pub(crate) fn read_session_chat_launch_selection(
         .then_some(selection)
 }
 
-/// What the next launch of this session runs that its command line does not spell out: a command
-/// with no model is resumed or woken on the model the session last reported (see
-/// `with_resume_model_pin`), and Cursor's effort is the one it keeps for the pinned model.
-/// SEE-ALSO: CDXC:AgentProviders 2026-10-07 in agent_model_pins.rs.
+/// What the next launch of this session runs that its command line does not spell out, or runs
+/// instead of what it spells out: a resume or wake is launched on the conversation's remembered
+/// model and effort (see `with_resume_model_pin`), and Cursor's effort is the one it keeps for the
+/// pinned model.
+/// SEE-ALSO: CDXC:SessionChat 2026-10-08 and CDXC:AgentProviders 2026-10-07 in agent_model_pins.rs.
 fn with_remembered_launch_choice(
     agent: SessionChatOptionAgent,
     session: &Value,
@@ -34,22 +35,13 @@ fn with_remembered_launch_choice(
     session_id: &str,
     selection: &mut SessionChatDetectedSelection,
 ) {
-    let family = match agent {
-        SessionChatOptionAgent::Claude => "claude",
-        SessionChatOptionAgent::Codex => "codex",
-        SessionChatOptionAgent::Cursor => "cursor",
-        _ => return,
+    let Some(family) = pinned_family(agent) else {
+        return;
     };
-    let reading = crate::agent_model_pins::session_reading(project_id, session_id);
-    if selection.model.is_none() {
-        if let Some(reading) = reading.as_ref() {
-            selection.model = launch_model_choice(family, &reading.model);
-            if selection.effort.is_none() {
-                selection.effort = reading
-                    .effort
-                    .as_deref()
-                    .and_then(|effort| launch_effort_choice(family, effort));
-            }
+    if let Some(remembered) = remembered_selection(family, session, project_id, session_id) {
+        selection.model = remembered.model;
+        if remembered.effort.is_some() {
+            selection.effort = remembered.effort;
         }
         return;
     }
@@ -61,17 +53,55 @@ fn with_remembered_launch_choice(
         "/runtimeSettings/{}",
         crate::agent_model_pins::SESSION_PIN_KEY
     ));
-    let marker_effort = marker
+    selection.effort = marker
         .filter(|marker| marker.get("model").and_then(Value::as_str) == model.as_deref())
         .and_then(|marker| marker.get("effort"))
         .and_then(Value::as_str)
-        .map(str::to_string);
-    let reading_effort = reading
-        .filter(|reading| Some(reading.model.as_str()) == model.as_deref())
-        .and_then(|reading| reading.effort);
-    selection.effort = marker_effort
-        .or(reading_effort)
-        .and_then(|effort| launch_effort_choice(family, &effort));
+        .and_then(|effort| launch_effort_choice(family, effort));
+}
+
+/// The conversation's remembered model and effort alone. A slept session's transcript and
+/// statusline must not outrank them in its pills, because its next wake runs them.
+pub(crate) fn read_session_chat_remembered_selection(
+    repository: &DomainRepository<'_>,
+    project_id: &str,
+    session_id: &str,
+    agent: SessionChatOptionAgent,
+) -> Option<SessionChatDetectedSelection> {
+    let family = pinned_family(agent)?;
+    let session = repository.get_session(project_id, session_id).ok()??;
+    remembered_selection(family, &session, project_id, session_id)
+}
+
+fn pinned_family(agent: SessionChatOptionAgent) -> Option<&'static str> {
+    match agent {
+        SessionChatOptionAgent::Claude => Some("claude"),
+        SessionChatOptionAgent::Codex => Some("codex"),
+        SessionChatOptionAgent::Cursor => Some("cursor"),
+        _ => None,
+    }
+}
+
+fn remembered_selection(
+    family: &str,
+    session: &Value,
+    project_id: &str,
+    session_id: &str,
+) -> Option<SessionChatDetectedSelection> {
+    let agent_session_id = session
+        .pointer("/runtimeSettings/agentSessionId")
+        .and_then(Value::as_str);
+    let choice =
+        crate::agent_model_pins::session_choice(project_id, session_id, family, agent_session_id)?;
+    Some(SessionChatDetectedSelection {
+        model: launch_model_choice(family, &choice.model),
+        effort: choice
+            .effort
+            .as_deref()
+            .and_then(|effort| launch_effort_choice(family, effort)),
+        ..SessionChatDetectedSelection::default()
+    })
+    .filter(|selection| selection.model.is_some())
 }
 
 /// The options one agent command line names, read word by word so a quoted prompt or another

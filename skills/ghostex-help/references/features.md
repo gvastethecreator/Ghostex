@@ -1105,7 +1105,10 @@ New Claude Code and Codex sessions start on the model and reasoning level you
 last saved as that agent's default, so the pill names it as soon as the chat
 opens; a choice for this session only never becomes the default. Cursor CLI has
 no session-only choice, so a new Cursor session starts on the model you used
-last. A session you wake or resume comes back on the model it was last using.
+last. Each conversation remembers its own model and reasoning level: one you
+wake or resume comes back on what it was last using, including a choice made
+for that session only or with `/model` in its terminal, and its pill shows it
+as soon as you open it.
 If you change an agent's default outside Ghostex (for example with `/model` in
 a plain terminal), the next new session starts on that agent's own default and
 Ghostex remembers it from then on.

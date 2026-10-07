@@ -1193,6 +1193,12 @@ fn persist_session_chat_model_resume(
     if !session_only {
         crate::agent_model_pins::record_default(&agent, pin.clone());
     }
+    crate::agent_model_pins::record_session_choice(
+        &target.project_id,
+        &target.session_id,
+        &agent,
+        pin.clone(),
+    );
     let db =
         crate::storage::open_gxserver_database(&state.paths).map_err(|error| DomainStateError {
             code: "internalError",

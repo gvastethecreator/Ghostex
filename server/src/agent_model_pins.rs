@@ -80,6 +80,8 @@ struct PinFile {
 
 struct PinStore {
     path: Option<PathBuf>,
+    /// Where Claude's statusline payloads land, read by [`session_choice`].
+    hook_state_directory: Option<PathBuf>,
     file: PinFile,
 }
 
@@ -88,6 +90,7 @@ fn store() -> &'static Mutex<PinStore> {
     STORE.get_or_init(|| {
         Mutex::new(PinStore {
             path: None,
+            hook_state_directory: None,
             file: PinFile::default(),
         })
     })
@@ -102,6 +105,8 @@ pub(crate) fn init(paths: &crate::paths::GxserverPaths) {
         .unwrap_or_default();
     if let Ok(mut store) = store().lock() {
         store.path = Some(path);
+        store.hook_state_directory =
+            Some(crate::session_chat_options::session_chat_hook_state_directory(paths));
         store.file = file;
     }
 }
@@ -142,15 +147,90 @@ pub(crate) fn launch_default(family: &str) -> Option<ModelPin> {
     (remembered.settings == settings_snapshot(family)).then_some(remembered.pin)
 }
 
-/// What this session last reported running, which its next resume or wake is pinned to.
-pub(crate) fn session_reading(project_id: &str, session_id: &str) -> Option<ModelPin> {
-    store()
-        .lock()
-        .ok()?
+/// The model and effort this conversation runs next: what it last ran, or what the user last
+/// picked for it. Its resume and wake are launched on it and its pill shows it, so both agree
+/// before the agent reports anything.
+///
+/// CDXC:SessionChat 2026-10-08 DECISION:
+/// User: "we should cache the last used model and effort in each conversation fam for the composer since we basically keep that when we resume right?" Each conversation keeps its own last model and effort, here in gxserver so desktop, web and phone read the same value: the last live reading, a chat pick for it (a session-only pick included) the moment it is applied, and a `/model` typed in its terminal ("follow the outside change"). It beats the `--model`/`--effort` its saved command was launched with, which only a chat pick rewrote, so before this a slept conversation could come back on its launch model. New sessions still start on the agent-wide default (CDXC:AgentProviders 2026-10-07 above).
+/// SEE-ALSO: agents/resume_plan.rs `with_resume_model_pin` (the relaunch), session_chat_options/launch_selection.rs (the pill), session_chat_codex_picker.rs (a pick records it).
+pub(crate) fn session_choice(
+    project_id: &str,
+    session_id: &str,
+    family: &str,
+    agent_session_id: Option<&str>,
+) -> Option<ModelPin> {
+    let family = pin_family(family)?;
+    let (reading, hook_state_directory) = {
+        let store = store().lock().ok()?;
+        let reading = store
+            .file
+            .sessions
+            .get(&session_key(project_id, session_id))
+            .filter(|reading| reading.family.is_empty() || reading.family == family)
+            .cloned();
+        (reading, store.hook_state_directory.clone())
+    };
+    // Claude writes its statusline on every model or effort change, also while no chat follows the
+    // session (a `/model` typed in the terminal pane), so a payload newer than the reading wins.
+    let statusline = (family == "claude")
+        .then_some(())
+        .and(hook_state_directory.zip(agent_session_id))
+        .and_then(|(directory, agent_session_id)| {
+            crate::session_chat_options::read_claude_statusline_reading(
+                &directory,
+                agent_session_id,
+            )
+        })
+        .filter(|(_, written_at)| {
+            reading
+                .as_ref()
+                .is_none_or(|reading| written_at.as_str() > reading.recorded_at.as_str())
+        })
+        .and_then(|(selection, _)| live_pin(&selection.model, &selection.effort));
+    match (statusline, reading) {
+        (Some(mut newer), reading) => {
+            if newer.effort.is_none() {
+                newer.effort = reading
+                    .filter(|reading| reading.pin.model == newer.model)
+                    .and_then(|reading| reading.pin.effort);
+            }
+            Some(newer)
+        }
+        (None, reading) => reading.map(|reading| reading.pin),
+    }
+}
+
+/// A pick applied in the chat is this conversation's choice at once, so a session slept before
+/// the agent repaints still comes back on it.
+pub(crate) fn record_session_choice(
+    project_id: &str,
+    session_id: &str,
+    family: &str,
+    pin: ModelPin,
+) {
+    let Some(family) = pin_family(family) else {
+        return;
+    };
+    let Ok(mut store) = store().lock() else {
+        return;
+    };
+    let key = session_key(project_id, session_id);
+    let old = store
         .file
         .sessions
-        .get(&session_key(project_id, session_id))
-        .map(|reading| reading.pin.clone())
+        .get(&key)
+        .map(|reading| reading.pin.clone());
+    store.file.sessions.insert(
+        key,
+        SessionReading {
+            family: family.to_string(),
+            pin: with_known_labels(pin, old.as_ref()),
+            recorded_at: crate::agents::now_iso(),
+        },
+    );
+    prune_sessions(&mut store.file.sessions);
+    save(&store);
 }
 
 /// The label the agent itself shows for this model, so a launch value reads exactly like the

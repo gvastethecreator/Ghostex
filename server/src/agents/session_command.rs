@@ -365,10 +365,16 @@ fn validate_model_option_command(command: &str) -> Result<(), DomainStateError> 
             "Model and effort overrides require a single agent command without shell operators, command substitutions, comments, or line continuations.",
         )
     };
+    // CDXC:AgentProviders 2026-10-08 WHY: a Windows account session's command starts with PowerShell's call operator (`& 'C:\…\cswap.exe' run '3' --share-history -- …`, see accounts/launch.rs), which is not a shell operator. Refusing it left every chat pick off those sessions' saved command (logged as `sessionChatModelResumeCommandUnchanged`) and their resume back on the launch model.
+    let command = command.trim();
+    let command = command
+        .strip_prefix("& ")
+        .filter(|_| cfg!(windows))
+        .unwrap_or(command);
     let mut quote = None;
     let mut escaped = false;
     let mut word_start = true;
-    let mut chars = command.trim().chars().peekable();
+    let mut chars = command.chars().peekable();
     while let Some(ch) = chars.next() {
         if escaped {
             if matches!(ch, '\n' | '\r') {
