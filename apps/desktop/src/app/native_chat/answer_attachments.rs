@@ -89,37 +89,20 @@ impl NativeChatView {
         cx.notify();
     }
 
+    /// The answer field's pills and image tiles, parsed in the paint by the core's own pure parser,
+    /// as the composer's are (`CDXC:SessionChat` on `sync_composer_references`).
     pub(super) fn sync_answer_references(&mut self, p: &ChatAppearance, cx: &mut Context<Self>) {
         let Some((_, input)) = self.async_answer_input.clone() else {
             return;
         };
         let text = input.read(cx).value().to_string();
         if self.async_answer_echo.reference_draft.as_deref() != Some(&text) {
-            let parsed = self.runtime.as_ref().and_then(|runtime| {
-                runtime.query(
-                    "composerReferences",
-                    vec![json!(text), json!(true)],
-                    Duration::from_millis(40),
-                )
-            });
-            let Some(parsed) = parsed else {
-                if self.runtime.is_some() && self.async_answer_echo.reference_retry.is_none() {
-                    self.async_answer_echo.reference_retry =
-                        Some(cx.spawn(async move |this, cx| {
-                            cx.background_executor()
-                                .timer(Duration::from_millis(30))
-                                .await;
-                            let _ = this.update(cx, |this, cx| {
-                                this.async_answer_echo.reference_retry = None;
-                                cx.notify();
-                            });
-                        }));
-                }
-                return;
-            };
+            let parsed = serde_json::to_value(
+                ghostex_gx_chat_core::composer::queries::composer_references(&text),
+            )
+            .unwrap_or(Value::Null);
             self.async_answer_echo.references = composer_references::parse(&text, &parsed);
             self.async_answer_echo.reference_draft = Some(text);
-            self.async_answer_echo.reference_retry = None;
             self.async_answer_echo.hovered_image = None;
             self.cancel_composer_reference_open();
         }
