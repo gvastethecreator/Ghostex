@@ -195,14 +195,61 @@ pub fn fold_shell_commands(messages: &[ChatMessage]) -> Vec<ChatMessage> {
             index += 1;
             continue;
         };
+        // Claude writes a prompt queued meanwhile ahead of the command's own two rows, so a queue
+        // row can sit between them; the output still belongs to the command.
+        let mut next = index + 1;
+        while messages.get(next).is_some_and(|row| row.queued) {
+            next += 1;
+        }
         let output = messages
-            .get(index + 1)
-            .filter(|next| next.role == ChatRole::User)
-            .and_then(|next| shell_command_output(&joined_text(next)));
-        index += if output.is_some() { 2 } else { 1 };
-        folded.push(shell_command_message(message, &command, output));
+            .get(next)
+            .filter(|row| row.role == ChatRole::User)
+            .and_then(|row| shell_command_output(&joined_text(row)));
+        folded.push(shell_command_message(message, &command, output.clone()));
+        if output.is_some() {
+            folded.extend(messages[index + 1..next].iter().cloned());
+            index = next + 1;
+        } else {
+            index += 1;
+        }
     }
     folded
+}
+
+/// A `!` line sent while the agent was busy waits in Claude's own queue, and Claude records the
+/// queue entry without its `!`. While the line's echo stands in as its Shell card, that queue row is
+/// the same send a second time, so it is left out; the command's own rows replace the echo once the
+/// queue releases it.
+pub fn without_shell_echo_queue_rows(
+    transcript: Vec<ChatMessage>,
+    pending: &[ChatMessage],
+) -> Vec<ChatMessage> {
+    let commands: Vec<String> = pending
+        .iter()
+        .filter(|message| is_shell_command_message(message))
+        .filter_map(|message| match message.blocks.first() {
+            Some(ChatBlock::ToolCall { input, .. }) => input
+                .get("command")
+                .and_then(serde_json::Value::as_str)
+                .map(collapse_spaces),
+            _ => None,
+        })
+        .collect();
+    if commands.is_empty() {
+        return transcript;
+    }
+    transcript
+        .into_iter()
+        .filter(|message| {
+            !(message.queued
+                && message.role == ChatRole::User
+                && commands.contains(&collapse_spaces(&joined_text(message))))
+        })
+        .collect()
+}
+
+fn collapse_spaces(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// How far before gxserver's estimate of a running command's start its recorded row may be stamped

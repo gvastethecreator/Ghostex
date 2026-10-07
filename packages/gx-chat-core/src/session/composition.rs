@@ -284,7 +284,10 @@ pub fn compose(
         state.pending.terminal_shell.as_ref(),
         &boundaried,
     );
-    let transcript = reconcile_local_command_output(&boundaried, &state.session.app_commands);
+    let transcript = crate::transcript::local_command::without_shell_echo_queue_rows(
+        reconcile_local_command_output(&boundaried, &state.session.app_commands),
+        &pending_messages,
+    );
 
     // A marker whose text an authoritative user row already carries is the same fact twice.
     let authoritative_text: Vec<String> = boundaried
