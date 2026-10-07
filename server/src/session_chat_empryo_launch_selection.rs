@@ -27,19 +27,40 @@ pub(crate) fn empryo_launch_model(model: Option<&str>) -> Result<&str, DomainSta
         })
 }
 
-/// Writes `<cwd>/.empryo/sessions/<new id>/` with one tab on `model` (without one, on whatever
-/// default Empryo resolves for the folder), the minimum `--session` resumes (a `meta.json` index and
-/// the `session.jsonl` log it replays), and returns the id.
+/// The model Empryo starts a new tab in `cwd` on: the folder's `.empryo/config.json`
+/// `defaultModel`, else the user's. `None` when neither names one.
+fn empryo_default_model(cwd: &Path) -> Option<String> {
+    let hook_paths =
+        crate::agent_hooks::config::HookPaths::from_paths(&crate::paths::get_gxserver_paths(None));
+    [
+        cwd.join(".empryo"),
+        crate::agent_hooks::config::empryo_home(&hook_paths),
+    ]
+    .iter()
+    .find_map(|dir| crate::session_chat_pi_models::empryo_config_default_model(dir))
+}
+
+/// Writes `<cwd>/.empryo/sessions/<new id>/` with one tab on `model` (without one, on the folder's
+/// default model, [`empryo_default_model`]), the minimum `--session` resumes (a `meta.json` index and
+/// the `session.jsonl` log it replays), records the id and log on the session row and returns the
+/// id. The log is recorded up front because a window that joins another session's engine never
+/// sends hooks of its own (session_chat_empryo_tabs.rs).
 pub(crate) fn seed_empryo_launch_session(
     cwd: &Path,
     model: Option<&str>,
+    runtime_settings: &mut Map<String, Value>,
 ) -> Result<String, DomainStateError> {
     let session_id = uuid::Uuid::new_v4().to_string();
     let tab_id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp_millis();
     let cwd_text = cwd.to_string_lossy();
     let mut tab = json!({ "label": "TAB-1", "forgeMode": "default" });
-    if let Some(model) = model {
+    // A window that joins another session's engine opens its tab on the tab's own model, and a
+    // tab with none drops every prompt (seen live on 3.9.1-beta), so the default is written in.
+    if let Some(model) = model
+        .map(str::to_string)
+        .or_else(|| empryo_default_model(cwd))
+    {
         tab["activeModel"] = json!(model);
     }
     let mut meta_tab = tab.clone();
@@ -87,6 +108,11 @@ pub(crate) fn seed_empryo_launch_session(
         let _ = std::fs::remove_dir_all(&folder);
         return Err(failed(error));
     }
+    runtime_settings.insert("agentSessionId".to_string(), json!(session_id));
+    runtime_settings.insert(
+        "agentSessionPath".to_string(),
+        json!(folder.join("session.jsonl").to_string_lossy()),
+    );
     Ok(session_id)
 }
 

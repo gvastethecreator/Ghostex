@@ -107,6 +107,7 @@ pub mod session_chat_empryo_command;
 pub(crate) mod session_chat_empryo_launch_selection;
 pub mod session_chat_empryo_mirror;
 pub mod session_chat_empryo_question;
+pub mod session_chat_empryo_tabs;
 pub mod session_chat_files;
 pub(crate) mod session_chat_fleet_process;
 pub(crate) mod session_chat_fleet_progress;

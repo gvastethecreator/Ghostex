@@ -143,7 +143,12 @@ pub(crate) async fn read_empryo_terminal_draft(
         session_id,
         zmx_name,
         "session-chat-draft-handoff",
-        vec![SessionChatSendStep::ReadEmpryoDraft],
+        vec![
+            SessionChatSendStep::SelectEmpryoTab {
+                wait_ms: crate::session_chat_empryo_tabs::EMPRYO_SEND_TAB_WAIT_MS,
+            },
+            SessionChatSendStep::ReadEmpryoDraft,
+        ],
         Some(completion_tx),
         Some(draft_tx),
         None,

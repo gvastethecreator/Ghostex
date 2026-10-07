@@ -130,7 +130,7 @@ pub(crate) fn create_agent_session_params_for_project(
     }
     /*
     CDXC:SessionIdentity 2026-10-07 WHY:
-    A plain Empryo launch ran bare `empryo`, which reopens the folder's latest session: the row never learned an agent session id (its chat had no transcript), and a second launch in the same repo shared the first one's session (seen live on 3.9.1-beta). Every new local Empryo session gets a seeded folder of its own, as a launch model's does, with no model in its tab so Empryo opens it on the folder's current default. Resume and fork arrive with their id and keep it.
+    A plain Empryo launch ran bare `empryo`, which reopens the folder's latest session: the row never learned an agent session id (its chat had no transcript), and a second launch in the same repo shared the first one's session (seen live on 3.9.1-beta). Every new local Empryo session gets a seeded folder of its own, as a launch model's does, on the folder's current default model. Resume and fork arrive with their id and keep it.
     */
     let empryo_session_id = match empryo_session_id {
         None if agentbox_provider.is_none()
@@ -142,8 +142,8 @@ pub(crate) fn create_agent_session_params_for_project(
             let id = crate::session_chat_empryo_launch_selection::seed_empryo_launch_session(
                 &empryo_cwd(params, project)?,
                 None,
+                &mut runtime_settings,
             )?;
-            runtime_settings.insert("agentSessionId".to_string(), json!(id));
             Some(id)
         }
         seeded => seeded,
@@ -442,9 +442,11 @@ fn apply_requested_agent_model(
     if family == "empryo" {
         use crate::session_chat_empryo_launch_selection as launch;
         let model = launch::empryo_launch_model(model.as_deref())?;
-        let session_id =
-            launch::seed_empryo_launch_session(&empryo_cwd(params, project)?, Some(model))?;
-        runtime_settings.insert("agentSessionId".to_string(), json!(session_id));
+        let session_id = launch::seed_empryo_launch_session(
+            &empryo_cwd(params, project)?,
+            Some(model),
+            runtime_settings,
+        )?;
         if let Some(effort) = effort.as_deref() {
             launch::record_empryo_launch_effort(runtime_settings, model, effort);
         }

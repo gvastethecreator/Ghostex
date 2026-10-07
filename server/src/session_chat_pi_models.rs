@@ -244,20 +244,10 @@ fn pinned_models(agent: PiFamilyAgent, home: &Path) -> (Option<String>, Vec<Stri
             (omp_default_role(&config), Vec::new())
         }
         // A project's own `.empryo/config.json` can name another; the lineup is the user's.
-        PiFamilyAgent::Empryo => {
-            let default = std::fs::read(home.join(".empryo").join("config.json"))
-                .ok()
-                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-                .and_then(|config| {
-                    config
-                        .get("defaultModel")?
-                        .as_str()
-                        .map(str::trim)
-                        .filter(|model| !model.is_empty() && *model != "none")
-                        .map(str::to_string)
-                });
-            (default, Vec::new())
-        }
+        PiFamilyAgent::Empryo => (
+            empryo_config_default_model(&home.join(".empryo")),
+            Vec::new(),
+        ),
     }
 }
 
@@ -306,6 +296,18 @@ fn empryo_model_rows(output: &str) -> Vec<LineupModel> {
         });
     }
     rows
+}
+
+/// The `defaultModel` (`provider/model`) of the Empryo `config.json` in `dir`.
+pub(crate) fn empryo_config_default_model(dir: &Path) -> Option<String> {
+    let config: Value =
+        serde_json::from_slice(&std::fs::read(dir.join("config.json")).ok()?).ok()?;
+    config
+        .get("defaultModel")?
+        .as_str()
+        .map(str::trim)
+        .filter(|model| model.contains('/'))
+        .map(str::to_string)
 }
 
 /// `modelRoles.default` from OMP's `config.yml`, without its `:<level>` suffix.

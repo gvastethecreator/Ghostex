@@ -544,6 +544,20 @@ pub(super) async fn run_session_chat_send_worker(
                         break;
                     }
                 }
+                SessionChatSendStep::SelectEmpryoTab { wait_ms } => {
+                    if let Err(message) = crate::session_chat_empryo_tabs::select_empryo_own_tab(
+                        &project_id,
+                        &session_id,
+                        &zmx_name,
+                        &source,
+                        wait_ms,
+                    )
+                    .await
+                    {
+                        outcome = Err(SessionChatSendError::not_attempted(message));
+                        break;
+                    }
+                }
                 SessionChatSendStep::ReadEmpryoDraft => {
                     let Some(input) = capture_session_terminal_text_vt(&zmx_name)
                         .await

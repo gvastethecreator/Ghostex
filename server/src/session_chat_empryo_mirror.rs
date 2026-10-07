@@ -180,6 +180,9 @@ struct EmpryoLog {
     /// Sven: one Ghostex session follows one Empryo tab, the tab of the most recent user turn;
     /// records from its other tabs are hidden.
     followed_tab: Option<String>,
+    /// CDXC:SessionChat 2026-10-07 WHY:
+    /// Empryo 3.9.1-beta logs every window that joins a repository's shared engine in the engine's session, so one `session.jsonl` holds other Ghostex sessions' tabs too (their first tab, session_chat_empryo_tabs.rs). Those are never this session's to follow.
+    foreign_tabs: HashSet<String>,
 }
 
 const OBSERVED_KINDS: [&str; 6] = [
@@ -229,7 +232,7 @@ impl EmpryoLog {
                 let Some(pending) = record.get("patch").and_then(pending_prompts) else {
                     return;
                 };
-                if !pending.is_empty() {
+                if !pending.is_empty() && !self.foreign_tabs.contains(&tab) {
                     self.followed_tab = Some(tab.clone());
                 }
                 self.pending_by_tab.insert(tab, pending);
@@ -241,7 +244,9 @@ impl EmpryoLog {
                 let Some(key) = extract_string(ui.get("id")) else {
                     return;
                 };
-                self.followed_tab = Some(tab.clone());
+                if !self.foreign_tabs.contains(&tab) {
+                    self.followed_tab = Some(tab.clone());
+                }
                 self.turns_by_tab.entry(tab).or_default().push(EmpryoTurn {
                     key,
                     turn_id: extract_string(record.get("turnId")),
@@ -425,13 +430,16 @@ fn turn_row(key: &str, state: &str, timestamp: Value) -> Value {
 
 /// The mirror's rows for a raw log. Only complete lines are read: a torn tail would otherwise
 /// be mirrored as a parse failure and never revisited.
-fn mirror_rows(raw: &[u8]) -> Vec<Value> {
+fn mirror_rows(raw: &[u8], foreign_tabs: HashSet<String>) -> Vec<Value> {
     let complete = match raw.iter().rposition(|byte| *byte == b'\n') {
         Some(end) => &raw[..=end],
         None => &[][..],
     };
     let text = String::from_utf8_lossy(complete);
-    let mut log = EmpryoLog::default();
+    let mut log = EmpryoLog {
+        foreign_tabs,
+        ..EmpryoLog::default()
+    };
     for line in text.lines() {
         log.observe(line);
     }
@@ -497,9 +505,9 @@ fn mirror_rows(raw: &[u8]) -> Vec<Value> {
 }
 
 /// The whole mirror for a raw log, one row per line.
-fn build_mirror(raw: &[u8]) -> Vec<u8> {
+fn build_mirror(raw: &[u8], foreign_tabs: HashSet<String>) -> Vec<u8> {
     let mut out = Vec::new();
-    for row in mirror_rows(raw) {
+    for row in mirror_rows(raw, foreign_tabs) {
         if let Ok(serialized) = serde_json::to_vec(&row) {
             out.extend_from_slice(&serialized);
             out.push(b'\n');
@@ -511,7 +519,7 @@ fn build_mirror(raw: &[u8]) -> Vec<u8> {
 /// The visible prompts of the followed tab, oldest first: Generate Name's history source
 /// (`agent_transcripts.rs`), read through the same rows the chat shows.
 pub(crate) fn empryo_user_prompts(raw: &[u8]) -> Vec<String> {
-    mirror_rows(raw)
+    mirror_rows(raw, HashSet::new())
         .iter()
         .filter(|row| row.get("row").and_then(Value::as_str) == Some("user"))
         .filter_map(|row| extract_string(row.get("text")))
@@ -523,6 +531,8 @@ pub(crate) fn empryo_user_prompts(raw: &[u8]) -> Vec<String> {
 #[derive(Default)]
 struct EmpryoMirrorState {
     raw_path: PathBuf,
+    /// The tabs other Ghostex sessions own, which the mirror leaves out (session_chat_empryo_tabs.rs).
+    foreign_tabs: HashSet<String>,
     raw_len: u64,
     raw_modified: Option<std::time::SystemTime>,
     output_len: usize,
@@ -586,7 +596,7 @@ fn sync_mirror(mirror_path: &Path, state: &mut EmpryoMirrorState) -> Option<()> 
         return Some(());
     }
     let raw = fs::read(&state.raw_path).ok()?;
-    let output = build_mirror(&raw);
+    let output = build_mirror(&raw, state.foreign_tabs.clone());
     write_mirror(mirror_path, &output, state, mirror_exists)?;
     state.raw_len = raw_len;
     state.raw_modified = raw_modified;
@@ -635,7 +645,10 @@ pub fn resolve_empryo_chat_transcript_path(
         .get_or_insert_with(HashMap::new)
         .entry(mirror_path.clone())
         .or_default();
+    let (raw_path, foreign_tabs) = crate::session_chat_empryo_tabs::empryo_tab_scan(&raw_path)
+        .unwrap_or((raw_path, HashSet::new()));
     state.raw_path = raw_path;
+    state.foreign_tabs = foreign_tabs;
     sync_mirror(&mirror_path, state)?;
     Some(mirror_path)
 }

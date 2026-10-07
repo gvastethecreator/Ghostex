@@ -326,6 +326,43 @@ fn empryo_composer_input(screen: &str, lines: &[StyledLine]) -> Option<SessionCh
     })
 }
 
+/// The tabs Empryo's tab bar shows (`▏  ALPHA output ✕▕  ▏  TAB-1 ✕▕   +`, drawn once a window
+/// holds two or more tabs), as the number of tabs and the index of the active one, read from a
+/// VT capture. `None` while no tab bar is on screen.
+///
+/// CDXC:AgentScreenDetection 2026-10-07 WHY:
+/// Empryo 3.9.1-beta paints the active tab's label bold and every other label in its plain tab
+/// color; a tab's number badge, when shown, is bold in every tab, so only the label's letters
+/// tell the active tab, in every theme.
+pub(crate) fn empryo_tab_bar(screen: &str) -> Option<(usize, Option<usize>)> {
+    styled_lines(screen).iter().find_map(|line| {
+        let mut tabs = 0;
+        let mut active = None;
+        let mut cell: Option<Vec<(char, Style)>> = None;
+        for &(ch, style) in &line.chars {
+            match (ch, cell.as_mut()) {
+                ('\u{258f}', _) => cell = Some(Vec::new()),
+                ('\u{2595}', Some(chars)) => {
+                    if chars.iter().rev().find(|(ch, _)| !ch.is_whitespace())?.0 != '\u{2715}' {
+                        return None;
+                    }
+                    if chars
+                        .iter()
+                        .any(|(ch, style)| ch.is_alphabetic() && style.bold)
+                    {
+                        active = Some(tabs);
+                    }
+                    tabs += 1;
+                    cell = None;
+                }
+                (_, Some(chars)) => chars.push((ch, style)),
+                (_, None) => {}
+            }
+        }
+        (tabs > 0).then_some((tabs, active))
+    })
+}
+
 pub(super) fn hermes_input_region(lines: &[String]) -> Option<Range<usize>> {
     let region = unmarked_rule_input_region(lines)?;
     let start = region.clone().find(|&i| !lines[i].trim().is_empty())?;
