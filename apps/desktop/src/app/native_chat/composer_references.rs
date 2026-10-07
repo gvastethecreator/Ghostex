@@ -130,8 +130,8 @@ pub(super) fn revealed(draft: &str, reference: &ComposerReference) -> Option<(St
 impl NativeChatView {
     /// Keep the composer input's reference pills in step with the draft it is about to paint.
     ///
-    /// The shared parser answers in the same call, so a pill appears with the keystroke that
-    /// completed it instead of a frame later.
+    /// CDXC:SessionChat 2026-10-07 WHY:
+    /// The pills and the image tiles above the input are parsed here, in the paint, by the core's own pure parser (`composer_references` in packages/gx-chat-core/src/composer/queries.rs, the same rule the runtime's `composerReferences` query answers with). Supersedes asking the chat runtime thread with a 40ms timeout and keeping the last answer when it timed out: right after Enter that thread is busy with the send, so the sent message's thumbnails stayed above the emptied input for about a second.
     pub(super) fn sync_composer_references(
         &mut self,
         appearance: &ChatAppearance,
@@ -139,33 +139,10 @@ impl NativeChatView {
     ) {
         if self.composer_reference_draft.as_deref() != Some(self.draft.as_str()) {
             let draft = self.draft.clone();
-            let parsed = self.runtime.as_ref().and_then(|runtime| {
-                runtime.query(
-                    "composerReferences",
-                    vec![Value::String(draft.clone())],
-                    std::time::Duration::from_millis(40),
-                )
-            });
-            // CDXC:SessionChat 2026-09-19 WHY:
-            // Typing keeps the runtime thread busy with draft commands, so it often cannot answer
-            // within the paint. The input moves the pills it already shows with the edit, so the
-            // stale ranges held here must not be pushed over them; a short retry picks up a
-            // reference the edit completed even if nothing else repaints the composer.
-            let Some(parsed) = parsed else {
-                if self.runtime.is_some() && self.composer_reference_retry.is_none() {
-                    self.composer_reference_retry = Some(cx.spawn(async move |this, cx| {
-                        cx.background_executor()
-                            .timer(Duration::from_millis(30))
-                            .await;
-                        let _ = this.update(cx, |this, cx| {
-                            this.composer_reference_retry = None;
-                            this.notify_composer(cx);
-                        });
-                    }));
-                }
-                return;
-            };
-            self.composer_reference_retry = None;
+            let parsed = serde_json::to_value(
+                ghostex_gx_chat_core::composer::queries::composer_references(&draft),
+            )
+            .unwrap_or(Value::Null);
             self.composer_references = parse(&draft, &parsed);
             self.composer_reference_draft = Some(draft);
             // Editing the draft moves every reference, so a click that has not opened yet no

@@ -127,8 +127,6 @@ pub(crate) struct NativeChatView {
     pub(super) composer_reference_draft: Option<String>,
     pub(super) composer_reference_click: u64,
     pub(super) composer_reference_task: Option<gpui::Task<()>>,
-    /// Re-asks the shared parser after a paint found the runtime thread busy.
-    pub(super) composer_reference_retry: Option<gpui::Task<()>>,
     /// Path of the image pill under the pointer.
     pub(super) composer_image_hover: Option<String>,
     /// Image the caret last sat against, so a caret move repaints the thumbnails only when it matters.
@@ -365,7 +363,6 @@ impl NativeChatView {
             composer_reference_draft: None,
             composer_reference_click: 0,
             composer_reference_task: None,
-            composer_reference_retry: None,
             composer_image_hover: None,
             composer_caret_image: None,
             async_answer_input: None,
