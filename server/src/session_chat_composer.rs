@@ -65,9 +65,9 @@ pub(crate) fn hermes_composer_row(screen_text: &str) -> Option<usize> {
     input::hermes_input_region(&raw_lines).map(|region| region.start)
 }
 
-/// The row above OMP's live composer (the box's `╭` top border, or the status band over the band shape's `╰─` row), found by the shape `omp_input_region` reads, or `None` when it is not on screen.
-pub(crate) fn omp_composer_head_row(lines: &[String]) -> Option<usize> {
-    input::omp_input_region(lines).map(|region| region.start - 1)
+/// The first row of OMP's live input on an untrimmed, ANSI-stripped screen, found by the shapes `omp_input_region` reads, or `None` when it is not on screen.
+pub(crate) fn omp_composer_input_row(lines: &[String]) -> Option<usize> {
+    input::omp_input_region(lines).map(|region| region.start)
 }
 
 /// Non-blank lines kept from the bottom of a capture. Wide enough to hold
@@ -302,7 +302,7 @@ fn composer_signature(agent: &str) -> Option<ComposerSignature> {
         // `┃` rows over a `╹▀▀▀▀` foot; mid-screen when fresh.
         "opencode" => ComposerSignature::HeavyBarFoot,
         // Two-line rounded box at the bottom with the statusline in its border;
-        // readiness reads the box and the default band shape through `omp_input_region`.
+        // readiness reads every `composer.shape` through `omp_input_region`.
         "omp" => ComposerSignature::TrailingRoundedFoot,
         // Three-line rounded box with a `>` input marker.
         "gemini" => ComposerSignature::ShortRoundedBoxMarker { marker: '>' },
