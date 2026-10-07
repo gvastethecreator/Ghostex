@@ -14,10 +14,11 @@ use ghostex_gx_protocol::{ChatBlock, ChatMessage, ChatRole, ChatSource, StartupD
 use crate::session::constants::PENDING_ID_PREFIX;
 use crate::session::text::{is_staged_path_input, normalize_pending_text, parse_command_envelope};
 use crate::state::PendingSend;
+use crate::transcript::local_command::{shell_command_message, shell_command_prompt_text};
 
 /// `sessionChatPendingContentKey`: what two sends must agree on to be the same prompt.
 pub fn content_key(text: &str, image_paths: &[String]) -> String {
-    let normalized = normalize_pending_text(text);
+    let normalized = shell_command_key(normalize_pending_text(text));
     if !normalized.is_empty() {
         return format!("text:{normalized}");
     }
@@ -92,11 +93,25 @@ fn block_text(message: &ChatMessage, separator: &str) -> String {
         .join(separator)
 }
 
+/// `!aws login` and `! aws login` run the same command: Claude records both as `aws login`.
+fn shell_command_key(normalized: String) -> String {
+    match normalized.strip_prefix('!') {
+        Some(command) => format!("!{}", command.trim_start()),
+        None => normalized,
+    }
+}
+
+/// A user row's text as the composer would have sent it: a `!` command's `<bash-input>` row reads
+/// as the `!` line that ran it.
+fn user_message_text(message: &ChatMessage) -> String {
+    shell_command_prompt_text(message).unwrap_or_else(|| block_text(message, "\n"))
+}
+
 fn user_message_content_key(message: &ChatMessage) -> String {
     let envelope = parse_command_envelope(&block_text(message, "\n"));
     let text = match &envelope {
         Some(envelope) => format!("{} {}", envelope.name, envelope.args),
-        None => block_text(message, "\n"),
+        None => user_message_text(message),
     };
     let image_paths: Vec<String> = message
         .blocks
@@ -137,8 +152,11 @@ pub fn advanced_user_content_counts(messages: &[&ChatMessage]) -> BTreeMap<Strin
     for message in messages {
         if matches!(message.role, ChatRole::User) {
             let key = user_message_content_key(message);
-            if parse_command_envelope(&block_text(message, "\n")).is_some() || message.queued {
-                // Neither needs an assistant reply to advance the turn: local commands finish
+            if parse_command_envelope(&block_text(message, "\n")).is_some()
+                || shell_command_prompt_text(message).is_some()
+                || message.queued
+            {
+                // None needs an assistant reply to advance the turn: local and `!` commands finish
                 // without one, and a queued row is owned by the server.
                 *counts.entry(key).or_insert(0) += 1;
             } else {
@@ -158,7 +176,7 @@ fn user_texts(messages: &[&ChatMessage], advanced: bool) -> Vec<String> {
     let mut waiting: Vec<String> = Vec::new();
     for message in messages {
         if matches!(message.role, ChatRole::User) {
-            let text = normalize_pending_text(&block_text(message, "\n"));
+            let text = shell_command_key(normalize_pending_text(&user_message_text(message)));
             if advanced {
                 waiting.push(text);
             } else {
@@ -295,7 +313,7 @@ fn filter_pending_sends(
 
     let mut embedded: Vec<usize> = Vec::new();
     for (index, entry) in still_open.iter().enumerate() {
-        let pending_text = normalize_pending_text(&entry.text);
+        let pending_text = shell_command_key(normalize_pending_text(&entry.text));
         if pending_text.is_empty() {
             continue;
         }
@@ -415,7 +433,7 @@ pub fn pending_sends_as_messages(pending: &[PendingSend]) -> Vec<ChatMessage> {
                         error_message: None,
                     })
             });
-            ChatMessage {
+            let echo = ChatMessage {
                 id: format!("{PENDING_ID_PREFIX}{}", entry.id),
                 role: ChatRole::User,
                 blocks,
@@ -428,6 +446,16 @@ pub fn pending_sends_as_messages(pending: &[PendingSend]) -> Vec<ChatMessage> {
                 queued: startup_delivery.is_none() && entry.sent_while_working,
                 deferred_work: None,
                 startup_delivery,
+            };
+            let command = entry
+                .text
+                .trim()
+                .strip_prefix('!')
+                .map(str::trim)
+                .filter(|command| entry.shell_command && !command.is_empty());
+            match command {
+                Some(command) => shell_command_message(&echo, command, None),
+                None => echo,
             }
         })
         .collect()

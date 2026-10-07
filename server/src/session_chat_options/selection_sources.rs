@@ -658,7 +658,14 @@ pub(super) fn merge_session_chat_option_selections(
 ) -> Option<SessionChatDetectedSelection> {
     let mut merged = match transcript {
         Some(transcript) => transcript,
-        None => launch.filter(|_| statusline.is_none()).unwrap_or_default(),
+        // Cursor's payload carries only context usage, so it must not hide a pinned model.
+        None => launch
+            .filter(|_| {
+                statusline
+                    .as_ref()
+                    .is_none_or(|statusline| statusline.model.is_none())
+            })
+            .unwrap_or_default(),
     };
     let statusline_model = statusline
         .as_ref()

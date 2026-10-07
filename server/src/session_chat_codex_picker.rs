@@ -1176,11 +1176,22 @@ fn persist_session_chat_model_resume(
     target: &crate::session_chat_send::SessionChatSendTarget,
     model: &str,
     effort: &str,
+    session_only: bool,
 ) -> Result<(), DomainStateError> {
     let agent = crate::session_chat_follower::session_chat_agent_for_session(&target.session)
         .unwrap_or_default();
-    if !matches!(agent.as_str(), "claude" | "codex") || model.is_empty() {
+    if !matches!(agent.as_str(), "claude" | "codex" | "cursor") || model.is_empty() {
         return Ok(());
+    }
+    // CDXC:AgentProviders 2026-10-07: a pick saved as the default is what new sessions start on;
+    // a pick for this session alone is never remembered as the default.
+    let pin = crate::agent_model_pins::ModelPin {
+        model: model.to_string(),
+        effort: (!effort.is_empty()).then(|| effort.to_string()),
+        ..Default::default()
+    };
+    if !session_only {
+        crate::agent_model_pins::record_default(&agent, pin.clone());
     }
     let db =
         crate::storage::open_gxserver_database(&state.paths).map_err(|error| DomainStateError {
@@ -1199,24 +1210,38 @@ fn persist_session_chat_model_resume(
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
-    let Some(command) = runtime
+    let marker = crate::agent_model_pins::session_marker(
+        if session_only {
+            crate::agent_model_pins::ORIGIN_SESSION
+        } else {
+            crate::agent_model_pins::ORIGIN_DEFAULT
+        },
+        Some(&pin),
+    );
+    let marker_changed = runtime.get(crate::agent_model_pins::SESSION_PIN_KEY) != Some(&marker);
+    runtime.insert(crate::agent_model_pins::SESSION_PIN_KEY.to_string(), marker);
+    let command = runtime
         .get("agentCommand")
         .and_then(Value::as_str)
         .filter(|command| !command.trim().is_empty())
-        .map(str::to_string)
-    else {
-        return Ok(());
-    };
-    let rewritten = crate::agents::with_agent_model_options(
-        &command,
-        &agent,
-        Some(model),
-        (!effort.is_empty()).then_some(effort),
-    )?;
-    if rewritten == command {
+        .map(str::to_string);
+    let rewritten = command
+        .as_deref()
+        .map(|command| {
+            crate::agents::with_agent_model_options(
+                command,
+                &agent,
+                Some(model),
+                (!effort.is_empty() && agent != "cursor").then_some(effort),
+            )
+        })
+        .transpose()?;
+    if rewritten == command && !marker_changed {
         return Ok(());
     }
-    runtime.insert("agentCommand".into(), json!(rewritten));
+    if let Some(rewritten) = rewritten {
+        runtime.insert("agentCommand".into(), json!(rewritten));
+    }
     repository.update_session(
         json!({
             "projectId": target.project_id,
@@ -1386,7 +1411,9 @@ pub(crate) async fn select_session_chat_model(
     // session-only pick would silently mean "until this pane sleeps", and a default-changing pick
     // on a session launched with --model/--effort would snap back to its launch flags.
     // SEE-ALSO: server/src/agents/session_command.rs with_agent_model_options, server/src/agents/launch_plan.rs.
-    if let Err(error) = persist_session_chat_model_resume(state, &target, &model, &effort) {
+    if let Err(error) =
+        persist_session_chat_model_resume(state, &target, &model, &effort, session_only)
+    {
         log_picker(
             LogLevel::Warn,
             "sessionChatModelResumeCommandUnchanged",

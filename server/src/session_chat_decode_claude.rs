@@ -301,6 +301,9 @@ fn cross_session_queue_key(text: &str) -> Option<String> {
 /// The delivered `user` row names the actual content; `queued_command` attachments already have a keyed `remove` and must not release a second identical entry.
 /// Match each delivery, not task ids globally, because a resumed agent can finish more than once.
 fn claude_delivered_queue_keys(record: &Map<String, Value>) -> Vec<String> {
+    if let Some(command) = claude_bash_input_command(record) {
+        return vec![queued_prompt_key(&command)];
+    }
     if record.get("type").and_then(Value::as_str) != Some("user")
         || (record.get("promptSource").and_then(Value::as_str) != Some("queued")
             && record.get("queueSkipAttachments") != Some(&Value::Bool(true)))
@@ -325,6 +328,32 @@ fn claude_delivered_queue_keys(record: &Map<String, Value>) -> Vec<String> {
             _ => None,
         })
         .collect()
+}
+
+/// CDXC:SessionChat 2026-10-07 WHY:
+/// A `!` line sent while Claude is busy waits in its queue as `enqueue` with the command without its `!`, and is released by a content-free `dequeue` and delivered as a plain `<bash-input>cmd</bash-input>` row with no `promptSource`, so the queued row matched no release and stayed on screen as a "queued" bubble after the command had run. The `<bash-input>` row names the command, which is the queue entry's key.
+fn claude_bash_input_command(record: &Map<String, Value>) -> Option<String> {
+    if record.get("type").and_then(Value::as_str) != Some("user") {
+        return None;
+    }
+    let content = as_record(record.get("message")).and_then(|message| message.get("content"));
+    let text = claude_content_blocks(content)
+        .into_iter()
+        .filter_map(|block| match block {
+            SessionChatBlock::Text { text } => Some(text),
+            _ => None,
+        })
+        .collect::<String>();
+    let command = text
+        .trim()
+        .strip_prefix("<bash-input>")?
+        .strip_suffix("</bash-input>")?;
+    let command = command
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&");
+    let command = command.trim();
+    (!command.is_empty()).then(|| command.to_string())
 }
 
 fn claude_queue_operation(record: &Map<String, Value>) -> Option<TranscriptQueueOp> {

@@ -42,20 +42,25 @@ fn collapse_spaces(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-fn scan_lines(text: &str) -> Vec<String> {
+/// The screen's non-blank lines, trimmed and space-collapsed, and the index among them of the last line above OMP's live composer (see `omp_composer_head`).
+fn scan_lines(text: &str) -> (Vec<String>, Option<usize>) {
     let mut lines = Vec::new();
-    for raw in text.lines().rev() {
+    let mut rows = Vec::new();
+    let raw_lines: Vec<_> = text.lines().collect();
+    for (row, raw) in raw_lines.iter().enumerate().rev() {
         let line = collapse_spaces(normalize_spaces(&strip_ansi_sgr(raw)).trim());
         if line.is_empty() {
             continue;
         }
         lines.push(line);
+        rows.push(row);
         if lines.len() >= OMP_BLOCKING_SCAN_LINES {
             break;
         }
     }
     lines.reverse();
-    lines
+    rows.reverse();
+    (lines, omp_composer_head(text, &rows))
 }
 
 fn is_rounded_top(line: &str) -> bool {
@@ -88,12 +93,19 @@ fn is_horizontal_rule(line: &str) -> bool {
 
 /// CDXC:AgentScreenDetection 2026-10-01 WHY:
 /// The composer used to be recognised by the `π`, `⬢` and `◒` in its statusline border, which OMP's Nerd Font symbol preset never draws, so a dismissed dialog kept blocking sends. It is found by its frame instead, the same shape composer readiness reads (`omp_input_region`).
-fn omp_composer_head(lines: &[String]) -> Option<usize> {
-    crate::session_chat_composer::omp_composer_head_row(lines)
+/// CDXC:AgentScreenDetection 2026-10-07 WHY:
+/// Most composer shapes are told apart by indentation (`❯ ` against two-space rows, the band's three-space rows), which the trimmed scan lines lose, so the composer is found on the untrimmed screen and its row mapped onto them: the last scan line above the input, which for the box is its `╭` border.
+fn omp_composer_head(text: &str, rows: &[usize]) -> Option<usize> {
+    let lines: Vec<_> = text.lines().map(strip_ansi_sgr).collect();
+    let input = crate::session_chat_composer::omp_composer_input_row(&lines)?;
+    rows.iter()
+        .filter(|&&row| row < input)
+        .count()
+        .checked_sub(1)
 }
 
-fn composer_after(lines: &[String], evidence: usize) -> bool {
-    omp_composer_head(lines).is_some_and(|composer| composer > evidence)
+fn composer_after(composer: Option<usize>, evidence: usize) -> bool {
+    composer.is_some_and(|composer| composer > evidence)
 }
 
 fn rounded_frames(lines: &[String]) -> Vec<(usize, usize)> {
@@ -291,17 +303,22 @@ fn latest_paired_evidence(
 }
 
 fn live_unframed(
-    lines: &[String],
+    composer: Option<usize>,
     evidence: Option<usize>,
     title: &'static str,
     detail: &'static str,
 ) -> Option<OmpBlockingScreen> {
     let evidence = evidence?;
-    (!composer_after(lines, evidence)).then_some(OmpBlockingScreen { title, detail })
+    (!composer_after(composer, evidence)).then_some(OmpBlockingScreen { title, detail })
 }
 
-fn classify_rounded_frame(lines: &[String], start: usize, end: usize) -> Option<OmpBlockingScreen> {
-    if omp_composer_head(lines) == Some(start) || composer_after(lines, end) {
+fn classify_rounded_frame(
+    lines: &[String],
+    composer: Option<usize>,
+    start: usize,
+    end: usize,
+) -> Option<OmpBlockingScreen> {
+    if composer == Some(start) || composer_after(composer, end) {
         return None;
     }
     let title = frame_title(&lines[start]);
@@ -388,13 +405,13 @@ fn classify_rounded_frame(lines: &[String], start: usize, end: usize) -> Option<
 /// composer. `None` means either the composer has returned, only stale
 /// scrollback matched, or the screen has no source-stable blocking evidence.
 pub fn detect_omp_blocking_screen(text: &str) -> Option<OmpBlockingScreen> {
-    let lines = scan_lines(text);
+    let (lines, composer) = scan_lines(text);
     if lines.is_empty() {
         return None;
     }
 
     if let Some(screen) = live_unframed(
-        &lines,
+        composer,
         latest_paired_evidence(
             &lines,
             &["setup step "],
@@ -407,7 +424,7 @@ pub fn detect_omp_blocking_screen(text: &str) -> Option<OmpBlockingScreen> {
     }
 
     if let Some(screen) = live_unframed(
-        &lines,
+        composer,
         latest_paired_evidence(
             &lines,
             &["p a u s e d", "paused for"],
@@ -424,7 +441,7 @@ pub fn detect_omp_blocking_screen(text: &str) -> Option<OmpBlockingScreen> {
     }
 
     if let Some(screen) = live_unframed(
-        &lines,
+        composer,
         latest_paired_evidence(
             &lines,
             &["session's directory no longer exists ("],
@@ -437,7 +454,7 @@ pub fn detect_omp_blocking_screen(text: &str) -> Option<OmpBlockingScreen> {
     }
 
     if let Some(screen) = live_unframed(
-        &lines,
+        composer,
         latest_paired_evidence(
             &lines,
             &["select a provider:", "select a provider to logout:"],
@@ -450,7 +467,7 @@ pub fn detect_omp_blocking_screen(text: &str) -> Option<OmpBlockingScreen> {
     }
 
     if let Some(screen) = live_unframed(
-        &lines,
+        composer,
         latest_line_containing(
             &lines,
             "paste the authorization code (or full redirect url):",
@@ -462,7 +479,7 @@ pub fn detect_omp_blocking_screen(text: &str) -> Option<OmpBlockingScreen> {
     }
 
     for (start, end) in rounded_frames(&lines) {
-        if let Some(screen) = classify_rounded_frame(&lines, start, end) {
+        if let Some(screen) = classify_rounded_frame(&lines, composer, start, end) {
             return Some(screen);
         }
     }
@@ -476,7 +493,7 @@ pub fn detect_omp_blocking_screen(text: &str) -> Option<OmpBlockingScreen> {
             && lines[start..=end]
                 .iter()
                 .any(|line| line.to_ascii_lowercase().contains("space mute"))
-            && !composer_after(&lines, end)
+            && !composer_after(composer, end)
         {
             return Some(OmpBlockingScreen {
                 title: "OMP live mode owns terminal input",
@@ -492,7 +509,7 @@ pub fn detect_omp_blocking_screen(text: &str) -> Option<OmpBlockingScreen> {
             .iter()
             .filter(|line| is_horizontal_rule(line))
             .count();
-        if rules >= 2 && !composer_after(&lines, cancel) {
+        if rules >= 2 && !composer_after(composer, cancel) {
             return Some(OmpBlockingScreen {
                 title: "OMP has a cancellable operation open",
                 detail:

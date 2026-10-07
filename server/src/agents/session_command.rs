@@ -168,6 +168,22 @@ pub(crate) fn option_takes_value(agent: &str, word: &str) -> bool {
                 | "--image"
                 | "--local-provider"
         ),
+        "cursor" => matches!(
+            word,
+            "--model"
+                | "--api-key"
+                | "-H"
+                | "--header"
+                | "-e"
+                | "--endpoint"
+                | "--output-format"
+                | "--mode"
+                | "--sandbox"
+                | "--workspace"
+                | "--add-dir"
+                | "--plugin-dir"
+                | "--worktree-base"
+        ),
         "pi" => matches!(
             word,
             "--provider"
@@ -229,8 +245,12 @@ pub(crate) fn with_agent_model_options(
         let next_value = words.get(index + 1).map(|(_, _, value)| value.as_str());
         let (remove, takes_value) = match (agent, word.as_str()) {
             _ if !is_flag => (false, false),
-            ("claude" | "codex", "--model") | ("codex", "-m") if model.is_some() => (true, true),
-            ("claude" | "codex", value) if model.is_some() && value.starts_with("--model=") => {
+            ("claude" | "codex" | "cursor", "--model") | ("codex", "-m") if model.is_some() => {
+                (true, true)
+            }
+            ("claude" | "codex" | "cursor", value)
+                if model.is_some() && value.starts_with("--model=") =>
+            {
                 (true, false)
             }
             ("claude", "--effort") if effort.is_some() => (true, true),
@@ -295,10 +315,34 @@ pub(crate) fn with_agent_model_options(
                 shell_word(&format!("model_reasoning_effort={effort}"))
             )),
             "pi" => result.push_str(&format!(" --thinking {}", shell_word(effort))),
+            // Cursor keeps each model's effort in its own settings and takes no effort flag.
+            "cursor" => {}
             _ => result.push_str(&format!(" --effort {}", shell_word(effort))),
         }
     }
     Ok(result)
+}
+
+/// Whether the command already chooses a model (`--model`, Codex's `-m`), which a remembered pin
+/// must not replace: it is the session's own choice.
+pub(crate) fn command_names_model(command: &str, agent: &str) -> bool {
+    let mut offset = 0;
+    let mut skip_value = false;
+    while let Some((start, end, word)) = command_word(command, offset) {
+        offset = end;
+        if std::mem::take(&mut skip_value) || !is_option_word(&command[start..end], &word) {
+            continue;
+        }
+        // A Codex profile can name its own model.
+        let codex_choice = agent == "codex"
+            && (matches!(word.as_str(), "-m" | "-p" | "--profile")
+                || word.starts_with("--profile="));
+        if word == "--model" || word.starts_with("--model=") || codex_choice {
+            return true;
+        }
+        skip_value = !word.contains('=') && option_takes_value(agent, &word);
+    }
+    false
 }
 
 /// Model ids such as `opus[1m]` carry shell glob characters, so only plain words stay unquoted.

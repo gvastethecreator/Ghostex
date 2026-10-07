@@ -1096,6 +1096,15 @@ leaves the default alone (either one closes the picker), and Option+1 to Option+
 jump the highlight to one of the first nine rows without applying it. Escape closes it
 without changing anything. The key reminder along the bottom lists these.
 
+New Claude Code and Codex sessions start on the model and reasoning level you
+last saved as that agent's default, so the pill names it as soon as the chat
+opens; a choice for this session only never becomes the default. Cursor CLI has
+no session-only choice, so a new Cursor session starts on the model you used
+last. A session you wake or resume comes back on the model it was last using.
+If you change an agent's default outside Ghostex (for example with `/model` in
+a plain terminal), the next new session starts on that agent's own default and
+Ghostex remembers it from then on.
+
 Clicking a model or a reasoning level applies it to this session and saves it as
 the agent's default for new sessions. Right-clicking applies it to this session
 only and leaves the saved default alone, so new sessions still start where they
@@ -1252,6 +1261,9 @@ last reading with its age ("Usage is from 3 hours ago") and Ghostex keeps
 retrying on its own. Automatic switching and the Account for new sessions rule
 skip that account until its usage refreshes. A login problem shows what to do
 instead, such as "The saved login expired. Reconnect this account."
+A newly added account starts with Available for automatic switching on; turn it
+off in the account's editor in Settings > Accounts to keep that account out of
+automatic switching.
 Reconnecting a Codex account works while that account's sessions keep running.
 When Codex still has to stop first, Settings lists the sessions in the way and
 offers Sleep sessions and continue; sleeping keeps them in the sidebar and they

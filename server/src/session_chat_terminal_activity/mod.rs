@@ -48,9 +48,11 @@ use serde_json::{json, Map, Value};
 mod agent_stream;
 mod line_parsers;
 mod screen_rows;
+mod shell_command;
 mod types;
 
 pub use agent_stream::*;
 pub(crate) use line_parsers::*;
 pub use screen_rows::*;
+pub use shell_command::*;
 pub use types::*;

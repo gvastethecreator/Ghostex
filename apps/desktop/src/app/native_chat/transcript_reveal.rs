@@ -51,10 +51,11 @@ impl NativeChatView {
             .hold_since
             .get_or_insert_with(Instant::now);
         let s = p.scale;
+        // `size_full`, not `flex_1`: this element is the cached transcript view's root, whose parent
+        // is not a flex column, so `flex_1` left it content-height and pinned to the top.
         div()
-            .flex_1()
+            .size_full()
             .min_h_0()
-            .w_full()
             .flex()
             .items_center()
             .justify_center()

@@ -6,7 +6,7 @@ use ghostex_gx_protocol::ChatMessage;
 
 use crate::transcript::foreign::{merge_messages_with, order_messages};
 use crate::transcript::image_markers::normalize_image_transcript_messages;
-use crate::transcript::local_command::normalize_local_command_messages;
+use crate::transcript::local_command::{fold_shell_commands, normalize_local_command_messages};
 use crate::transcript::noise::{
     drop_hidden_messages, fold_model_effort_pairs, is_turn_seam, suppressed_turn_label,
 };
@@ -19,7 +19,9 @@ use crate::transcript::turns::{
 
 pub fn normalize_chat_transcript(messages: &[ChatMessage]) -> Vec<ChatMessage> {
     let ordered = order_messages(messages);
-    let with_commands = fold_side_questions(&normalize_local_command_messages(&ordered));
+    let with_commands = fold_side_questions(&fold_shell_commands(
+        &normalize_local_command_messages(&ordered),
+    ));
     let with_images = normalize_image_transcript_messages(&with_commands);
     fold_model_effort_pairs(&drop_hidden_messages(&with_images))
 }

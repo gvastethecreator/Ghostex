@@ -57,3 +57,283 @@ pub fn normalize_local_command_messages(messages: &[ChatMessage]) -> Vec<ChatMes
     }
     normalized
 }
+
+/// The tool name a `!` shell command's card carries; the name makes it a command tool, so the card
+/// gets the terminal glyph and its Command and Result blocks.
+pub const SHELL_COMMAND_TOOL_NAME: &str = "Shell";
+
+/// The body of the first `<tag>` or `<tag data-ghostex-escaped="html">` element in `text`, entities
+/// decoded.
+fn harness_tag_body(text: &str, tag: &str) -> Option<String> {
+    let open = format!("<{tag}");
+    let start = text.find(&open)? + open.len();
+    let rest = &text[start..];
+    let body_start = if let Some(rest) = rest.strip_prefix('>') {
+        text.len() - rest.len()
+    } else {
+        let attribute = rest
+            .strip_prefix(' ')?
+            .strip_prefix(ESCAPED_MARKUP_ATTRIBUTE)?;
+        text.len() - attribute.strip_prefix('>')?.len()
+    };
+    let close = format!("</{tag}>");
+    let end = body_start + text[body_start..].find(&close)?;
+    Some(decode_escaped_markup(&text[body_start..end]))
+}
+
+fn joined_text(message: &ChatMessage) -> String {
+    message
+        .blocks
+        .iter()
+        .filter_map(|block| match block {
+            ChatBlock::Text { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+/// The command of a `!` shell row: Claude's `<bash-input>` row, or the escaped marker gxserver
+/// writes for a Codex `!` command.
+pub fn shell_command_input(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if !trimmed.starts_with("<bash-input") || !trimmed.ends_with("</bash-input>") {
+        return None;
+    }
+    let command = harness_tag_body(trimmed, "bash-input")?;
+    let command = command.trim();
+    (!command.is_empty()).then(|| command.to_string())
+}
+
+/// The chat text a `!` shell row stands for (`!aws login`), the same text the composer sent, so an
+/// echo and its recorded row agree.
+pub fn shell_command_prompt_text(message: &ChatMessage) -> Option<String> {
+    if message.role != ChatRole::User {
+        return None;
+    }
+    shell_command_input(&joined_text(message)).map(|command| format!("!{command}"))
+}
+
+/// What a `!` command printed, stdout then stderr, and whether only stderr had anything to say.
+fn shell_command_output(text: &str) -> Option<(String, bool)> {
+    let trimmed = text.trim();
+    if !trimmed.starts_with("<bash-stdout") && !trimmed.starts_with("<bash-stderr") {
+        return None;
+    }
+    let clean = |body: Option<String>| {
+        crate::transcript::noise::strip_chat_ansi(&body.unwrap_or_default().replace("\r\n", "\n"))
+            .trim_end()
+            .to_string()
+    };
+    let stdout = clean(harness_tag_body(trimmed, "bash-stdout"));
+    let stderr = clean(harness_tag_body(trimmed, "bash-stderr"));
+    let failed = stdout.trim().is_empty() && !stderr.trim().is_empty();
+    let output = match (stdout.trim().is_empty(), stderr.trim().is_empty()) {
+        (_, true) => stdout,
+        (true, false) => stderr,
+        (false, false) => format!("{stdout}\n{stderr}"),
+    };
+    Some((output, failed))
+}
+
+/// The card a `!` command renders as: a user turn holding the command as a shell tool call and its
+/// output as that call's result. `output` is `None` while the command still runs.
+pub fn shell_command_message(
+    template: &ChatMessage,
+    command: &str,
+    output: Option<(String, bool)>,
+) -> ChatMessage {
+    let call_id = Some(format!("shell-command:{}", template.id));
+    let mut blocks = vec![ChatBlock::ToolCall {
+        name: SHELL_COMMAND_TOOL_NAME.to_string(),
+        input: serde_json::json!({ "command": command }),
+        call_id: call_id.clone(),
+    }];
+    if let Some((output, failed)) = output.filter(|(output, _)| !output.trim().is_empty()) {
+        blocks.push(ChatBlock::ToolResult {
+            output,
+            is_error: failed.then_some(true),
+            call_id,
+        });
+    }
+    let mut message = template.clone();
+    message.role = ChatRole::User;
+    message.blocks = blocks;
+    message
+}
+
+/// Whether a row is a `!` command's card, which renders as the tool card in the user's place.
+pub fn is_shell_command_message(message: &ChatMessage) -> bool {
+    message.role == ChatRole::User
+        && matches!(
+            message.blocks.first(),
+            Some(ChatBlock::ToolCall { name, .. }) if name == SHELL_COMMAND_TOOL_NAME
+        )
+        && message.blocks.iter().all(|block| {
+            matches!(
+                block,
+                ChatBlock::ToolCall { .. } | ChatBlock::ToolResult { .. }
+            )
+        })
+}
+
+/*
+CDXC:SessionChat 2026-10-07 DECISION:
+User: a `!` shell command sent to the agent ("! aws login") showed nothing in chat, then two plain "Local command" / "Local command output" rows; "let's please just show this in a new component similar to the ones we already have". Claude writes a `!` command as two user rows, `<bash-input> cmd</bash-input>` and `<bash-stdout>…</bash-stdout><bash-stderr>…</bash-stderr>` (its own output HTML-escaped), and only once the command has finished; gxserver writes a Codex `!` command as the same pair of escaped markers in one row, split above. The pair folds into ONE user row holding the command as a shell tool call and the output (stdout, then stderr) as its result, so every renderer draws the tool card where the user's message sits and the row opens its own turn, which the collapsed markers never did (summary mode filed them under the previous turn's work, or dropped them when no turn came before).
+SEE-ALSO: session/pending.rs (the echo drawn as this card until the row lands), apps/desktop/src/app/native_chat/transcript.rs and apps/mobile/app/src/chat (the card in the user's place).
+*/
+pub fn fold_shell_commands(messages: &[ChatMessage]) -> Vec<ChatMessage> {
+    let mut folded = Vec::with_capacity(messages.len());
+    let mut index = 0;
+    while index < messages.len() {
+        let message = &messages[index];
+        let command = (message.role == ChatRole::User)
+            .then(|| shell_command_input(&joined_text(message)))
+            .flatten();
+        let Some(command) = command else {
+            folded.push(message.clone());
+            index += 1;
+            continue;
+        };
+        // Claude writes a prompt queued meanwhile ahead of the command's own two rows, so a queue
+        // row can sit between them; the output still belongs to the command.
+        let mut next = index + 1;
+        while messages.get(next).is_some_and(|row| row.queued) {
+            next += 1;
+        }
+        let output = messages
+            .get(next)
+            .filter(|row| row.role == ChatRole::User)
+            .and_then(|row| shell_command_output(&joined_text(row)));
+        folded.push(shell_command_message(message, &command, output.clone()));
+        if output.is_some() {
+            folded.extend(messages[index + 1..next].iter().cloned());
+            index = next + 1;
+        } else {
+            index += 1;
+        }
+    }
+    folded
+}
+
+/// A `!` line sent while the agent was busy waits in Claude's own queue, and Claude records the
+/// queue entry without its `!`. While the line's echo stands in as its Shell card, that queue row is
+/// the same send a second time, so it is left out; the command's own rows replace the echo once the
+/// queue releases it.
+pub fn without_shell_echo_queue_rows(
+    transcript: Vec<ChatMessage>,
+    pending: &[ChatMessage],
+) -> Vec<ChatMessage> {
+    let commands: Vec<String> = pending
+        .iter()
+        .filter(|message| is_shell_command_message(message))
+        .filter_map(|message| match message.blocks.first() {
+            Some(ChatBlock::ToolCall { input, .. }) => input
+                .get("command")
+                .and_then(serde_json::Value::as_str)
+                .map(collapse_spaces),
+            _ => None,
+        })
+        .collect();
+    if commands.is_empty() {
+        return transcript;
+    }
+    transcript
+        .into_iter()
+        .filter(|message| {
+            !(message.queued
+                && message.role == ChatRole::User
+                && commands.contains(&collapse_spaces(&joined_text(message))))
+        })
+        .collect()
+}
+
+fn collapse_spaces(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// How far before gxserver's estimate of a running command's start its recorded row may be stamped
+/// and still be the same run: the probe's clock and the CLI's clock disagree a little.
+const LIVE_SHELL_START_SLACK_MS: i64 = 10_000;
+
+/// The running Shell card, with what the terminal shows of the command's output so far.
+///
+/// `activity` is gxserver's `shell-command` screen activity. Claude runs one `!` command at a time,
+/// so the output belongs to the newest pending `!` echo; a command typed straight into the terminal
+/// has no echo and gets its own running card, until the transcript records a `!` row for that run.
+/// Either way the recorded card replaces it once the command ends, and the output never shows twice.
+pub fn with_live_shell_output(
+    mut pending: Vec<ChatMessage>,
+    activity: Option<&serde_json::Value>,
+    transcript: &[ChatMessage],
+) -> Vec<ChatMessage> {
+    let Some(activity) = activity else {
+        return pending;
+    };
+    let field = |key: &str| activity.get(key).and_then(serde_json::Value::as_str);
+    let command = field("label").unwrap_or_default().trim();
+    if command.is_empty() {
+        return pending;
+    }
+    let output = field("detail").unwrap_or_default().to_string();
+    if let Some(index) = pending.iter().rposition(is_shell_command_message) {
+        let echo_command = match pending[index].blocks.first() {
+            Some(ChatBlock::ToolCall { input, .. }) => input
+                .get("command")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(command)
+                .to_string(),
+            _ => command.to_string(),
+        };
+        pending[index] =
+            shell_command_message(&pending[index], &echo_command, Some((output, false)));
+        return pending;
+    }
+    let detected_at = field("detectedAt").unwrap_or_default();
+    let elapsed_ms = activity
+        .get("elapsedSeconds")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or(0)
+        * 1000;
+    let started_at = crate::session::startup_sends::parse_iso_ms(Some(detected_at))
+        .map(|detected| detected - elapsed_ms);
+    let recorded = transcript.iter().any(|message| {
+        shell_command_prompt_text(message).is_some()
+            && match (message.timestamp, started_at) {
+                (Some(stamp), Some(started)) => stamp >= started - LIVE_SHELL_START_SLACK_MS,
+                _ => false,
+            }
+    });
+    if recorded {
+        return pending;
+    }
+    let template = ChatMessage {
+        id: format!("terminal-shell:{detected_at}"),
+        role: ChatRole::User,
+        blocks: Vec::new(),
+        async_questions: None,
+        timestamp: started_at,
+        source: ChatSource::Hook,
+        turn_id: None,
+        byte_offset: None,
+        queued: false,
+        deferred_work: None,
+        startup_delivery: None,
+    };
+    pending.push(shell_command_message(
+        &template,
+        command,
+        Some((output, false)),
+    ));
+    pending
+}
+
+/// A `!` card still running with output to show: its detail stays open while the output arrives.
+pub fn is_live_shell_command_message(message: &ChatMessage) -> bool {
+    is_shell_command_message(message)
+        && message.source != ChatSource::Transcript
+        && message
+            .blocks
+            .iter()
+            .any(|block| matches!(block, ChatBlock::ToolResult { .. }))
+}

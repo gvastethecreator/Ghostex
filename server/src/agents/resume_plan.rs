@@ -265,6 +265,8 @@ pub(crate) fn to_agent_resume_input(
             &launch_settings,
         )
     });
+    let base_command = base_command
+        .map(|command| with_resume_model_pin(agent_id.as_deref(), project, session, command));
     let runtime_command = agent_id
         .as_ref()
         .and_then(|agent_id| {
@@ -312,6 +314,35 @@ pub(crate) fn to_agent_resume_input(
             .or_else(|| read_text_from_map(&runtime_settings, "restoreTitleSource"))
             .or_else(|| Some("user".to_string())),
     }
+}
+
+/// A resumed or woken Claude, Codex or Cursor session whose command names no model comes back on
+/// the model it last reported, or else the remembered default, so the pill shows it at once and the
+/// agent runs exactly that (CDXC:AgentProviders 2026-10-07 in agent_model_pins.rs). A command that
+/// names one is the session's own choice: a chat pick rewrites it, and it is kept.
+fn with_resume_model_pin(
+    family: Option<&str>,
+    project: &Value,
+    session: &Value,
+    command: String,
+) -> String {
+    let Some(family) = family.and_then(crate::agent_model_pins::pin_family) else {
+        return command;
+    };
+    if command_names_model(&command, family) {
+        return command;
+    }
+    let reading = read_text_value(session, "projectId")
+        .or_else(|| read_text_value(project, "projectId"))
+        .zip(read_text_value(session, "sessionId"))
+        .and_then(|(project_id, session_id)| {
+            crate::agent_model_pins::session_reading(&project_id, &session_id)
+        });
+    let Some(pin) = reading.or_else(|| crate::agent_model_pins::launch_default(family)) else {
+        return command;
+    };
+    let effort = pin.effort.as_deref().filter(|_| family != "cursor");
+    with_agent_model_options(&command, family, Some(&pin.model), effort).unwrap_or(command)
 }
 
 fn is_one_time_agent_session_command(agent_id: Option<&str>, command: &str) -> bool {

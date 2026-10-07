@@ -217,12 +217,16 @@ impl SessionChatTerminalActivity {
         authority here — `PreCompact` is deliberately unregistered and a
         `/compact` typed in the terminal is not proven to raise
         `UserPromptSubmit` — so gating on "working" hid a compaction the
-        terminal was visibly showing.
+        terminal was visibly showing;
+      - a running `!` shell command (2026-10-07): its run-in-background hint
+        is painted only while it runs, and Claude is not working meanwhile.
     */
     pub fn remains_live_when_ready(&self) -> bool {
         matches!(
             self.kind,
-            SESSION_CHAT_ACTIVITY_SHELLS_RUNNING | SESSION_CHAT_ACTIVITY_COMPACTING
+            SESSION_CHAT_ACTIVITY_SHELLS_RUNNING
+                | SESSION_CHAT_ACTIVITY_COMPACTING
+                | SESSION_CHAT_ACTIVITY_SHELL_COMMAND
         )
     }
 }

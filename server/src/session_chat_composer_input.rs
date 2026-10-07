@@ -374,7 +374,190 @@ pub(super) fn hermes_input_region(lines: &[String]) -> Option<Range<usize>> {
 /// OMP's box composer draws its statusline into the top border, and that line changes with the symbol preset (`π >` with Unicode symbols, `󰵗` and powerline glyphs with Nerd Font) and turns into a spinner mid-turn. Requiring `π` and `>` there read a Nerd Font OMP as never ready, so its first chat message waited in the queue forever.
 /// The frame is the signature instead: OMP merges the input's last row into the foot (`╰─ text ─╯`), while its dialogs and welcome card close with a solid box rule.
 pub(super) fn omp_input_region(lines: &[String]) -> Option<Range<usize>> {
-    let foot = lines.iter().rposition(|line| !line.trim().is_empty())?;
+    omp_input(lines).map(|(region, _)| region)
+}
+
+/// The `composer.shape` that drew OMP's input, which decides how each row's chrome is stripped.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OmpShape {
+    Box,
+    Band,
+    /// `claude`: `❯ ` and two-space rows between two rules.
+    MarkedSandwich,
+    /// `pi`: one-space padded rows between two rules.
+    PaddedSandwich,
+    /// `rule` (under a top rule) and `borderless`: `❯ ` and two-space rows.
+    Gutter,
+    /// `field`: `▐ … ▌` rows.
+    Field,
+    /// `rail`: `▎ …` rows.
+    Rail,
+}
+
+/// CDXC:AgentScreenDetection 2026-10-07 WHY:
+/// OMP's setup wizard asks every new user to pick one of eight composer shapes, and Ghostex read only the box and the band, so a user who picked any other one could never send from chat. Each shape is read by its own row grammar (measured against OMP 18.8.2's `packages/tui/src/components/composer/`), tried in an order where a looser grammar cannot claim a stricter shape's rows.
+/// Every shape but the box and the band ends in OMP's status bar, and while the slash-command list is open the list replaces the status bar. So an input counts only when nothing but those follows it.
+fn omp_input(lines: &[String]) -> Option<(Range<usize>, OmpShape)> {
+    if let Some(region) = omp_box_input_region(lines) {
+        return Some((region, OmpShape::Box));
+    }
+    if let Some(region) = omp_band_input_region(lines) {
+        return Some((region, OmpShape::Band));
+    }
+    omp_sandwich_input(lines)
+        .or_else(|| omp_capped_input(lines, '▐', OmpShape::Field))
+        .or_else(|| omp_capped_input(lines, '▎', OmpShape::Rail))
+        .or_else(|| omp_gutter_input(lines))
+}
+
+/// Rows OMP may draw under its input: the one-line status bar, or the slash-command list (two-space rows with one selected `❯ ` row), which hides the status bar.
+fn omp_composer_tail(rows: &[String]) -> bool {
+    let rows: Vec<_> = rows.iter().filter(|row| !row.trim().is_empty()).collect();
+    let status_bar = rows.len() <= 1
+        && rows
+            .iter()
+            .all(|row| !row.trim_start().starts_with(['╭', '╰', '│', '❯']));
+    status_bar || omp_slash_list(&rows)
+}
+
+/// OMP's slash-command list: two-space rows with one selected `❯ ` row, drawn under every shape's input.
+fn omp_slash_list(rows: &[&String]) -> bool {
+    !rows.is_empty()
+        && rows
+            .iter()
+            .all(|row| row.starts_with("❯ ") || row.starts_with("  "))
+        && rows.iter().filter(|row| row.starts_with('❯')).count() == 1
+}
+
+/// The input's rows from `start`: following rows that `continues` accepts, blank rows included, ending at the last row with text.
+fn omp_rows(lines: &[String], start: usize, continues: impl Fn(&str) -> bool) -> Range<usize> {
+    let rows = lines[start + 1..]
+        .iter()
+        .take_while(|line| continues(line) || line.trim().is_empty())
+        .count();
+    let end = (start + 1..=start + rows)
+        .rfind(|&row| !lines[row].trim().is_empty())
+        .unwrap_or(start);
+    start..end + 1
+}
+
+fn omp_marked_row(line: &str) -> bool {
+    line.starts_with("❯ ") || line.trim_end() == "❯"
+}
+
+/// `claude` and `pi` shapes: the input sits between two full-width rules (the top one can carry a status chip), with the status bar or the slash list under the foot.
+fn omp_sandwich_input(lines: &[String]) -> Option<(Range<usize>, OmpShape)> {
+    let foot = lines.iter().rposition(|line| is_horizontal_rule(line))?;
+    if !omp_composer_tail(&lines[foot + 1..]) {
+        return None;
+    }
+    let head = lines[..foot]
+        .iter()
+        .rposition(|line| is_horizontal_rule(line) || is_titled_horizontal_rule(line))?;
+    let rows = &lines[head + 1..foot];
+    if rows.is_empty()
+        || rows
+            .iter()
+            .any(|row| row.trim_start().starts_with(['╭', '╰', '│']))
+    {
+        return None;
+    }
+    let region = head + 1..foot;
+    if omp_marked_row(&rows[0])
+        && rows[1..]
+            .iter()
+            .all(|row| row.starts_with("  ") || row.trim().is_empty())
+    {
+        Some((region, OmpShape::MarkedSandwich))
+    } else if rows
+        .iter()
+        .all(|row| row.starts_with(' ') || row.trim().is_empty())
+    {
+        Some((region, OmpShape::PaddedSandwich))
+    } else {
+        None
+    }
+}
+
+/// `field` and `rail` shapes: every input row, blank ones included, starts with the shape's accent cap.
+fn omp_capped_input(
+    lines: &[String],
+    cap: char,
+    shape: OmpShape,
+) -> Option<(Range<usize>, OmpShape)> {
+    let end = lines.iter().rposition(|line| line.starts_with(cap))?;
+    let start = lines[..end]
+        .iter()
+        .rposition(|line| !line.starts_with(cap))
+        .map_or(0, |row| row + 1);
+    omp_composer_tail(&lines[end + 1..]).then_some((start..end + 1, shape))
+}
+
+/// `rule` and `borderless` shapes: a `❯ ` row then two-space rows, above the status bar or the slash list. The slash list draws the same `❯ ` and two-space rows, so the input is the topmost `❯ ` row of the trailing gutter block whose rows are followed only by that tail.
+fn omp_gutter_input(lines: &[String]) -> Option<(Range<usize>, OmpShape)> {
+    let gutter = |line: &str| omp_marked_row(line) || line.starts_with("  ");
+    let last = lines.iter().rposition(|line| !line.trim().is_empty())?;
+    let bottom = if gutter(&lines[last]) { last + 1 } else { last };
+    let top = lines[..bottom]
+        .iter()
+        .rposition(|line| !gutter(line) && !line.trim().is_empty())
+        .map_or(0, |row| row + 1);
+    (top..bottom)
+        .filter(|&row| omp_marked_row(&lines[row]))
+        .map(|row| omp_rows(lines, row, |line| line.starts_with("  ")))
+        .find(|region| omp_composer_tail(&lines[region.end..]))
+        .map(|region| (region, OmpShape::Gutter))
+}
+
+/// One input row's text with the shape's chrome removed.
+fn omp_row_text(shape: OmpShape, first: bool, line: &str) -> String {
+    let line = match shape {
+        OmpShape::Box => {
+            // OMP merges its final input row into ╰─ text ─╯.
+            let line = line.trim();
+            let inner = line
+                .chars()
+                .skip(1)
+                .take(line.chars().count().saturating_sub(2))
+                .collect::<String>();
+            return if line.starts_with('╰') {
+                let inner = inner.strip_prefix('─').unwrap_or(&inner);
+                inner.strip_suffix('─').unwrap_or(inner).to_string()
+            } else {
+                inner
+            };
+        }
+        // The band's first row carries the `╰─ ` cue, later rows a three-space indent.
+        OmpShape::Band => match line.strip_prefix(OMP_BAND_CUE) {
+            Some(row) => row.strip_prefix(' ').unwrap_or(row),
+            None => line.strip_prefix("   ").unwrap_or(line),
+        },
+        OmpShape::MarkedSandwich | OmpShape::Gutter => match line.strip_prefix('❯') {
+            Some(row) if first => row.strip_prefix(' ').unwrap_or(row),
+            _ => line.strip_prefix("  ").unwrap_or(line),
+        },
+        OmpShape::PaddedSandwich => line.strip_prefix(' ').unwrap_or(line),
+        OmpShape::Field | OmpShape::Rail => {
+            let row = line.trim_start_matches(['▐', '▎']);
+            let row = row.strip_prefix(' ').unwrap_or(row).trim_end();
+            row.strip_suffix(['▌', '█']).unwrap_or(row)
+        }
+    };
+    line.trim_end().to_string()
+}
+
+fn omp_box_input_region(lines: &[String]) -> Option<Range<usize>> {
+    let foot = lines.iter().rposition(|line| {
+        let line = line.trim();
+        line.starts_with('╰') && line.ends_with('╯')
+    })?;
+    let tail: Vec<_> = lines[foot + 1..]
+        .iter()
+        .filter(|row| !row.trim().is_empty())
+        .collect();
+    if !tail.is_empty() && !omp_slash_list(&tail) {
+        return None;
+    }
     let interior = lines[foot].trim().strip_prefix('╰')?.strip_suffix('╯')?;
     if !interior.starts_with('─')
         || interior
@@ -396,10 +579,43 @@ pub(super) fn omp_input_region(lines: &[String]) -> Option<Range<usize>> {
     Some(head + 1..foot + 1)
 }
 
+/// The cue OMP's status band composer draws at column 0 of the input's first row; later rows are indented three spaces.
+const OMP_BAND_CUE: &str = "╰─";
+
+/// CDXC:AgentScreenDetection 2026-10-07 WHY:
+/// OMP 18.0.10 made the status band its default composer shape (`composer.shape: band`, also offered first by its setup wizard): the statusline is a flush row above an unframed input whose first row starts with `╰─ ` and has no `╭` head or `╯` corner. Reading only the rounded box called every default OMP "not on screen yet", so chat messages never reached its terminal and users pasted them in by hand.
+/// The cue is OMP's own literal gutter, not a themed glyph, and its overlays and tool frames close with `╰───╯` rules, so a `╰─` row whose rest is not a rule, with no frame drawn under it, is the live input. The row above it is the band (empty while the statusline starts). The slash-command list OMP opens under the input is not indented, so the input ends at the last indented row.
+fn omp_band_input_region(lines: &[String]) -> Option<Range<usize>> {
+    let last = lines.iter().rposition(|line| !line.trim().is_empty())?;
+    let cue = lines[..=last]
+        .iter()
+        .rposition(|line| line.starts_with(OMP_BAND_CUE))?;
+    let rest = lines[cue][OMP_BAND_CUE.len()..].trim_end();
+    if cue == 0
+        || rest.starts_with(|c| ('\u{2500}'..='\u{257f}').contains(&c))
+        || rest.ends_with('╯')
+        || lines[cue + 1..=last]
+            .iter()
+            .any(|line| line.trim_start().starts_with(['╭', '╰', '│']))
+    {
+        return None;
+    }
+    let rows = lines[cue + 1..=last]
+        .iter()
+        .take_while(|line| line.starts_with("   ") || line.trim().is_empty())
+        .count();
+    let end = (cue + 1..=cue + rows)
+        .rfind(|&row| !lines[row].trim().is_empty())
+        .unwrap_or(cue);
+    Some(cue..end + 1)
+}
+
 /// CDXC:AgentScreenDetection 2026-10-01 WHY:
 /// OMP's empty composer shows one right-aligned gesture hint in its foot (`╰─  ⇧⇥ to change thinking effort ─╯`, or `󰘶 󰌒 …` with Nerd Font symbols): the key as one accent-colored span, the label italic. Reading it as a draft failed every send with "could not be cleared". Typed input is never italic, so an italic label with only one key span before it is the hint.
 fn omp_hint_only(line: &StyledLine) -> bool {
-    let is_chrome = |ch: char| ch.is_whitespace() || ('\u{2500}'..='\u{257f}').contains(&ch);
+    // Box-drawing and block glyphs frame every shape's row, and `❯` is the gutter of the `claude`, `rule` and `borderless` shapes.
+    let is_chrome =
+        |ch: char| ch.is_whitespace() || ('\u{2500}'..='\u{259f}').contains(&ch) || ch == '❯';
     let Some(label) = line
         .chars
         .iter()
@@ -840,33 +1056,20 @@ pub fn session_chat_composer_input(agent: &str, screen: &str) -> Option<SessionC
     }
     let plain: Vec<_> = lines.iter().map(|line| line.text.clone()).collect();
     if matches!(agent, "pi" | "omp" | "zcode") {
-        let region = if agent == "zcode" {
-            zcode_input_region(&plain)?
+        let (region, omp_shape) = if agent == "zcode" {
+            (zcode_input_region(&plain)?, None)
         } else if agent == "pi" {
-            unmarked_rule_input_region(&plain)?
+            (unmarked_rule_input_region(&plain)?, None)
         } else {
-            omp_input_region(&plain)?
+            let (region, shape) = omp_input(&plain)?;
+            (region, Some(shape))
         };
         let text = plain[region.clone()]
             .iter()
-            .map(|line| {
-                if agent == "omp" {
-                    // OMP merges its final input row into ╰─ text ─╯.
-                    let line = line.trim();
-                    let inner = line
-                        .chars()
-                        .skip(1)
-                        .take(line.chars().count().saturating_sub(2))
-                        .collect::<String>();
-                    if line.starts_with('╰') {
-                        let inner = inner.strip_prefix('─').unwrap_or(&inner);
-                        inner.strip_suffix('─').unwrap_or(inner).to_string()
-                    } else {
-                        inner
-                    }
-                } else {
-                    line.clone()
-                }
+            .enumerate()
+            .map(|(index, line)| match omp_shape {
+                Some(shape) => omp_row_text(shape, index == 0, line),
+                None => line.clone(),
             })
             .collect::<Vec<_>>()
             .join("\n");
