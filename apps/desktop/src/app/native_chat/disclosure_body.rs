@@ -34,27 +34,29 @@ pub(super) enum DisclosureRail {
 }
 
 impl DisclosureRail {
-    /// The centre of the two-pixel line. React reached these two values through
-    /// the marker-column tokens plus `.ghostex-chat-expansion`'s own negative
-    /// inset, which `.ghostex-chat-work-detail` overrides and the other bodies
-    /// do not; they are written out here because GPUI has no cascade to inherit
-    /// them from.
-    fn centre(self) -> f32 {
+    /// Where the body's first column of content starts, from the left edge of the row that owns
+    /// the rail. These are React's positions (the marker rail's `-5px` inset plus the box and the
+    /// `calc(0.75rem - 5px)` gap, and `.ghostex-chat-work-detail`'s own override); they are kept
+    /// as they were so moving the line never moves the content.
+    fn content_x(self) -> f32 {
         match self {
-            Self::Marker => 2.5,
-            Self::ToolDetail => 15.0,
+            Self::Marker => 17.0,
+            Self::ToolDetail => 29.5,
         }
     }
 }
 
-/// The rail's hit target, React's fifteen-pixel `.ghostex-chat-expansion-rail` box: the two-pixel
-/// line is centred in it, so the line and the content keep the places they had when the rail was
-/// only the line, and the reader does not have to land on two pixels to close the body.
-const RAIL_BOX: f32 = 15.0;
+/// The centre of the two-pixel line, from the left edge of the row that owns the rail: the
+/// centre of the chevron or glyph slot that opens the body (`MARKER_INSET` 2 plus half of the
+/// 16-pixel `MARKER_SLOT`; the chevron rows in transcript.rs and tool_run.rs and the tool row's
+/// glyph all use that slot). One value for every depth, so each line runs straight down from
+/// the middle of the icon above it; React's lines sat at 2.5 and 15, 7.5 left and 5 right of it.
+const SLOT_CENTRE: f32 = 2.0 + 16.0 / 2.0;
 
-/// The gap between the rail's box and the first column of content, React's
-/// `calc(0.75rem - 5px)` on `.ghostex-chat-expansion`.
-const RAIL_TO_CONTENT: f32 = 7.0;
+/// The rail's hit target: the two-pixel line is centred in it, and it stays inside the row's
+/// content column (its right edge is the marker rail's content start), so the reader does not
+/// have to land on two pixels to close the body.
+const RAIL_BOX: f32 = 14.0;
 
 /// Hovering the rail's box lights the line inside it, as React's `:hover::before` did.
 const RAIL_GROUP: &str = "native-chat-disclosure-rail";
@@ -78,10 +80,8 @@ pub(super) fn disclosure_body(
     div()
         .flex()
         .min_w_0()
-        // Negative on the marker rail, as React's `margin-inline-start: -5px` was: the box widens
-        // into the row's own padding, never over a neighbouring control.
-        .ml(px((rail.centre() - RAIL_BOX / 2.0) * s))
-        .gap(px(RAIL_TO_CONTENT * s))
+        .ml(px((SLOT_CENTRE - RAIL_BOX / 2.0) * s))
+        .gap(px((rail.content_x() - SLOT_CENTRE - RAIL_BOX / 2.0) * s))
         .child(
             div()
                 .id(SharedString::from(format!("rail:{key}")))
