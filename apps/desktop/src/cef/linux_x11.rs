@@ -391,6 +391,9 @@ pub(super) fn append_platform_command_line_switches(command_line: &mut cef::Comm
             Some(&cef::CefString::from(scale.to_string().as_str())),
         );
     }
+    // Thin overlay scrollbars instead of tracked ones with a white track on dark pages
+    // (CDXC:CefRuntime 2026-10-07 in cef/windows.rs).
+    super::shell::append_chromium_feature(command_line, "enable-features", "OverlayScrollbar");
 }
 
 /*

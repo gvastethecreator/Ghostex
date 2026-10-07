@@ -1,6 +1,7 @@
-//! Coordinator trees: each open thread drawn right under its coordinator.
+//! Coordinator trees: each thread drawn right under its coordinator.
 //!
-//! SEE-ALSO: server/src/coordinators/presentation.rs (the fields), view.rs `RowNesting`.
+//! CDXC:Coordinators 2026-10-07 SEE-ALSO: the user's decision in packages/gx-chat-core/src/extras/coordinator_threads.rs ("show the working or the active in the last 2 hours", "Don't actually 'hide' them please"). An expanded coordinator lists its threads that are working, waiting, or were active in the last two hours (and the one the user is looking at); the older ones, resolved threads included, wait behind one "N older threads" row at the end of its children. That row and the coordinator's fold change only when the user clicks them, and are remembered per coordinator; opening the coordinator's own chat changes neither, and opening a thread unfolds its coordinator (the 2026-10-01 decision below) but never lists the older threads. A folded coordinator shows no threads, and its badge counts what it lists.
+//! SEE-ALSO: server/src/coordinators/presentation.rs (the fields), view.rs `RowNesting`, apps/desktop/src/app/native_sidebar/threads.rs (the "N older threads" row), packages/gx-chat-core/src/extras/coordinator_threads.rs (the chat panel's twin rule).
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
@@ -11,10 +12,37 @@ use super::inputs::SectionId;
 use super::ordering::{is_snoozed, section_of};
 use super::view::{RowNesting, SessionRow, SessionView, ThreadTally};
 
+/// How long after its last activity a thread that neither works nor waits is still listed.
+const RECENT_THREAD_MS: i64 = 2 * 60 * 60 * 1000;
+
+fn is_busy_thread(row: &SessionRow) -> bool {
+    matches!(row.thread_state.as_deref(), Some("working" | "waiting")) || row.activity == "working"
+}
+
+/// A thread an expanded coordinator lists without its "N older threads" row.
+fn is_recent_thread(row: &SessionRow, now_ms: u64) -> bool {
+    is_busy_thread(row)
+        || row
+            .timing
+            .last_interaction_ms
+            .is_some_and(|at| at + RECENT_THREAD_MS > now_ms as i64)
+}
+
+/// When an idle thread stops being recent, so the list is rebuilt then.
+pub(crate) fn recent_thread_deadline_ms(row: &SessionRow) -> Option<i64> {
+    if row.coordinator_parent.is_none() || is_busy_thread(row) {
+        return None;
+    }
+    row.timing
+        .last_interaction_ms
+        .map(|at| at + RECENT_THREAD_MS)
+}
+
 /// Every coordinator's threads among `rows`, by state. A row listed twice (a project's own rows and
 /// a group's members) counts once.
 pub(crate) fn tally_threads<'a>(
     rows: impl Iterator<Item = &'a Arc<SessionRow>>,
+    now_ms: u64,
 ) -> HashMap<SessionKey, ThreadTally> {
     let mut seen: BTreeSet<&str> = BTreeSet::new();
     let mut tallies: HashMap<SessionKey, ThreadTally> = HashMap::new();
@@ -27,7 +55,9 @@ pub(crate) fn tally_threads<'a>(
         }
         let tally = tallies.entry(parent.clone()).or_default();
         let bump = |count: &mut u16| *count = count.saturating_add(1);
-        bump(&mut tally.total);
+        if is_recent_thread(row, now_ms) {
+            bump(&mut tally.total);
+        }
         match row.thread_state.as_deref() {
             Some("waiting") => bump(&mut tally.waiting),
             Some("working") => bump(&mut tally.working),
@@ -45,15 +75,15 @@ fn is_nestable_thread(session: &SessionView, enable_parking: bool, now_ms: u64) 
     let row = &session.row;
     row.coordinator_parent.is_some()
         && !row.is_browser
-        && row.thread_state.as_deref() != Some("done")
         && !(enable_parking && row.is_parked)
         && !is_snoozed(row, now_ms)
 }
 
-/// Reorders a group's rows (already in display order) so each open thread follows its
-/// coordinator, and returns the section each row is drawn under: a thread takes its coordinator's.
-/// The threads of a coordinator in `collapsed` (sidebar row ids) stay in the list, marked folded,
-/// so the headers above still count them.
+/// Reorders a group's rows (already in display order) so each thread follows its coordinator, its
+/// recent threads before its older ones, and returns the section each row is drawn under: a thread
+/// takes its coordinator's. The threads of a coordinator in `collapsed` (sidebar row ids), and the
+/// older threads of one not in `older_shown`, stay in the list, marked folded, so the headers above
+/// still count them.
 ///
 /// CDXC:Coordinators 2026-10-01 DECISION:
 /// User: "I want to be able to collapse the coordinator's row by clicking on a button next to it." A chevron on the coordinator row folds its threads away and unfolds them, remembered per coordinator across restarts with the rest of the sidebar's collapse state. A folded coordinator still shows its badge (count and tint), its threads still count toward the section and project headers, revealing one of its threads unfolds it, and for a drop the folded block is just the coordinator row.
@@ -63,6 +93,7 @@ pub(crate) fn nest_threads(
     group_working: bool,
     held: &HashSet<String>,
     collapsed: &BTreeSet<String>,
+    older_shown: &BTreeSet<String>,
     now_ms: u64,
 ) -> (Vec<SessionView>, Vec<SectionId>) {
     let base_sections: Vec<SectionId> = sessions
@@ -122,6 +153,20 @@ pub(crate) fn nest_threads(
         list.retain(|child| parent_of[*child].is_some());
         !list.is_empty()
     });
+    // The thread the user is looking at is never tucked away, however long it has been idle.
+    let is_older: Vec<bool> = sessions
+        .iter()
+        .map(|session| {
+            !session.is_focused && !session.is_visible && !is_recent_thread(&session.row, now_ms)
+        })
+        .collect();
+    for list in children.values_mut() {
+        list.sort_by_key(|child| is_older[*child]);
+    }
+    let shows_older: Vec<bool> = sessions
+        .iter()
+        .map(|session| older_shown.contains(&session.row.sidebar_session_id))
+        .collect();
 
     let is_collapsed: Vec<bool> = sessions
         .iter()
@@ -131,43 +176,55 @@ pub(crate) fn nest_threads(
         })
         .collect();
 
-    /// Where one row is emitted: its index, depth, whether it is the last child, its section, and
-    /// whether a folded coordinator hides it.
+    /// Where one row is emitted: its index, depth, whether it is the last drawn child, its section,
+    /// whether a folded coordinator hides it, and whether it waits behind its coordinator's "N
+    /// older threads" row.
     struct Placed {
         index: usize,
         depth: u8,
         last: bool,
         section: SectionId,
         folded: bool,
+        older_hidden: bool,
+    }
+    /// What `emit` reads about every row.
+    struct Tree<'a> {
+        children: &'a HashMap<usize, Vec<usize>>,
+        is_collapsed: &'a [bool],
+        is_older: &'a [bool],
+        shows_older: &'a [bool],
     }
     let mut order: Vec<Placed> = Vec::with_capacity(sessions.len());
-    fn emit(
-        placed: Placed,
-        children: &HashMap<usize, Vec<usize>>,
-        is_collapsed: &[bool],
-        order: &mut Vec<Placed>,
-    ) {
+    fn emit(placed: Placed, tree: &Tree<'_>, order: &mut Vec<Placed>) {
         let (index, depth, section) = (placed.index, placed.depth, placed.section);
-        let folded = placed.folded || is_collapsed[index];
+        let folded = placed.folded || tree.is_collapsed[index];
         order.push(placed);
-        if let Some(list) = children.get(&index) {
-            let count = list.len();
+        if let Some(list) = tree.children.get(&index) {
+            let tucks_older = !tree.shows_older[index];
+            let hidden = |child: usize| tucks_older && tree.is_older[child];
+            let drawn = list.iter().filter(|child| !hidden(**child)).count();
             for (position, child) in list.iter().enumerate() {
                 emit(
                     Placed {
                         index: *child,
                         depth: (depth + 1).min(MAX_DEPTH),
-                        last: position + 1 == count,
+                        last: position + 1 == drawn,
                         section,
-                        folded,
+                        folded: folded || hidden(*child),
+                        older_hidden: hidden(*child),
                     },
-                    children,
-                    is_collapsed,
+                    tree,
                     order,
                 );
             }
         }
     }
+    let tree = Tree {
+        children: &children,
+        is_collapsed: &is_collapsed,
+        is_older: &is_older,
+        shows_older: &shows_older,
+    };
     for index in 0..sessions.len() {
         if parent_of[index].is_none() {
             emit(
@@ -177,9 +234,9 @@ pub(crate) fn nest_threads(
                     last: false,
                     section: base_sections[index],
                     folded: false,
+                    older_hidden: false,
                 },
-                &children,
-                &is_collapsed,
+                &tree,
                 &mut order,
             );
         }
@@ -194,6 +251,7 @@ pub(crate) fn nest_threads(
         last,
         section,
         folded,
+        older_hidden,
     } in order
     {
         let Some(mut session) = sessions[index].take() else {
@@ -207,6 +265,12 @@ pub(crate) fn nest_threads(
                 .map_or(0, |list| u16::try_from(list.len()).unwrap_or(u16::MAX)),
             collapsed: is_collapsed[index],
             folded,
+            older_threads: children.get(&index).map_or(0, |list| {
+                u16::try_from(list.iter().filter(|child| is_older[**child]).count())
+                    .unwrap_or(u16::MAX)
+            }),
+            older_threads_shown: shows_older[index],
+            older_hidden,
             ..RowNesting::default()
         };
         nested.push(session);

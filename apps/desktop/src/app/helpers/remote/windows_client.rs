@@ -1,6 +1,12 @@
 //! Native Windows SSH client and Credential Manager integration.
 
-use std::{env, io::Write, path::PathBuf, process::Child};
+use std::{
+    env, fs,
+    io::{self, Read, Write},
+    path::{Path, PathBuf},
+    process::Child,
+    sync::Mutex,
+};
 
 use windows_sys::Win32::{
     Foundation::{ERROR_NOT_FOUND, GetLastError},
@@ -157,7 +163,53 @@ pub(crate) fn gpui_terminate_remote_process(child: &mut Child) {
 pub(crate) fn gpui_bundled_remote_gxserver_package_dir(
     _target: &GpuiRemoteInstallTarget,
 ) -> Option<PathBuf> {
-    // Windows ships its own server; remote platforms use the verified component download.
+    // Windows ships no unpacked package; Linux remotes get the archive below.
+    None
+}
+
+/// CDXC:RemoteMachines 2026-10-06 WHY:
+/// The Windows app unpacks no Linux package and its sealed download manifest lists no gxserver asset, so every Linux remote (a Debian dev server, for one) failed with "Machine unsupported". It does ship the static (musl) Linux gxserver package its WSL backend installs, `resources/wsl/gxserver-linux-<arch>.tar.gz`, which has the layout and `gxserver setup` a macOS app's upload has, so remote installs and updates upload that archive as is.
+pub(crate) fn gpui_bundled_remote_gxserver_archive(
+    target: &GpuiRemoteInstallTarget,
+) -> Option<PathBuf> {
+    // The asset key is fixed text per supported arch, so the remote's uname output never becomes part of a local path.
+    let asset_key = gpui_on_demand_gxserver_asset_key(target)?;
+    let archive_path = env::current_exe()
+        .ok()?
+        .parent()?
+        .join("resources")
+        .join("wsl")
+        .join(format!("{asset_key}.tar.gz"));
+    archive_path.is_file().then_some(archive_path)
+}
+
+/// The archive's `build-identity.json` sits behind its binaries, so reading it decompresses most of the archive; the archive cannot change while the app runs, so each answer is kept.
+pub(crate) fn gpui_bundled_remote_gxserver_archive_build_identity(
+    archive_path: &Path,
+) -> Option<String> {
+    static IDENTITIES: Mutex<Vec<(PathBuf, Option<String>)>> = Mutex::new(Vec::new());
+    let mut identities = IDENTITIES.lock().ok()?;
+    if let Some((_, identity)) = identities.iter().find(|(path, _)| path == archive_path) {
+        return identity.clone();
+    }
+    let identity = read_archive_build_identity(archive_path);
+    identities.push((archive_path.to_path_buf(), identity.clone()));
+    identity
+}
+
+fn read_archive_build_identity(archive_path: &Path) -> Option<String> {
+    let file = fs::File::open(archive_path).ok()?;
+    let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(io::BufReader::new(file)));
+    for entry in archive.entries().ok()? {
+        let mut entry = entry.ok()?;
+        let path = entry.path().ok()?.into_owned();
+        if path.strip_prefix(".").unwrap_or(path.as_path()) != Path::new("build-identity.json") {
+            continue;
+        }
+        let mut text = String::new();
+        entry.read_to_string(&mut text).ok()?;
+        return gpui_gxserver_build_identity_from_json(&text);
+    }
     None
 }
 

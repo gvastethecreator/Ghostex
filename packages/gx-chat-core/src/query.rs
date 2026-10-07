@@ -54,7 +54,31 @@ pub fn answer_query(
         }
         Query::InsertAnswerAttachments => to_json(&answer_attachments_edit(arguments)?),
         Query::RemoveChatReference => to_json(&chat_reference_removal(arguments)?),
+        Query::RenderVisual => render_visual(arguments)?,
     })
+}
+
+/// `renderVisual(source, width, theme, fontFamily)`: one ```visual block laid out at `width` for
+/// the phone, which paints the returned SVG (the GPUI renderers paint the same scene directly).
+/// `theme` is the theme object (or its JSON text) `Theme::from_json` reads.
+fn render_visual(arguments: &[Value]) -> Option<String> {
+    let source = arguments.first()?.as_str()?;
+    let width = arguments.get(1)?.as_f64()? as f32;
+    let theme = match arguments.get(2) {
+        Some(Value::String(text)) => text.clone(),
+        Some(value) => value.to_string(),
+        None => "{}".to_string(),
+    };
+    let font_family = arguments
+        .get(3)
+        .and_then(Value::as_str)
+        .unwrap_or("system-ui, sans-serif");
+    Some(ghostex_gx_visual::render_json(
+        source,
+        width,
+        &theme,
+        font_family,
+    ))
 }
 
 /// `insertAnswerAttachments(current, paths, original, start, end)`, offsets in UTF-16 code units.
@@ -108,6 +132,8 @@ pub enum Query {
     InsertAnswerAttachments,
     /// A draft without the reference an attachment pill stands for.
     RemoveChatReference,
+    /// One ```visual block drawn for the phone: its scene as SVG, tooltip regions, or a page card.
+    RenderVisual,
 }
 
 impl Query {
@@ -121,6 +147,7 @@ impl Query {
             Self::SendBlockedToast => "sendBlockedToast",
             Self::InsertAnswerAttachments => "insertAnswerAttachments",
             Self::RemoveChatReference => "removeChatReference",
+            Self::RenderVisual => "renderVisual",
         }
     }
 
@@ -134,6 +161,7 @@ impl Query {
             "sendBlockedToast" => Self::SendBlockedToast,
             "insertAnswerAttachments" => Self::InsertAnswerAttachments,
             "removeChatReference" => Self::RemoveChatReference,
+            "renderVisual" => Self::RenderVisual,
             _ => return None,
         })
     }

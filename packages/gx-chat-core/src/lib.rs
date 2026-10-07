@@ -74,3 +74,7 @@ pub use ghostex_gx_protocol::Tri;
 
 /// The wire types, re-exported so a host needs one dependency.
 pub use ghostex_gx_protocol as protocol;
+
+/// The chat's visual blocks (```visual fences): the scene every renderer paints, re-exported so the
+/// GPUI renderers, the web build and the phone reach it through the chat core alone.
+pub use ghostex_gx_visual as visual;

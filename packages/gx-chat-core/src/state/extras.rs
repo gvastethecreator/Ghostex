@@ -71,10 +71,16 @@ pub struct PanelsState {
     pub tasks_show_completed: bool,
     /// The task list length the fold was last reset against; `-1` before the first projection.
     pub task_signature: i64,
-    /// A coordinator's Threads panel is folded to its header.
+    /// A coordinator's Threads panel is folded to its header; remembered across chats
+    /// (`threadsCollapsed`).
     pub threads_collapsed: bool,
-    /// Its Done group is listed.
-    pub threads_show_done: bool,
+    /// Every thread is listed, not only the working ones and the latest few.
+    pub threads_show_all: bool,
+    /// The full thread list "N more" read: the revision it answers and its rows (`Null` when the
+    /// read failed, so it is not retried until the list changes). Dropped when the list folds.
+    pub threads_all: Option<(String, Value)>,
+    /// The `readCoordinatorThreads` in flight and the revision it was asked for.
+    pub threads_all_request: Option<(u64, String)>,
 }
 
 impl Default for PanelsState {
@@ -85,7 +91,9 @@ impl Default for PanelsState {
             tasks_show_completed: false,
             task_signature: -1,
             threads_collapsed: false,
-            threads_show_done: false,
+            threads_show_all: false,
+            threads_all: None,
+            threads_all_request: None,
         }
     }
 }

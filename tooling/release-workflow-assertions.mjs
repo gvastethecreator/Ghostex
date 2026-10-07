@@ -84,7 +84,8 @@ const RELEASE_BUILD_WORKFLOWS = [
     platform: 'macos',
   },
   {
-    compileNeedles: ['windows.ps1', 'cargo '],
+    // The compile step runs windows.ps1 through windows-build-watchdog.ps1.
+    compileNeedles: ['windows.ps1', 'windows-build-watchdog.ps1', 'cargo '],
     contract: [{ file: 'apps/desktop/scripts/build-windows-app.ps1', literal: 'cargo build --release' }],
     file: '.github/workflows/release-gpui-windows.yml',
     platform: 'windows',
@@ -590,6 +591,221 @@ function warmCacheJobAssertions({ arch, compileNeedles, duplicatedCargo, job, re
   ];
 }
 
+/*
+ CDXC:Release 2026-10-07 WHY:
+ The Windows workflow compiles the native runtime (gxserver, ghostex, wmx, the
+ prompt editor) in jobs.runtime on a second runner while jobs.build compiles
+ the desktop app, and jobs.build packages the runtime outputs it downloads.
+ Nothing at run time notices when the two jobs drift apart: a different runner
+ label or cargo env compiles different bytes and misses the sccache namespace
+ the warm jobs fill, an artifact name or path mismatch only fails the packaging
+ phase 25 minutes in, and a `needs: runtime` edge or a `-Phase compile` in
+ jobs.build silently puts the runtime build back on the critical path. These
+ assertions hold the hand-off together.
+*/
+const WINDOWS_WORKFLOW = '.github/workflows/release-gpui-windows.yml';
+const WINDOWS_RUNTIME_ARTIFACT = 'release-windows-native-runtime-${{ inputs.arch }}';
+/* Each path build-windows-app.ps1's stage half copies from a runtime build. */
+const WINDOWS_RUNTIME_OUTPUTS = [
+  {
+    literal: '"server/target/release/$binary"',
+    upload: ['server/target/release/gxserver.exe', 'server/target/release/ghostex.exe'],
+  },
+  { literal: '".dependencies/wmx/target/release/wmx.exe"', upload: ['.dependencies/wmx/target/release/wmx.exe'] },
+  {
+    literal: '"apps/editor/desktop/target/release/ghostex-editor.exe"',
+    upload: ['apps/editor/desktop/target/release/ghostex-editor.exe'],
+  },
+  { literal: '"apps/editor/dist/web"', upload: ['apps/editor/dist/web/'] },
+];
+
+function windowsRuntimeJobs(document) {
+  const build = jobSteps(document, 'build');
+  const runtime = jobSteps(document, 'runtime');
+  if (!build) {
+    return { problem: stale(`${WINDOWS_WORKFLOW} has no jobs.build; the assertion navigates by that job name.`) };
+  }
+  if (!runtime) {
+    return {
+      problem: regressed(
+        REGRESSION_ABSENT,
+        `${WINDOWS_WORKFLOW} has no jobs.runtime, but jobs.build waits for its release-windows-native-runtime artifact.`
+      ),
+    };
+  }
+  return { build, runtime };
+}
+
+const runsPhase = (step, phase) =>
+  step &&
+  typeof step.run === 'string' &&
+  step.run.includes('windows-build-watchdog.ps1') &&
+  step.run.includes(`-Phase ${phase} `);
+
+const usesArtifact = (step, action) =>
+  step &&
+  typeof step.uses === 'string' &&
+  step.uses.split('@')[0] === action &&
+  step.with?.name === WINDOWS_RUNTIME_ARTIFACT;
+
+export function windowsNativeRuntimeAssertions() {
+  const shared = { contract: [], file: WINDOWS_WORKFLOW, platform: 'windows-runtime', related: [] };
+  return [
+    {
+      ...shared,
+      id: 'windows-runtime/mirrors-build',
+      requirement:
+        'jobs.runtime runs on the same runs-on expression as jobs.build and matches its job env for every cargo-affecting variable',
+      verify(document) {
+        const { problem, build, runtime } = windowsRuntimeJobs(document);
+        if (problem) {
+          return problem;
+        }
+        const runtimeRunner = runtime.job['runs-on'];
+        const buildRunner = build.job['runs-on'];
+        if (runtimeRunner !== buildRunner) {
+          return regressed(
+            REGRESSION_VALUE,
+            `jobs.runtime runs on ${JSON.stringify(runtimeRunner)} but jobs.build on ${JSON.stringify(buildRunner)}; the runtime binaries would come from a different toolchain image.`
+          );
+        }
+        const buildEnv = effectiveJobEnv(document, build.job);
+        const runtimeEnv = effectiveJobEnv(document, runtime.job);
+        const affecting = (name) =>
+          CARGO_AFFECTING_JOB_ENV.includes(name) ||
+          CARGO_AFFECTING_ENV_PREFIXES.some((prefix) => name.startsWith(prefix));
+        const names = new Set([...Object.keys(buildEnv), ...Object.keys(runtimeEnv)].filter(affecting));
+        const drift = [...names].filter((name) => String(buildEnv[name]) !== String(runtimeEnv[name]));
+        if (drift.length > 0) {
+          const described = drift.map(
+            (name) => `${name} (${JSON.stringify(runtimeEnv[name])} vs ${JSON.stringify(buildEnv[name])})`
+          );
+          return regressed(
+            REGRESSION_VALUE,
+            `jobs.runtime and jobs.build differ on ${described.join(', ')}; the runtime compile keys differently from the warm and release caches.`
+          );
+        }
+        return ok(`runs-on and ${[...names].sort().join(', ')} match`);
+      },
+    },
+    {
+      ...shared,
+      id: 'windows-runtime/action-pin',
+      requirement: `jobs.runtime installs ${SCCACHE_ACTION}@${SCCACHE_ACTION_TAG} before its compile-runtime step`,
+      verify(document) {
+        const { problem, runtime } = windowsRuntimeJobs(document);
+        if (problem) {
+          return problem;
+        }
+        const compileIndex = runtime.steps.findIndex((step) => runsPhase(step, 'compile-runtime'));
+        if (compileIndex === -1) {
+          return regressed(
+            REGRESSION_ABSENT,
+            'jobs.runtime has no step running windows.ps1 -Phase compile-runtime under the watchdog.'
+          );
+        }
+        const installs = stepsUsing(runtime.steps, SCCACHE_ACTION);
+        if (installs.length === 0 || installs.every(({ index }) => index > compileIndex)) {
+          return regressed(
+            REGRESSION_ABSENT,
+            `jobs.runtime does not install ${SCCACHE_ACTION} before its compile step.`
+          );
+        }
+        const unpinned = installs
+          .map(({ step }) => step.uses.split('@')[1] ?? '')
+          .filter((ref) => ref !== SCCACHE_ACTION_TAG);
+        if (unpinned.length > 0) {
+          return regressed(
+            REGRESSION_VALUE,
+            `jobs.runtime uses ${SCCACHE_ACTION}@${unpinned.join(', @')} instead of @${SCCACHE_ACTION_TAG}.`
+          );
+        }
+        return ok(`${SCCACHE_ACTION}@${SCCACHE_ACTION_TAG}`);
+      },
+    },
+    {
+      ...shared,
+      contract: WINDOWS_RUNTIME_OUTPUTS.map(({ literal }) => ({
+        file: 'apps/desktop/scripts/build-windows-app.ps1',
+        literal,
+      })),
+      id: 'windows-runtime/hand-off',
+      requirement: `jobs.runtime uploads ${WINDOWS_RUNTIME_ARTIFACT} (hidden files included) with every runtime output the stage half copies, and jobs.build compiles only the app half, has no needs: edge on it, and awaits and downloads it into the workspace before -Phase package`,
+      verify(document) {
+        const { problem, build, runtime } = windowsRuntimeJobs(document);
+        if (problem) {
+          return problem;
+        }
+        const upload = runtime.steps.find((step) => usesArtifact(step, 'actions/upload-artifact'));
+        if (!upload) {
+          return regressed(REGRESSION_ABSENT, `jobs.runtime uploads no artifact named ${WINDOWS_RUNTIME_ARTIFACT}.`);
+        }
+        const uploaded = String(upload.with.path ?? '')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const missing = WINDOWS_RUNTIME_OUTPUTS.flatMap(({ upload: paths }) => paths).filter(
+          (output) => !uploaded.includes(output)
+        );
+        if (missing.length > 0) {
+          return regressed(
+            REGRESSION_ABSENT,
+            `jobs.runtime does not upload ${missing.join(', ')}, which the stage half copies.`
+          );
+        }
+        if (String(upload.with['include-hidden-files']) !== 'true') {
+          return regressed(
+            REGRESSION_VALUE,
+            'jobs.runtime uploads without include-hidden-files: true, which drops .dependencies/wmx/target/release/wmx.exe.'
+          );
+        }
+        if ([build.job.needs ?? []].flat().map(String).includes('runtime')) {
+          return regressed(REGRESSION_VALUE, 'jobs.build needs jobs.runtime, which serialises the two compiles again.');
+        }
+        if (build.steps.some((step) => runsPhase(step, 'compile'))) {
+          return regressed(
+            REGRESSION_VALUE,
+            'jobs.build runs -Phase compile, which compiles the native runtime a second time on the critical path; it runs -Phase compile-app.'
+          );
+        }
+        const appIndex = build.steps.findIndex((step) => runsPhase(step, 'compile-app'));
+        const awaitIndex = build.steps.findIndex(
+          (step) =>
+            step &&
+            typeof step.run === 'string' &&
+            step.run.includes('await-run-artifacts.mjs') &&
+            step.run.includes('release-windows-native-runtime-')
+        );
+        const downloadIndex = build.steps.findIndex((step) => usesArtifact(step, 'actions/download-artifact'));
+        const packageIndex = build.steps.findIndex((step) => runsPhase(step, 'package'));
+        const absent = [
+          appIndex === -1 && 'the -Phase compile-app step',
+          awaitIndex === -1 && 'the await for the runtime artifact',
+          downloadIndex === -1 && `the download of ${WINDOWS_RUNTIME_ARTIFACT}`,
+          packageIndex === -1 && 'the -Phase package step',
+        ].filter(Boolean);
+        if (absent.length > 0) {
+          return regressed(REGRESSION_ABSENT, `jobs.build lacks ${absent.join(', ')}.`);
+        }
+        if (!(appIndex < awaitIndex && awaitIndex < downloadIndex && downloadIndex < packageIndex)) {
+          return regressed(
+            REGRESSION_VALUE,
+            'jobs.build must compile the app, then await and download the runtime artifact, then package, in that order.'
+          );
+        }
+        const downloadPath = String(build.steps[downloadIndex].with?.path ?? '');
+        if (downloadPath !== '${{ github.workspace }}') {
+          return regressed(
+            REGRESSION_VALUE,
+            `jobs.build downloads the runtime artifact to ${JSON.stringify(downloadPath)}, not the workspace root the stage half copies from.`
+          );
+        }
+        return ok(`${uploaded.length} runtime outputs handed from jobs.runtime to jobs.build`);
+      },
+    },
+  ];
+}
+
 export function warmCacheWorkflowAssertions() {
   const file = WARM_CACHE_WORKFLOW;
   return [
@@ -658,6 +874,7 @@ export function warmCacheWorkflowAssertions() {
 export function releaseWorkflowAssertions() {
   return [
     ...RELEASE_BUILD_WORKFLOWS.flatMap((workflow) => sccacheWorkflowAssertions(workflow)),
+    ...windowsNativeRuntimeAssertions(),
     ...warmCacheWorkflowAssertions(),
   ];
 }

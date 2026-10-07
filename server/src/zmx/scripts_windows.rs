@@ -30,15 +30,26 @@ fn invocation(
     )
 }
 
-pub(super) fn process(script: &str) -> Result<Option<(Command, HashMap<String, String>)>, String> {
+/// The wmx command, its environment, and the extra creation flags it needs.
+///
+/// CDXC:PlatformSupport 2026-10-06 WHY:
+/// gxserver suppresses Windows error dialogs for the helpers it starts (`suppress_helper_error_dialogs`), and children inherit that error mode. `wmx start` launches the daemon whose PowerShell and agent run inside the user's session, so it gets CREATE_DEFAULT_ERROR_MODE: programs the user runs there keep Windows' normal error dialogs.
+pub(super) fn process(
+    script: &str,
+) -> Result<Option<(Command, HashMap<String, String>, u32)>, String> {
+    const CREATE_DEFAULT_ERROR_MODE: u32 = 0x0400_0000;
     let Some(encoded) = script.strip_prefix(PREFIX) else {
         return Ok(None);
     };
     let invocation: Invocation =
         serde_json::from_str(encoded).map_err(|error| error.to_string())?;
+    let flags = match invocation.args.first().map(String::as_str) {
+        Some("start" | "start-encoded") => CREATE_DEFAULT_ERROR_MODE,
+        _ => 0,
+    };
     let mut command = Command::new(invocation.program);
     command.args(invocation.args);
-    Ok(Some((command, invocation.environment)))
+    Ok(Some((command, invocation.environment, flags)))
 }
 
 fn simple(program: &str, operation: &str, name: &str) -> String {

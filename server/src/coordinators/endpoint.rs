@@ -26,6 +26,7 @@ pub struct CoordinatorEndpointOutput {
 
 pub const COORDINATOR_ENDPOINTS: &[&str] = &[
     "/api/readCoordinator",
+    "/api/readCoordinatorThreads",
     "/api/listCoordinators",
     "/api/updateCoordinator",
     "/api/linkCoordinatorThread",
@@ -69,6 +70,14 @@ pub fn handle_coordinator_endpoint(
                 changed_sessions: Vec::new(),
             })
         }
+        "/api/readCoordinatorThreads" => Ok(CoordinatorEndpointOutput {
+            result: super::panel::read_coordinator_threads(&required_ids(
+                params,
+                "projectId",
+                "sessionId",
+            )?),
+            changed_sessions: Vec::new(),
+        }),
         "/api/listCoordinators" => {
             let project_id = text(params, "projectId");
             let threads = list_threads(db)?;

@@ -26,7 +26,8 @@ sendFeedback carries up to five 5 MiB images as base64 (about 35 MB), the same
 36 MiB request cap the feedback relay itself enforces.
 */
 pub const GXSERVER_FEEDBACK_BODY_LIMIT_BYTES: usize = 36 * 1024 * 1024;
-pub const GXSERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The app version (`package.json`), not the placeholder crate version; see `server/build.rs`.
+pub const GXSERVER_VERSION: &str = env!("GHOSTEX_BUILD_MARKETING_VERSION");
 
 pub const GXSERVER_CAPABILITIES: &[&str] = &[
     "health",

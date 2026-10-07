@@ -335,6 +335,26 @@ pub(super) async fn run_session_chat_send_worker(
                         break;
                     }
                 }
+                SessionChatSendStep::GuardCursorInterrupt => {
+                    // `session_chat_interrupt_escape_steps` says why Cursor's Ctrl+C waits.
+                    let deadline = Instant::now() + Duration::from_secs(8);
+                    let mut processing = false;
+                    loop {
+                        if let Some(screen) = capture_session_terminal_text(&zmx_name).await {
+                            if crate::session_chat_cursor_blocking::cursor_is_processing(&screen) {
+                                processing = true;
+                                break;
+                            }
+                        }
+                        if Instant::now() >= deadline {
+                            break;
+                        }
+                        tokio::time::sleep(Duration::from_millis(250)).await;
+                    }
+                    if !processing {
+                        break;
+                    }
+                }
                 SessionChatSendStep::GuardCodexInterrupt => {
                     let Some(screen) = capture_session_terminal_text(&zmx_name).await else {
                         outcome = Err(SessionChatSendError::not_attempted(

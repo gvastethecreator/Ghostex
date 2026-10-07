@@ -444,6 +444,7 @@ pub(super) async fn route_sessions_http(
             },
         ),
         "/api/readCoordinator"
+        | "/api/readCoordinatorThreads"
         | "/api/listCoordinators"
         | "/api/updateCoordinator"
         | "/api/linkCoordinatorThread"

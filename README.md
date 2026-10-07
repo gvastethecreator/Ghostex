@@ -3,11 +3,6 @@
 </h1>
 
 <p align="center">
-  <strong>The best all-in-one native agents workspace.</strong><br/>
-  Agent chats, a code editor and a browser for every agent CLI and subscription you have, in one fast native window.
-</p>
-
-<p align="center">
   <a href="https://github.com/maddada/Ghostex/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/stars/maddada/Ghostex.svg?variant=secondary&mode=dark" /><img src="https://shieldcn.dev/github/stars/maddada/Ghostex.svg?variant=secondary&mode=light" alt="GitHub stars" /></picture></a>
   <a href="https://github.com/maddada/Ghostex/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/release/maddada/Ghostex.svg?variant=secondary&mode=dark" /><img src="https://shieldcn.dev/github/release/maddada/Ghostex.svg?variant=secondary&mode=light" alt="Latest release" /></picture></a>
   <a href="LICENSE"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/license/maddada/Ghostex.svg?variant=secondary&mode=dark" /><img src="https://shieldcn.dev/github/license/maddada/Ghostex.svg?variant=secondary&mode=light" alt="License" /></picture></a>
@@ -19,131 +14,167 @@
 <a href="https://discord.gg/df7b3G92CS"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/Discord-Join%20the%20community.svg?variant=branded&logo=discord&mode=dark" /><img src="https://shieldcn.dev/badge/Discord-Join%20the%20community.svg?variant=branded&logo=discord&mode=light" alt="Join the Discord" /></picture></a>
 </p>
 
+<p align="center">
+  <strong>The native desktop app for Claude Code, Codex, OpenCode, and every other coding agent.</strong><br/>
+  Chat with several agents side by side, review their work as they go, and keep steering from your phone.
+</p>
+
 <h3 align="center"><a href="#install"><ins>Download Ghostex</ins></a> &nbsp;·&nbsp; <a href="https://ghostex.dev">Website</a> &nbsp;·&nbsp; <a href="https://youtu.be/QzjFB4J6-8E">Watch the 3-minute tour</a></h3>
+
+<p align="center">
+  <a href="media/readme/gx-hero-dark.jpg"><picture><source media="(prefers-color-scheme: dark)" srcset="media/readme/gx-hero-dark.gif" /><img src="media/readme/gx-hero-light.gif" alt="Ghostex with see-through glass over a moving meadow: projects and agent sessions in the sidebar, a chat in the middle and the view picker on the right" width="960" /></picture></a>
+</p>
 
 <div align="center">
   <table>
     <tr>
-      <td width="50%" align="center"><a href="#a-real-chat-for-every-agent"><img src="media/readme/gx-card-chat.gif" alt="Just like the ChatGPT and Claude apps, but much more customizable and powerful" width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#coordinators-that-run-the-work"><img src="media/readme/gx-card-orchestrate.gif" alt="Let one agent orchestrate the others. Agents message each other, too." width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#a-real-chat-view-for-every-agent"><img src="media/readme/gx-diff.jpg" alt="A chat showing the agent's code change as a diff" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#agents-that-run-agents"><img src="media/readme/gx-threads.jpg" alt="A coordinator with its threads in the sidebar and the Threads panel" width="100%" /></a></td>
     </tr>
     <tr>
-      <td width="50%" align="center"><a href="#any-agent-swap-on-the-fly"><img src="media/readme/gx-card-handover.gif" alt="Hand any chat to any agent. The whole conversation comes along." width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#a-real-browser-next-to-your-agents"><img src="media/readme/gx-card-markup.gif" alt="Mark up any web page and send it to your agent" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#any-agent-swap-on-the-fly"><img src="media/readme/gx-agent-picker.gif" alt="The model picker switching between agents" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#embedded-chromium-browser"><img src="media/readme/gx-browser-pane.jpg" alt="A chat next to the built-in browser" width="100%" /></a></td>
     </tr>
     <tr>
-      <td width="50%" align="center"><a href="#your-agents-in-your-pocket"><img src="media/readme/gx-card-phone.gif" alt="Every machine, every session, in your pocket" width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#find-any-chat-you-ever-had"><img src="media/readme/gx-card-search.gif" alt="Instantly find any chat with smart search" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#ios-and-android-apps-with-easy-connect-or-tailscale"><img src="media/readme/gx-phone.gif" alt="Pairing the phone app, then sessions and a chat on the phone" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#find-any-past-session"><img src="media/readme/gx-search.gif" alt="Searching every past prompt" width="100%" /></a></td>
     </tr>
     <tr>
-      <td width="50%" align="center"><a href="#accounts-and-usage"><img src="media/readme/gx-card-accounts.gif" alt="Add multiple Claude and Codex accounts and switch between them freely" width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#plugins-you-install-only-when-you-want-them"><img src="media/readme/gx-card-plugins.gif" alt="Tons of powerful plugins. All optional." width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#a-real-chat-view-for-every-agent"><img src="media/readme/gx-question.jpg" alt="An agent's question shown as a card with options" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#also-in-the-box"><img src="media/readme/gx-views.jpg" alt="The view picker with Code, Browser, Kanban, Automate, Files, Terminal, Linear and Jira" width="100%" /></a></td>
     </tr>
   </table>
 </div>
 
-Ghostex is for developers who keep many agents alive at once. Claude Code, Codex, OpenCode, Gemini and 20+ other agent CLIs run in real Ghostty terminals, and every one of them gets a proper chat view on top. The shell is native Rust and GPUI (no Electron, no Tauri), the browser is real Chromium, and every session survives restarts. Your phone and your other computers join the same workspace.
-
-<p align="center">
-  <img src="media/readme/gx-hero.jpg" alt="Ghostex with a Codex chat on the left showing a CSS fix as a diff, and the built-in browser on the right showing the fixed storefront grid" width="100%" />
-</p>
+Ghostex is built for developers who keep many agents alive at once. A chat view for every agent, a native Rust/GPUI shell, embedded Chromium panes, and a mobile app share one workspace, and every session survives restarts.
 
 ## Features
 
-### A real chat for every agent
-
-Talk to any agent in a chat that reads like the ChatGPT and Claude apps: thinking, tool calls and file edits fold into tidy cards, diffs are readable, images are clickable, prompts queue while the agent works, and sub-agents stay in view. It is still the agent's own CLI underneath, so nothing breaks when the CLI updates, and the raw terminal is one hotkey away with your draft intact.
-
-<p align="center">
-  <img src="media/readme/gx-chat-diff.jpg" alt="A Claude Code chat in Ghostex, showing the agent's two changed files as inline diffs under its reply" width="100%" />
-</p>
-
 <table>
 <tr>
-<td width="50%" valign="top">
+<td width="50%" valign="middle">
 
-**Questions and approvals are cards, not terminal menus.** Pick an option, write your own answer, or skip, and the answer reaches the agent as if you had typed it in its terminal.
+<br/>
+
+### A real chat view for every agent
+
+Talk to Claude Code, Codex, or any other agent in a proper chat GUI: clickable images, readable diffs, queued prompts, sub-agents in view, and a full editor for long messages. If you ever need the raw CLI, it is one hotkey away and your draft comes with you.
+
+<br/>
 
 </td>
-<td width="50%" valign="top">
-
-**Chat and terminal, side by side.** Drag any session onto a pane edge to split. Each pane can show the chat or the real Ghostty terminal underneath.
-
+<td width="50%">
+  <img src="media/readme/gx-diff.jpg" alt="A chat showing the agent's code change as a diff" width="100%" />
 </td>
 </tr>
 <tr>
-<td width="50%"><img src="media/readme/gx-question-card.jpg" alt="An agent asking which illustration style to use, shown as a multiple-choice card above the chat box" width="100%" /></td>
-<td width="50%"><img src="media/readme/gx-side-by-side.jpg" alt="A Codex chat and a Claude Code chat split side by side in one window" width="100%" /></td>
+<td width="50%" valign="middle">
+
+<br/>
+
+### iOS and Android apps with Easy Connect or Tailscale
+
+Your agents in your pocket. Easy Connect pairs your phone with a single scan, no extra accounts needed, or join through your Tailscale tailnet if you already have one. Read transcripts, send follow-ups, preview localhost pages, and get a push when an agent finishes.
+
+<br/>
+
+</td>
+<td width="50%">
+  <img src="media/readme/gx-phone.gif" alt="Pairing the phone app, then sessions and a chat on the phone" width="100%" />
+</td>
 </tr>
-</table>
+<tr>
+<td width="50%" valign="middle">
 
-### Coordinators that run the work
-
-Tell a coordinator what needs doing and it hands each piece to a thread: an ordinary agent session it starts, briefs, and keeps track of, in its own git worktree when threads should run in parallel. Threads sit under the coordinator in the sidebar, their reports come back on their own, and the coordinator checks and commits the work, then tells you what needs you. Start one from any project's agent menu with **New Coordinator…**, or turn a running session into one with **Make Coordinator**.
-
-<p align="center">
-  <img src="media/readme/gx-coordinator.jpg" alt="A coordinator named Checkout redesign with a crown in the sidebar, one thread under it, thread reports in the chat and a Threads panel listing one working and five done" width="100%" />
-</p>
+<br/>
 
 ### Any agent, swap on the fly
 
-Claude Code, Codex, OpenCode, Pi, Gemini, Grok, Cursor, Copilot, Antigravity, Hermes and more. Pick the model and effort from the chat box, hand a conversation from one agent to another mid-task, and let agents message each other through the `ghostex` CLI:
+Claude Code, Codex, OpenCode, Pi, Gemini, Grok, Cursor, and more. Pick the model and effort from the chat box, or hand a session from one agent to another mid-task.
 
-```bash
-ghostex agents create codex --task "Run the checkout tests and report back"
-ghostex agents send "Checkout redesign" "Tests pass, ready for review"
-ghostex read-session-chat "Checkout redesign" --all --format text
-```
+<br/>
 
-### Real terminals when you want them
+</td>
+<td width="50%">
+  <img src="media/readme/gx-agent-picker.gif" alt="The model picker switching between agents" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
 
-Every session is a real Ghostty terminal, kept alive by its own session daemon, so agents keep running when you close the window, restart the app or update it. Split panes, a command terminal under your work, and `ghostex attach` from any shell, even over SSH.
+<br/>
 
-<p align="center">
-  <img src="media/readme/gx-terminals.jpg" alt="Two Ghostty terminals side by side: Codex on the left and Claude Code on the right, both showing their tool calls and results" width="100%" />
-</p>
+### Embedded Chromium browser
 
-### A real browser next to your agents
+Click any element, type what should change, and the note lands in the agent's prompt. Agents can drive your tabs too, through the built-in browser-use skill.
 
-Open your dev server in an embedded Chromium tab beside the chat. Click any element, type what should change, and the note lands in the agent's prompt. Agents can drive the browser themselves through the built-in browser-use skill, and Markdown plans and HTML prototypes in the Files view get the same annotations.
+<br/>
 
-<p align="center">
-  <img src="media/readme/gx-browser.jpg" alt="A Codex chat with its CSS fix next to the built-in browser showing the storefront on localhost" width="100%" />
-</p>
+</td>
+<td width="50%">
+  <img src="media/readme/gx-browser-pane.jpg" alt="A chat next to the built-in browser" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
 
-### Kanban board and automations
+<br/>
 
-A project board on the [Beads](https://github.com/gastownhall/beads) `bd` CLI, so agents and humans share one backlog: dump tickets on it, start an agent on a card, and the card shows who is working on it. Automate schedules agent work per project (daily, weekly, cron, or once) in your checkout, a fresh worktree or an existing thread.
+### Kanban board on Beads
 
-<p align="center">
-  <img src="media/readme/gx-kanban.jpg" alt="The Kanban board with Backlog, Todo, In Progress, Test, Review and Done lanes, with agent sessions linked to cards" width="100%" />
-</p>
+Dump your thoughts on the board, then let an agent pick up the tickets. Runs on the [Beads](https://github.com/gastownhall/beads) `bd` CLI, so agents and humans share one backlog.
 
-<p align="center">
-  <img src="media/readme/gx-automate.jpg" alt="The Automate view listing a weekday morning triage, a paused flaky test sweep and a weekly dependency audit" width="100%" />
-</p>
+<br/>
 
-### Your agents in your pocket
+</td>
+<td width="50%">
+  <img src="media/readme/gx-kanban-board.jpg" alt="The Kanban board with Backlog, Todo, In Progress and Test lanes" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
 
-The Android and iOS apps show every computer you connect, with their projects and sessions. Read transcripts, answer questions, send follow-ups, preview localhost pages and get a push when an agent finishes. **Easy Connect** pairs your phone with one QR scan and no extra accounts, or join through Tailscale if you already use it. Other computers join the same way and show up in the sidebar.
+<br/>
 
-<p align="center">
-  <img src="media/readme/gx-card-webpreview.gif" alt="Open any site running on your computer on your phone: the whole app, not a lite version" width="80%" />
-</p>
+### Find any past session
 
-### Find any chat you ever had
+Fuzzy search every prompt you ever sent, across all your agents, and press Enter to resume the conversation. Star favourites and filter by agent or project. Also available as `gx f` for command-line fans.
 
-Fuzzy-search every prompt you ever sent, across every agent and project, and press Enter to resume that conversation. Star favourites and filter by agent or project. Also in the terminal as `gx f`.
+<br/>
 
-### Accounts and usage
+</td>
+<td width="50%">
+  <img src="media/readme/gx-search.gif" alt="Searching every past prompt" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
 
-Add several Claude and Codex accounts, see their limits in the status line, and let Ghostex move a session to another account automatically when one runs out.
+<br/>
 
-### Plugins you install only when you want them
+### Agents that run agents
 
-Browser, Files, Kanban, Automate, VS Code, Storybook, Linear, Jira, GitHub, Sentry, Figma, Vercel, Supabase, PostHog, Hermes bots and more. Every view is optional, sleeps when idle, and you can build your own extensions.
+Agents can open sessions, send prompts, and read replies from other agents through the `ghostex` command. Ask Claude Code to spin up Codex sub-agents and steer them, or hand the work to a coordinator that keeps track of them for you.
 
-**Also in the box:** the Ctrl+G rich prompt editor, worktrees per task, Spaces, Floating Capture for prompting from any app, Cloud Boxes for agents in a sandbox, window glass and themes, notifications and sounds, multiple windows, and Keep Awake.
+<br/>
+
+</td>
+<td width="50%">
+  <img src="media/readme/gx-threads.jpg" alt="A coordinator with its threads in the sidebar and the Threads panel" width="100%" />
+</td>
+</tr>
+</table>
+
+### Also in the box
+
+- **Docs with annotations**: open Markdown, HTML prototypes, and Excalidraw diagrams next to your agent and leave notes on anything.
+- **Rich prompt editor**: press Ctrl+G to edit any prompt in a full editor.
+- **Built-in IDE**: a VS Code editor that loads on demand and sleeps when you are not using it.
+- **Remote machines**: connect another computer with an Easy Connect code or SSH and it shows up in the sidebar.
+- **Usage and accounts**: Claude and Codex limits at a glance, with automatic account switching.
+- **Worktrees, splits, and spaces**: a worktree per task, split panes, Arc-style spaces.
+- **Automations**: scheduled prompts, plus menu bar and sound notifications.
+- **Optional plugins**: browser, Kanban, IDE, Docs, and more load only when you use them. Or write your own.
 
 ---
 
@@ -187,7 +218,7 @@ Or download the app directly:
   <a href="https://maddada.com/download/windows-arm64"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/Windows-ARM64%20Setup.svg?variant=secondary&logo=windows&mode=dark" /><img src="https://shieldcn.dev/badge/Windows-ARM64%20Setup.svg?variant=secondary&logo=windows&mode=light" alt="Windows ARM64 installer" /></picture></a>
 </p>
 
-Agents run in native PowerShell with your Windows folders by default. Prefer Linux? Switch to WSL in Settings > General > Terminal > Windows Environment. Portable ZIPs are on the [release page](https://github.com/maddada/Ghostex/releases/latest), and updates arrive automatically.
+Agents run in native PowerShell by default. Prefer Linux? Switch to WSL in Settings > General > Terminal > Windows Environment. Updates arrive automatically.
 
 ### Linux
 
@@ -206,7 +237,7 @@ yay -S ghostex-bin
 sudo tar -xpf ghostex-*-linux-x64.tar.zst -C /
 ```
 
-The browser and code editor run on Chromium, which Ghostex offers to install the first time you open one of them.
+Ghostex offers to install Chromium the first time you open the browser or code editor.
 
 ### Mobile
 
@@ -215,11 +246,7 @@ The browser and code editor run on Chromium, which Ghostex offers to install the
   <a href="https://discord.gg/df7b3G92CS"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/iOS-TestFlight.svg?variant=secondary&logo=apple&mode=dark" /><img src="https://shieldcn.dev/badge/iOS-TestFlight.svg?variant=secondary&logo=apple&mode=light" alt="iOS TestFlight" /></picture></a>
 </p>
 
-The iOS TestFlight runs through the [Discord](https://discord.gg/df7b3G92CS). Post in the iOS channel to get in. Then open **Mobile & Remote** in the sidebar's More Options on your computer and scan the code.
-
-### Build from source
-
-See [CONTRIBUTING.md](CONTRIBUTING.md#building-from-source).
+The iOS TestFlight runs through the [Discord](https://discord.gg/df7b3G92CS). Post in the iOS channel to get in.
 
 ## Comparison
 
@@ -270,7 +297,7 @@ Ghostex builds on open source work from these projects and communities:
 - [vvterm](https://github.com/vivy-company/vvterm) and [Termux](https://github.com/termux/termux-app) for mobile terminal components
 - [Pierre](https://github.com/pierrecomputer/pierre) for diff and file rendering components
 
-Screenshot backdrops are public-domain paintings and prints: Claude Monet, *Cliff Walk at Pourville* (1882); Kawase Hasui, *Shinagawa Offshore* and *Lake Kugushi*; Yoshida Hiroshi, *Kumoi Cherry Trees* (1920); Frederic Edwin Church, *Heart of the Andes* (1859); Albert Bierstadt, *Canadian Rockies (Lake Louise)* and *Merced River, Yosemite Valley* (1866).
+The moving background behind the screenshots is [Time lapse of a green meadow](https://mixkit.co/free-stock-video/time-lapse-of-a-green-meadow-4070/) from Mixkit, used under the Mixkit Stock Video Free License.
 
 ## License
 

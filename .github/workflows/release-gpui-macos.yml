@@ -113,8 +113,9 @@ jobs:
       # CDXC:ReleaseChangeAwarePlanning 2026-08-13: the runtime artifacts used to
       # be downloaded here, behind a `needs: gxserver_*` edge that added ~22 min
       # to the critical path. macos.sh consumes them only in
-      # prepare-macos-runtime.sh, so the download now happens just before the
-      # build, after every macOS-local setup step.
+      # prepare-macos-runtime.sh, so the download now happens after every
+      # macOS-local setup step and (since 2026-10-07) after the gxserver cargo
+      # build, just before prepare-runtime.
       - name: Resolve dependency cache keys
         id: cache_keys
         run: |
@@ -258,6 +259,54 @@ jobs:
             echo "Configure either App Store Connect API-key or Apple ID notarization secrets" >&2
             exit 1
           fi
+      # CDXC:ReleaseMacosPhases 2026-09-02: macos.sh used to run as one step
+      # (1423 s on run 33462783752), hiding where the time went. It now runs as
+      # one step per phase so the jobs API reports each phase's duration. Steps
+      # share no shell state, so the environment the single step used to carry
+      # is exported once to $GITHUB_ENV here (same literals, same values) and
+      # the two secrets are attached to every phase step. The two cargo phases
+      # pre-warm the exact builds the staging and assembly scripts run
+      # afterwards, so those scripts find every artifact fresh and the shipped
+      # binaries are still produced by their original commands.
+      - name: Export macOS release build environment
+        env:
+          GHOSTEX_CODE_SIGN_IDENTITY: 'Developer ID Application: Mohamad Youssef (KTKP595G3B)'
+          GHOSTEX_NOTARY_PROFILE: notarytool-profile
+          GHOSTEX_RELEASE_UPDATE_SPARKLE: ${{ inputs.update_sparkle && '1' || '0' }}
+          GHOSTEX_ON_DEMAND_LINUX_X64_ARCHIVE: ${{ github.workspace }}/build/runtime-artifacts/x64/gxserver-linux-x64.tar.gz
+          GHOSTEX_ON_DEMAND_LINUX_ARM64_ARCHIVE: ${{ github.workspace }}/build/runtime-artifacts/arm64/gxserver-linux-arm64.tar.gz
+          GHOSTEX_CODE_SERVER_COMPONENT_VERSION: ${{ steps.code_server_identity.outputs.component_version }}
+          GHOSTEX_ON_DEMAND_CODE_SERVER_LINUX_X64_ARCHIVE: ${{ github.workspace }}/build/runtime-artifacts/code-server-x64/${{ steps.code_server_identity.outputs.archive_name }}
+          GHOSTEX_ON_DEMAND_CODE_SERVER_LINUX_ARM64_ARCHIVE: ${{ github.workspace }}/build/runtime-artifacts/code-server-arm64/code-server-${{ steps.code_server_identity.outputs.component_version }}-linux-arm64.tar.gz
+        run: |
+          for name in \
+            GHOSTEX_CODE_SIGN_IDENTITY \
+            GHOSTEX_NOTARY_PROFILE \
+            GHOSTEX_RELEASE_UPDATE_SPARKLE \
+            GHOSTEX_ON_DEMAND_LINUX_X64_ARCHIVE \
+            GHOSTEX_ON_DEMAND_LINUX_ARM64_ARCHIVE \
+            GHOSTEX_CODE_SERVER_COMPONENT_VERSION \
+            GHOSTEX_ON_DEMAND_CODE_SERVER_LINUX_X64_ARCHIVE \
+            GHOSTEX_ON_DEMAND_CODE_SERVER_LINUX_ARM64_ARCHIVE; do
+            printf '%s=%s\n' "$name" "${!name}" >> "$GITHUB_ENV"
+          done
+      - name: Prepare references and GhosttyKit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: tooling/release-gpui/macos.sh --phase prepare-sources "${{ inputs.version }}"
+      - name: Cargo build gxserver (server crates)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GHOSTEX_CARGO_TIMINGS: '1'
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: tooling/release-gpui/macos.sh --phase build-server "${{ inputs.version }}"
+      # CDXC:Release 2026-10-07 WHY:
+      # The runtime artifacts are awaited after the gxserver cargo build, not
+      # before it: neither prepare-sources nor that build reads them, and the
+      # wait used to idle for as long as the Linux gxserver jobs took (411 s in
+      # 10.14.0). prepare-runtime then resolves what `prepare` used to read
+      # from them, before stage-runtime as before.
       - name: Await the runtime artifacts of this run
         if: ${{ inputs.runtime_artifacts_ready }}
         env:
@@ -312,48 +361,11 @@ jobs:
           mkdir -p build/remote-gxserver-linux/x64/package build/remote-gxserver-linux/arm64/package
           tar -xzf build/runtime-artifacts/x64/gxserver-linux-x64.tar.gz -C build/remote-gxserver-linux/x64/package
           tar -xzf build/runtime-artifacts/arm64/gxserver-linux-arm64.tar.gz -C build/remote-gxserver-linux/arm64/package
-      # CDXC:ReleaseMacosPhases 2026-09-02: macos.sh used to run as one step
-      # (1423 s on run 33462783752), hiding where the time went. It now runs as
-      # one step per phase so the jobs API reports each phase's duration. Steps
-      # share no shell state, so the environment the single step used to carry
-      # is exported once to $GITHUB_ENV here (same literals, same values) and
-      # the two secrets are attached to every phase step. The two cargo phases
-      # pre-warm the exact builds the staging and assembly scripts run
-      # afterwards, so those scripts find every artifact fresh and the shipped
-      # binaries are still produced by their original commands.
-      - name: Export macOS release build environment
-        env:
-          GHOSTEX_CODE_SIGN_IDENTITY: 'Developer ID Application: Mohamad Youssef (KTKP595G3B)'
-          GHOSTEX_NOTARY_PROFILE: notarytool-profile
-          GHOSTEX_RELEASE_UPDATE_SPARKLE: ${{ inputs.update_sparkle && '1' || '0' }}
-          GHOSTEX_ON_DEMAND_LINUX_X64_ARCHIVE: ${{ github.workspace }}/build/runtime-artifacts/x64/gxserver-linux-x64.tar.gz
-          GHOSTEX_ON_DEMAND_LINUX_ARM64_ARCHIVE: ${{ github.workspace }}/build/runtime-artifacts/arm64/gxserver-linux-arm64.tar.gz
-          GHOSTEX_CODE_SERVER_COMPONENT_VERSION: ${{ steps.code_server_identity.outputs.component_version }}
-          GHOSTEX_ON_DEMAND_CODE_SERVER_LINUX_X64_ARCHIVE: ${{ github.workspace }}/build/runtime-artifacts/code-server-x64/${{ steps.code_server_identity.outputs.archive_name }}
-          GHOSTEX_ON_DEMAND_CODE_SERVER_LINUX_ARM64_ARCHIVE: ${{ github.workspace }}/build/runtime-artifacts/code-server-arm64/code-server-${{ steps.code_server_identity.outputs.component_version }}-linux-arm64.tar.gz
-        run: |
-          for name in \
-            GHOSTEX_CODE_SIGN_IDENTITY \
-            GHOSTEX_NOTARY_PROFILE \
-            GHOSTEX_RELEASE_UPDATE_SPARKLE \
-            GHOSTEX_ON_DEMAND_LINUX_X64_ARCHIVE \
-            GHOSTEX_ON_DEMAND_LINUX_ARM64_ARCHIVE \
-            GHOSTEX_CODE_SERVER_COMPONENT_VERSION \
-            GHOSTEX_ON_DEMAND_CODE_SERVER_LINUX_X64_ARCHIVE \
-            GHOSTEX_ON_DEMAND_CODE_SERVER_LINUX_ARM64_ARCHIVE; do
-            printf '%s=%s\n' "$name" "${!name}" >> "$GITHUB_ENV"
-          done
-      - name: Prepare references, code-server archives, and GhosttyKit
+      - name: Resolve code-server archives and remote gxserver packages
         env:
           GH_TOKEN: ${{ github.token }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-        run: tooling/release-gpui/macos.sh --phase prepare "${{ inputs.version }}"
-      - name: Cargo build gxserver (server crates)
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GHOSTEX_CARGO_TIMINGS: '1'
-          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-        run: tooling/release-gpui/macos.sh --phase build-server "${{ inputs.version }}"
+        run: tooling/release-gpui/macos.sh --phase prepare-runtime "${{ inputs.version }}"
       # The macOS code-server component is published by its own job; staging
       # only needs the tag to be live, which the artifact upload proves.
       - name: Await the macOS code-server component of this run

@@ -10,6 +10,7 @@ pub fn create_sidebar_hud_settings_mutation(
         ("agent", "save") => sidebar_agent_save_mutation(projects, params),
         ("agent", "delete") => sidebar_agent_delete_mutation(projects, params),
         ("agent", "order") => sidebar_agent_order_mutation(projects, params),
+        ("agent", "setEnabled") => sidebar_agent_set_enabled_mutation(projects, params),
         ("command", "save") => sidebar_command_save_mutation(projects, params),
         ("command", "delete") => sidebar_command_delete_mutation(projects, params),
         ("command", "order") => sidebar_command_order_mutation(projects, params),
@@ -36,17 +37,17 @@ fn sidebar_agent_save_mutation(
         .map(str::to_string);
     let accept_all_mode = sidebar_agent_accept_all_mode_update(params)?;
     let (stored_agents, stored_order) = sidebar_agent_state_from_projects(projects);
-    let current_agent_ids = sidebar_button_ids(
-        &sidebar_agent_buttons_from_state(&stored_agents, &stored_order),
-        "agentId",
-    );
     let selected_default_agent_id = requested_icon
         .as_deref()
         .and_then(default_sidebar_agent_by_icon)
         .map(|agent| agent.agent_id);
+    /*
+    CDXC:AgentLauncher 2026-10-06 WHY:
+    Adding an agent whose type is a built-in that is off turns that built-in back on instead of making a custom-* copy. The check uses `is_sidebar_agent_enabled`, so a built-in that starts hidden and was never stored (Kiro, OMP, Devin…) counts as off too; before, it read as visible and every re-add made a copy.
+    */
     let should_restore_hidden_default = requested_agent_id.is_none()
         && selected_default_agent_id
-            .map(|agent_id| !is_sidebar_agent_visible(&stored_agents, agent_id))
+            .map(|agent_id| !is_sidebar_agent_enabled(&stored_agents, agent_id))
             .unwrap_or(false);
     let agent_id = requested_agent_id
         .or_else(|| {
@@ -61,6 +62,10 @@ fn sidebar_agent_save_mutation(
         .position(|agent| agent.agent_id == agent_id);
     let previous_agent = existing_index.and_then(|index| stored_agents.get(index));
     let default_agent = default_sidebar_agent_by_id(&agent_id);
+    // An edit keeps the agent on or off; only a new or restored agent is saved as on.
+    let hidden = !should_restore_hidden_default
+        && (previous_agent.is_some() || default_agent.is_some())
+        && !is_sidebar_agent_enabled(&stored_agents, &agent_id);
     let next_agent = StoredSidebarAgent {
         accept_all_mode: match accept_all_mode {
             SidebarAgentAcceptAllModeUpdate::Preserve => previous_agent
@@ -70,7 +75,7 @@ fn sidebar_agent_save_mutation(
         },
         agent_id: agent_id.clone(),
         command,
-        hidden: false,
+        hidden,
         icon: requested_icon
             .or_else(|| {
                 previous_agent
@@ -92,7 +97,8 @@ fn sidebar_agent_save_mutation(
     {
         stored_order
     } else {
-        let mut next_order = current_agent_ids;
+        let mut next_order = full_sidebar_agent_order(&stored_agents, &stored_order);
+        next_order.retain(|candidate| candidate != &agent_id);
         next_order.push(agent_id);
         next_order
     };
@@ -144,10 +150,57 @@ fn sidebar_agent_delete_mutation(
     } else {
         next_agents.push(next_agent);
     }
-    let next_order = stored_order
-        .into_iter()
-        .filter(|candidate| candidate != &agent_id)
-        .collect::<Vec<_>>();
+    // A removed built-in is only turned off, so it keeps its slot like any agent that is off.
+    let next_order = full_sidebar_agent_order(&stored_agents, &stored_order);
+    sidebar_agent_projects_mutation(projects, next_agents, next_order, params)
+}
+
+/// Turns agents on or off (`agentIds` or `agentId`, and `enabled`). Built-in and custom agents
+/// both keep their row, settings and order slot; an agent turned on that the order never named
+/// goes to the end.
+fn sidebar_agent_set_enabled_mutation(
+    projects: &[Value],
+    params: &Map<String, Value>,
+) -> Result<SidebarHudSettingsMutation, DomainStateError> {
+    let enabled = params
+        .get("enabled")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| DomainStateError::bad_request("Missing enabled flag."))?;
+    let mut agent_ids = normalized_string_order(params.get("agentIds"));
+    if let Some(agent_id) = optional_trimmed_param(params, "agentId") {
+        if !agent_ids.contains(&agent_id) {
+            agent_ids.push(agent_id);
+        }
+    }
+    if agent_ids.is_empty() {
+        return Err(DomainStateError::bad_request("Missing agent id."));
+    }
+    let (stored_agents, stored_order) = sidebar_agent_state_from_projects(projects);
+    let mut next_order = full_sidebar_agent_order(&stored_agents, &stored_order);
+    let mut next_agents = stored_agents.clone();
+    for agent_id in &agent_ids {
+        if let Some(agent) = next_agents
+            .iter_mut()
+            .find(|agent| &agent.agent_id == agent_id)
+        {
+            agent.hidden = !enabled;
+        } else if let Some(default_agent) = default_sidebar_agent_by_id(agent_id) {
+            next_agents.push(StoredSidebarAgent {
+                accept_all_mode: None,
+                agent_id: default_agent.agent_id.to_string(),
+                command: default_agent.command.to_string(),
+                hidden: !enabled,
+                icon: Some(default_agent.icon.to_string()),
+                name: default_agent.name.to_string(),
+            });
+        } else {
+            return Err(DomainStateError::bad_request("Unknown agent."));
+        }
+        if enabled && !stored_order.contains(agent_id) {
+            next_order.retain(|candidate| candidate != agent_id);
+            next_order.push(agent_id.clone());
+        }
+    }
     sidebar_agent_projects_mutation(projects, next_agents, next_order, params)
 }
 
@@ -157,23 +210,12 @@ fn sidebar_agent_order_mutation(
 ) -> Result<SidebarHudSettingsMutation, DomainStateError> {
     let agent_ids = normalized_string_order(params.get("agentIds"));
     let (stored_agents, stored_order) = sidebar_agent_state_from_projects(projects);
-    let current_agent_ids = sidebar_button_ids(
-        &sidebar_agent_buttons_from_state(&stored_agents, &stored_order),
-        "agentId",
-    );
-    let mut next_order = agent_ids
-        .into_iter()
-        .filter(|agent_id| {
-            current_agent_ids
-                .iter()
-                .any(|candidate| candidate == agent_id)
-        })
-        .collect::<Vec<_>>();
-    for agent_id in current_agent_ids {
-        if !next_order.iter().any(|candidate| candidate == &agent_id) {
-            next_order.push(agent_id);
-        }
-    }
+    /*
+    CDXC:AgentLauncher 2026-10-06 WHY:
+    The order holds agents that are off too, so they come back where they were. A reorder may name only the agents a client shows (the launcher lists only agents that are on; Settings also lists off agents used before), so the requested ids refill their own slots and every agent left out keeps its place.
+    */
+    let full_order = full_sidebar_agent_order(&stored_agents, &stored_order);
+    let next_order = merge_sidebar_agent_order(&full_order, &agent_ids);
     let item_ids = sidebar_button_ids(
         &sidebar_agent_buttons_from_state(&stored_agents, &next_order),
         "agentId",

@@ -1,0 +1,17 @@
+# CDXC:SessionChat 2026-10-06 WHY:
+# This crate turns one ```visual chat block into a drawing scene for every client: the GPUI desktop, the GPUI web build (wasm32-unknown-unknown), the phone through the chat core's UniFFI query, and the `ghostex visual check` CLI. It carries serde and serde_json only and stays free of gpui, threads, clock reads, the file system and randomness, so the same layout runs everywhere and two clients never draw the same block differently.
+[package]
+name = "ghostex-gx-visual"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "ghostex_gx_visual"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+# `preserve_order` keeps an object's key order: a table built from row objects takes its columns
+# from the first row's keys in the order the agent wrote them, and Vega-Lite rows keep theirs.
+serde_json = { version = "1", features = ["preserve_order"] }

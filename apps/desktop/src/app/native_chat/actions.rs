@@ -45,7 +45,7 @@ impl NativeChatView {
         if self.chat_menu_toggled_shut(SEND_ACTIONS_TRIGGER, cx) {
             return;
         }
-        let enabled = self.composer_ready && !self.pending_send && !self.draft.trim().is_empty();
+        let enabled = self.composer_ready && !self.draft.trim().is_empty();
         let can_queue = enabled && self.snapshot["queue"]["capabilities"]["canQueue"] == true;
         let rows = vec![json!({
             "label":"Compact & Send",

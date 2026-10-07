@@ -165,6 +165,10 @@ pub(crate) fn gpui_next_sidebar_agent_metadata_state(
                 .collect::<Vec<_>>();
             Ok((next_agents, next_order, None))
         }
+        // gxserver alone decides what turning an agent on or off writes.
+        GpuiSidebarAgentMetadataWrite::SetEnabled { .. } => {
+            Err(GPUI_SIDEBAR_METADATA_GENERIC_ERROR.to_string())
+        }
         GpuiSidebarAgentMetadataWrite::SyncOrder {
             agent_ids,
             request_id,

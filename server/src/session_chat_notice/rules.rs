@@ -25,6 +25,13 @@ const RESTART_CODEX: NoticeActionSpec = NoticeActionSpec {
     send: None,
 };
 
+const RESTART_ZCODE: NoticeActionSpec = NoticeActionSpec {
+    id: "restartAgent",
+    label: "Restart ZCode",
+    kind: SessionChatTerminalNoticeActionKind::RestartAgent,
+    send: None,
+};
+
 pub(super) struct NoticeRule {
     pub(super) kind: &'static str,
     pub(super) severity: SessionChatTerminalNoticeSeverity,
@@ -185,7 +192,9 @@ const CODEX_RULES: &[NoticeRule] = &[
             },
             NoticeSignature {
                 scope: NoticeScope::Exit,
-                parts: &[NoticePart::Text("internal error; agent loop died unexpectedly")],
+                parts: &[NoticePart::Text(
+                    "internal error; agent loop died unexpectedly",
+                )],
                 corroborators: &[],
             },
         ],
@@ -669,31 +678,121 @@ const CLAUDE_RULES: &[NoticeRule] = &[
 
 /// CDXC:AgentScreenDetection 2026-09-07 DECISION:
 /// User: show Cursor's workspace trust notice in chat so it can be accepted without switching to the terminal.
-const CURSOR_RULES: &[NoticeRule] = &[NoticeRule {
-    kind: SESSION_CHAT_NOTICE_TRUST_PROMPT,
-    severity: SessionChatTerminalNoticeSeverity::Warning,
-    title: "Cursor is waiting for workspace trust",
-    detail: "Cursor Agent can execute code and access files in this directory. Trust this workspace to continue.",
-    blocks_input: true,
-    signatures: &[NoticeSignature {
-        scope: NoticeScope::Dialog,
-        parts: &[NoticePart::Text("Workspace Trust Required")],
-        corroborators: &[
-            "Do you trust the contents of this directory?",
-            "[a] Trust this workspace",
-            "[q] Quit",
+const CURSOR_RULES: &[NoticeRule] = &[
+    NoticeRule {
+        kind: SESSION_CHAT_NOTICE_TRUST_PROMPT,
+        severity: SessionChatTerminalNoticeSeverity::Warning,
+        title: "Cursor is waiting for workspace trust",
+        detail: "Cursor Agent can execute code and access files in this directory. Trust this workspace to continue.",
+        blocks_input: true,
+        signatures: &[NoticeSignature {
+            scope: NoticeScope::Dialog,
+            parts: &[NoticePart::Text("Workspace Trust Required")],
+            corroborators: &[
+                "Do you trust the contents of this directory?",
+                "[a] Trust this workspace",
+                "[q] Quit",
+            ],
+        }],
+        actions: &[
+            NoticeActionSpec {
+                id: "trustDirectory",
+                label: "Trust this workspace",
+                kind: SessionChatTerminalNoticeActionKind::SendKeys,
+                send: Some("a"),
+            },
+            OPEN_TERMINAL,
         ],
-    }],
-    actions: &[
-        NoticeActionSpec {
-            id: "trustDirectory",
-            label: "Trust this workspace",
-            kind: SessionChatTerminalNoticeActionKind::SendKeys,
-            send: Some("a"),
+        quote_evidence: false,
+    },
+    // A cancelled or failed sign-in exits to the shell (session_chat_cursor_login.rs reads the live sign-in screens).
+    NoticeRule {
+        kind: SESSION_CHAT_NOTICE_AGENT_EXITED,
+        severity: SessionChatTerminalNoticeSeverity::Warning,
+        title: "Cursor isn't signed in",
+        detail: "Cursor closed because it isn't signed in on this computer. Choose Sign in to start it again and sign in.",
+        blocks_input: true,
+        signatures: &[NoticeSignature {
+            scope: NoticeScope::Exit,
+            parts: &[NoticePart::Text(
+                "Authentication required to use Cursor Agent",
+            )],
+            corroborators: &[],
+        }],
+        actions: &[
+            NoticeActionSpec {
+                id: "restartAgent",
+                label: "Sign in",
+                kind: SessionChatTerminalNoticeActionKind::RestartAgent,
+                send: None,
+            },
+            OPEN_TERMINAL,
+        ],
+        quote_evidence: false,
+    },
+];
+
+// --- zcode ------------------------------------------------------------------
+
+const ZCODE_RULES: &[NoticeRule] = &[NoticeRule {
+    kind: SESSION_CHAT_NOTICE_AGENT_EXITED,
+    severity: SessionChatTerminalNoticeSeverity::Error,
+    title: "ZCode is no longer running in this terminal",
+    detail: "The ZCode process exited and can no longer receive messages. Restart it to continue this conversation.",
+    blocks_input: true,
+    signatures: &[
+        // The two shell-prompt forms, verified against a SIGTERM'd session:
+        // "Error: ZCode runtime exited with status 143. Diagnostics: …" and
+        // the resume hint Codex's exit rule also keys on.
+        NoticeSignature {
+            scope: NoticeScope::Exit,
+            parts: &[NoticePart::Text("ZCode runtime exited with status")],
+            corroborators: &[],
         },
-        OPEN_TERMINAL,
+        NoticeSignature {
+            scope: NoticeScope::Exit,
+            parts: &[
+                NoticePart::Text("To continue this session, run"),
+                NoticePart::Gap(3),
+                NoticePart::Text("zcode --resume"),
+            ],
+            corroborators: &[],
+        },
+        // CDXC:AgentScreenDetection 2026-10-06 WHY: the Banner arm covers the
+        // other death form, where ZCode's exit screen still owns the pane
+        // ("The session has terminated. Press Enter to exit.") and no shell
+        // prompt is on screen yet, so the Exit scope's prompt requirement can
+        // never match there.
+        NoticeSignature {
+            scope: NoticeScope::Banner,
+            parts: &[
+                NoticePart::Text("The session has terminated"),
+                NoticePart::Gap(40),
+                NoticePart::Text("Press Enter to exit"),
+            ],
+            corroborators: &[],
+        },
+        // CDXC:AgentScreenDetection 2026-10-07 WHY: ZCode draws inline (no
+        // alternate screen) and PowerShell does not clear below its prompt,
+        // so on Windows the dead TUI's composer rule and status bar stay under
+        // "PS C:\…>" and the Exit scope's last-line prompt check never holds
+        // (seen with a killed runtime: "Error: ZCode runtime exited with
+        // status 4294967295. Diagnostics: …"). The launcher line followed by
+        // a PowerShell prompt is the same "the shell is back" evidence.
+        NoticeSignature {
+            scope: NoticeScope::Banner,
+            parts: &[
+                NoticePart::Text("ZCode runtime exited with status"),
+                NoticePart::Gap(400),
+                NoticePart::Text(" PS "),
+                NoticePart::Gap(2),
+                NoticePart::Text("\\"),
+            ],
+            corroborators: &[],
+        },
     ],
-    quote_evidence: false,
+    actions: &[RESTART_ZCODE, OPEN_TERMINAL],
+    quote_evidence: true,
 }];
 
 pub(super) fn notice_rules(agent: SessionChatOptionAgent) -> &'static [NoticeRule] {
@@ -701,6 +800,7 @@ pub(super) fn notice_rules(agent: SessionChatOptionAgent) -> &'static [NoticeRul
         SessionChatOptionAgent::Claude => CLAUDE_RULES,
         SessionChatOptionAgent::Codex => CODEX_RULES,
         SessionChatOptionAgent::Cursor => CURSOR_RULES,
+        SessionChatOptionAgent::Zcode => ZCODE_RULES,
         // Grok, Hermes, Omp, Pi and Empryo have no phrase-catalog rules here. Hermes
         // and Pi have source-derived focused-component detectors after this
         // catalog; the other agents rely on measured composer readiness.
@@ -715,7 +815,7 @@ pub(super) fn notice_rules(agent: SessionChatOptionAgent) -> &'static [NoticeRul
 
 /// Every catalog, for the kind-level queries below. Adding an agent's rules
 /// here is the only step needed to teach the predicate about it.
-const ALL_NOTICE_RULES: &[&[NoticeRule]] = &[CODEX_RULES, CLAUDE_RULES, CURSOR_RULES];
+const ALL_NOTICE_RULES: &[&[NoticeRule]] = &[CODEX_RULES, CLAUDE_RULES, CURSOR_RULES, ZCODE_RULES];
 
 /*
 CDXC:SessionChat 2026-08-21:

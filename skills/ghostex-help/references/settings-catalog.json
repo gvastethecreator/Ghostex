@@ -2887,6 +2887,18 @@
       "agentWritable": false
     },
     {
+      "key": "agentsTidyUpOfferDismissed",
+      "title": "agentsTidyUpOfferDismissed",
+      "subtitle": "App-managed state saved with the settings; not a user preference.",
+      "tab": "settings",
+      "tabTitle": "General",
+      "section": "internalState",
+      "sectionTitle": "Internal state (not user settings)",
+      "type": "boolean",
+      "default": false,
+      "agentWritable": false
+    },
+    {
       "key": "settingsModalNavigation",
       "title": "settingsModalNavigation",
       "subtitle": "App-managed state saved with the settings; not a user preference.",
@@ -8129,169 +8141,9 @@
       "agentWritable": false
     },
     {
-      "key": "defaultPromptAgent",
-      "title": "Default Prompt Agent",
-      "subtitle": "Choose the agent used by Git helper prompts, project board Start Work, and the default worktree first-prompt selection.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "ui",
-      "agentWritable": false
-    },
-    {
-      "key": "titleGenerationAgent",
-      "title": "Title Generation Agent",
-      "subtitle": "Choose the headless agent Ghostex uses for first-prompt session title generation. Hover the info icon to see the exact command Ghostex sends.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "ui",
-      "options": [
-        {
-          "label": "Codex",
-          "value": "codex"
-        },
-        {
-          "label": "Cursor CLI",
-          "value": "cursor"
-        },
-        {
-          "label": "Claude",
-          "value": "claude"
-        },
-        {
-          "label": "Grok Build",
-          "value": "grok"
-        },
-        {
-          "label": "Pi Agent",
-          "value": "pi"
-        },
-        {
-          "label": "Antigravity CLI",
-          "value": "antigravity"
-        },
-        {
-          "label": "Empryo",
-          "value": "empryo"
-        },
-        {
-          "label": "Custom",
-          "value": "custom"
-        }
-      ],
-      "agentWritable": false
-    },
-    {
-      "key": "customTitleCommand",
-      "title": "Custom Title Command",
-      "subtitle": "Run this command with the title prompt on stdin. It should print only the title.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "ui",
-      "agentWritable": false
-    },
-    {
-      "key": "acceptAll",
-      "title": "Agent approvals",
-      "subtitle": "Choose whether supported agents ask before editing files or running commands. Per-agent settings can override this default.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "ui",
-      "agentWritable": false
-    },
-    {
-      "key": "agentAcceptAllEnabled",
-      "title": "Agent approvals: accept all",
-      "subtitle": "Start supported agents with approvals turned off (full access) by default. Off keeps each agent CLI default approval mode. Projects can override it.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "boolean",
-      "default": false,
-      "agentWritable": true
-    },
-    {
-      "key": "defaultPromptAgentId",
-      "title": "Default Prompt Agent",
-      "subtitle": "Agent id used when Ghostex sends a prompt on your behalf (for example PR review). Use an id from the configured agents.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "string",
-      "default": "codex",
-      "agentWritable": true
-    },
-    {
-      "key": "sessionTitleGenerationAgent",
-      "title": "Title Generation Agent",
-      "subtitle": "Headless agent Ghostex uses for first-prompt session title generation.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "enum",
-      "default": "codex",
-      "options": [
-        {
-          "label": "Codex",
-          "value": "codex"
-        },
-        {
-          "label": "Cursor CLI",
-          "value": "cursor"
-        },
-        {
-          "label": "Claude",
-          "value": "claude"
-        },
-        {
-          "label": "Grok Build",
-          "value": "grok"
-        },
-        {
-          "label": "Pi Agent",
-          "value": "pi"
-        },
-        {
-          "label": "Antigravity CLI",
-          "value": "antigravity"
-        },
-        {
-          "label": "Empryo",
-          "value": "empryo"
-        },
-        {
-          "label": "Custom",
-          "value": "custom"
-        }
-      ],
-      "agentWritable": true
-    },
-    {
-      "key": "customSessionTitleGenerationCommand",
-      "title": "Custom Title Command",
-      "subtitle": "Custom command run with the title prompt on stdin when Title Generation Agent is custom. It should print only the title.",
-      "tab": "agents",
-      "tabTitle": "Agents",
-      "section": "config",
-      "sectionTitle": "Config",
-      "type": "string",
-      "default": "",
-      "agentWritable": true
-    },
-    {
-      "key": "addAgent",
-      "title": "Add Agent",
-      "subtitle": "Add, reorder, edit, or delete agent launchers. Expand a row to install or update its CLI, check its version, and open installation docs.",
+      "key": "agentSwitches",
+      "title": "Turn agents on or off",
+      "subtitle": "Turn on the agents you use; they appear in the New session menu, the sidebar's Select Agent and on your phone. Drag to set their order. Agents you turned off but used before stay dimmed in the list; agents you never used wait under More agents. Expand a row to edit its command, permission mode and default view, or to install or update its CLI.",
       "tab": "agents",
       "tabTitle": "Agents",
       "section": "agentList",
@@ -8402,13 +8254,196 @@
       "agentWritable": false
     },
     {
-      "key": "agentResumeHooks",
-      "title": "Agent Hooks",
-      "subtitle": "Agent resume hooks let Ghostex capture each agent's native session id and resume the exact conversation after sleep, reload, or app restart. Install a single agent's hook from its row, or install and remove every Ghostex-owned hook with Install All and Uninstall All.",
+      "key": "addCustomAgent",
+      "title": "Add custom agent",
+      "subtitle": "Add your own command, or a variant of a built-in agent with other flags. Works like gives it that agent's logo, chat view, resume hook and permission handling. Custom agents can be turned off or deleted.",
       "tab": "agents",
       "tabTitle": "Agents",
       "section": "agentList",
       "sectionTitle": "Agents",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "preferredAgentInterfaceOverrides",
+      "title": "Default view per agent",
+      "subtitle": "Agents that support Ghostex's Chat View are marked with a chat bubble and can open in Chat or Terminal regardless of the global Default Agent View. Inherit keeps following that global setting.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "agentList",
+      "sectionTitle": "Agents",
+      "type": "json",
+      "default": {},
+      "agentWritable": false
+    },
+    {
+      "key": "defaultPromptAgent",
+      "title": "Default Prompt Agent",
+      "subtitle": "Choose the agent used by Git helper prompts, project board Start Work, and the default worktree first-prompt selection.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Defaults",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "titleGenerationAgent",
+      "title": "Title Generation Agent",
+      "subtitle": "Choose the headless agent Ghostex uses for first-prompt session title generation. Hover the info icon to see the exact command Ghostex sends.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Defaults",
+      "type": "ui",
+      "options": [
+        {
+          "label": "Codex",
+          "value": "codex"
+        },
+        {
+          "label": "Cursor CLI",
+          "value": "cursor"
+        },
+        {
+          "label": "Claude",
+          "value": "claude"
+        },
+        {
+          "label": "Grok Build",
+          "value": "grok"
+        },
+        {
+          "label": "Pi Agent",
+          "value": "pi"
+        },
+        {
+          "label": "Antigravity CLI",
+          "value": "antigravity"
+        },
+        {
+          "label": "Empryo",
+          "value": "empryo"
+        },
+        {
+          "label": "Custom",
+          "value": "custom"
+        }
+      ],
+      "agentWritable": false
+    },
+    {
+      "key": "customTitleCommand",
+      "title": "Custom Title Command",
+      "subtitle": "Run this command with the title prompt on stdin. It should print only the title.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Defaults",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "acceptAll",
+      "title": "Agent approvals",
+      "subtitle": "Choose whether supported agents ask before editing files or running commands. Per-agent settings can override this default.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Defaults",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "agentAcceptAllEnabled",
+      "title": "Agent approvals: accept all",
+      "subtitle": "Start supported agents with approvals turned off (full access) by default. Off keeps each agent CLI default approval mode. Projects can override it.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Config",
+      "type": "boolean",
+      "default": false,
+      "agentWritable": true
+    },
+    {
+      "key": "defaultPromptAgentId",
+      "title": "Default Prompt Agent",
+      "subtitle": "Agent id used when Ghostex sends a prompt on your behalf (for example PR review). Use an id from the configured agents.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Config",
+      "type": "string",
+      "default": "codex",
+      "agentWritable": true
+    },
+    {
+      "key": "sessionTitleGenerationAgent",
+      "title": "Title Generation Agent",
+      "subtitle": "Headless agent Ghostex uses for first-prompt session title generation.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Config",
+      "type": "enum",
+      "default": "codex",
+      "options": [
+        {
+          "label": "Codex",
+          "value": "codex"
+        },
+        {
+          "label": "Cursor CLI",
+          "value": "cursor"
+        },
+        {
+          "label": "Claude",
+          "value": "claude"
+        },
+        {
+          "label": "Grok Build",
+          "value": "grok"
+        },
+        {
+          "label": "Pi Agent",
+          "value": "pi"
+        },
+        {
+          "label": "Antigravity CLI",
+          "value": "antigravity"
+        },
+        {
+          "label": "Empryo",
+          "value": "empryo"
+        },
+        {
+          "label": "Custom",
+          "value": "custom"
+        }
+      ],
+      "agentWritable": true
+    },
+    {
+      "key": "customSessionTitleGenerationCommand",
+      "title": "Custom Title Command",
+      "subtitle": "Custom command run with the title prompt on stdin when Title Generation Agent is custom. It should print only the title.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "config",
+      "sectionTitle": "Config",
+      "type": "string",
+      "default": "",
+      "agentWritable": true
+    },
+    {
+      "key": "agentResumeHooks",
+      "title": "Session resume hooks",
+      "subtitle": "Hooks let Ghostex capture each agent's native session id and resume the exact conversation after sleep, reload, or app restart. Install one agent's hook from its row, fix every agent that is on with Fix all, or install and remove every Ghostex hook with Install all and Uninstall all.",
+      "tab": "agents",
+      "tabTitle": "Agents",
+      "section": "agentHooks",
+      "sectionTitle": "Session resume hooks",
       "type": "ui",
       "options": [
         {
@@ -8511,16 +8546,16 @@
       "agentWritable": false
     },
     {
-      "key": "preferredAgentInterfaceOverrides",
-      "title": "Default view per agent",
-      "subtitle": "Agents that support Ghostex's Chat View are marked with a chat bubble and can open in Chat or Terminal regardless of the global Default Agent View. Inherit keeps following that global setting.",
+      "key": "agentHooksAutoInstall",
+      "title": "Install the hook when I turn on an agent",
+      "subtitle": "Install an agent's session resume hook as soon as you turn it on, without asking.",
       "tab": "agents",
       "tabTitle": "Agents",
-      "section": "agentList",
-      "sectionTitle": "Agents",
-      "type": "json",
-      "default": {},
-      "agentWritable": false
+      "section": "agentHooks",
+      "sectionTitle": "Session resume hooks",
+      "type": "boolean",
+      "default": false,
+      "agentWritable": true
     },
     {
       "key": "ghostexCapture",
@@ -8561,6 +8596,10 @@
         {
           "label": "Ghostex Help",
           "value": "ghostex-help"
+        },
+        {
+          "label": "Ghostex Visuals",
+          "value": "ghostex-visuals"
         },
         {
           "label": "Ghostex Computer Use",

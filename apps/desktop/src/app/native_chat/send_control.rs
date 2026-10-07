@@ -13,7 +13,6 @@ impl NativeChatView {
         self.send_hold_task = None;
         self.send_hold_fired = false;
         if self.draft.trim().is_empty()
-            || self.pending_send
             || self.snapshot["queue"]["capabilities"]["canQueue"] != true
         {
             return;
@@ -79,7 +78,6 @@ impl NativeChatView {
         } else {
             !has_draft
                 || !self.composer_ready
-                || self.pending_send
                 || self.snapshot["pendingAttachments"].as_u64().unwrap_or(0) > 0
         };
         let blocked = !stop && self.snapshot["sendBlockedReason"].is_string();

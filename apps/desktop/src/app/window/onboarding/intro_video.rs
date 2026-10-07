@@ -20,8 +20,6 @@ use std::time::{Duration, Instant};
 
 /// The Ghostex v10 launch video (https://youtu.be/QzjFB4J6-8E, unlisted, embedding allowed).
 const INTRO_VIDEO_ID: &str = "QzjFB4J6-8E";
-/// YouTube's player refuses embeds that send no referrer to identify the embedding app (error 153).
-const INTRO_VIDEO_REFERRER: &str = "https://ghostex.dev/";
 
 const VIDEO_WIDTH: f32 = 1024.0;
 const VIDEO_HEIGHT: f32 = 576.0;
@@ -32,6 +30,23 @@ const BEZEL: f32 = 7.0;
 
 fn embed_url() -> String {
     format!("https://www.youtube-nocookie.com/embed/{INTRO_VIDEO_ID}?rel=0&playsinline=1&fs=0")
+}
+
+/// CDXC:Onboarding 2026-10-07 WHY:
+/// YouTube's player shows "Video player configuration error" (error 153) unless the embed request names the embedding site in its Referer. The web view used to open the embed URL as its own top-level page with a Referer header added to the navigation, but WebView2 drops that header (reproduced in WebView2 on Windows 11: error 153 on the first run), so the player now sits in an iframe inside this small page, which the web view serves from a real https origin (intro_web_view.rs: `https://ghostex.localhost/` on Windows, `https://ghostex.dev/` as the WKWebView base URL on macOS). The browser then sends that origin as the iframe's Referer itself, the way any website's embed works. Never load the page from `data:`, `about:blank` or NavigateToString: those origins are opaque and send no Referer.
+fn embed_page_html() -> String {
+    format!(
+        concat!(
+            "<!doctype html><html><head><meta charset=\"utf-8\">",
+            "<meta name=\"referrer\" content=\"strict-origin-when-cross-origin\"></head>",
+            "<body style=\"margin:0;background:#000;overflow:hidden\">",
+            "<iframe src=\"{}\" title=\"Ghostex intro video\" ",
+            "referrerpolicy=\"strict-origin-when-cross-origin\" allow=\"encrypted-media; picture-in-picture\" ",
+            "style=\"position:fixed;inset:0;width:100%;height:100%;border:0\"></iframe>",
+            "</body></html>"
+        ),
+        embed_url().replace('&', "&amp;")
+    )
 }
 
 fn watch_url() -> String {
@@ -107,7 +122,7 @@ impl GpuiOnboardingWindow {
         intro.status = if !reachable {
             Status::Offline
         } else {
-            match IntroWebView::new(window, &embed_url(), INTRO_VIDEO_REFERRER) {
+            match IntroWebView::new(window, &embed_page_html()) {
                 Ok(web_view) => {
                     intro.web_view = Some(Rc::new(web_view));
                     Status::Ready

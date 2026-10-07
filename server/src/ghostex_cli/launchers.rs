@@ -436,6 +436,7 @@ if (Test-Path -LiteralPath $appDirFile -PathType Leaf) {
     $appDir = (Get-Content -LiteralPath $appDirFile -Raw).Trim()
     if ($appDir) { $candidates += Join-Path $appDir 'Ghostex.exe' }
 }
+$candidates += Join-Path $env:LOCALAPPDATA 'Ghostex/current/Ghostex.exe'
 $candidates += Join-Path (Join-Path $programFiles 'Ghostex') 'Ghostex.exe'
 $executable = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
 if (-not $executable) {

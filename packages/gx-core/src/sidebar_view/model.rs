@@ -51,6 +51,8 @@ struct GroupKey {
     hover_actions_expanded: bool,
     /// The group's coordinator rows whose threads the user folded, by position.
     collapsed_coordinators: Vec<usize>,
+    /// The group's coordinator rows whose older threads the user listed, by position.
+    coordinators_showing_older: Vec<usize>,
     /// The threads of the group's coordinators, which may sit in other groups, by position.
     coordinator_threads: Vec<(usize, ThreadTally)>,
     section_collapse: SectionCollapse,
@@ -658,6 +660,7 @@ impl SidebarViewModel {
             plans
                 .iter()
                 .flat_map(|plan| plan.rows.iter().map(|row| &row.row)),
+            now_ms,
         );
         let mut builds: BTreeMap<String, GroupBuild> = BTreeMap::new();
         for plan in &plans {
@@ -978,6 +981,20 @@ fn group_key(
                         .ui
                         .collapse
                         .collapsed_coordinators
+                        .contains(&row.row.sidebar_session_id)
+            })
+            .map(|(index, _)| index)
+            .collect(),
+        coordinators_showing_older: plan
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| {
+                row.row.is_coordinator
+                    && inputs
+                        .ui
+                        .collapse
+                        .expanded_coordinator_older_threads
                         .contains(&row.row.sidebar_session_id)
             })
             .map(|(index, _)| index)

@@ -208,6 +208,14 @@ pub(super) async fn route_chat_http(
             handle_read_session_transcript_sizes_http(&state, endpoint.path, request_id, &body_json)
                 .await
         }
+        crate::visual_pages::PUBLISH_VISUAL_PAGE_ENDPOINT => {
+            crate::visual_pages::handle_publish_visual_page_http(
+                &state,
+                endpoint.path,
+                request_id,
+                &body_json,
+            )
+        }
         _ => {
             return Err(RouteHttpRequest {
                 state,

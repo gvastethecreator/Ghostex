@@ -434,15 +434,37 @@ pub(crate) async fn run_zmx_title_observer(
                 Err(_) => break,
             }
         }
-        let _ = child.wait().await;
-        if observed_output
-            || watch_started_at.elapsed() >= ZMX_TITLE_OBSERVER_HEALTHY_WATCH_DURATION
-        {
-            failure_count = 0;
+        let status = child.wait().await.ok();
+        if zmx_title_watcher_failed_to_load(status) {
+            failure_count = ZMX_TITLE_OBSERVER_RETRY_DELAYS_MS.len();
+        } else {
+            if observed_output
+                || watch_started_at.elapsed() >= ZMX_TITLE_OBSERVER_HEALTHY_WATCH_DURATION
+            {
+                failure_count = 0;
+            }
+            failure_count += 1;
         }
-        failure_count += 1;
         delay_zmx_title_observer_retry(failure_count).await;
     }
+}
+
+const ZMX_TITLE_OBSERVER_RETRY_DELAYS_MS: [u64; 6] = [250, 500, 1_000, 2_000, 5_000, 60_000];
+
+/// CDXC:SessionTitles 2026-10-06 WHY:
+/// While Windows shuts down, every watcher exits and its replacement can no longer load (0xc0000142, user32 cannot reach the closing desktop). That is not a watch that ended, so the 250 ms retry ladder only kept starting processes that could not run. A watcher Windows could not load waits the longest retry delay instead.
+fn zmx_title_watcher_failed_to_load(status: Option<std::process::ExitStatus>) -> bool {
+    const LOADER_FAILURES: [u32; 5] = [
+        0xC000_0142, // STATUS_DLL_INIT_FAILED
+        0xC000_0135, // STATUS_DLL_NOT_FOUND
+        0xC000_0139, // STATUS_ENTRYPOINT_NOT_FOUND
+        0xC000_007B, // STATUS_INVALID_IMAGE_FORMAT
+        0xC000_0145, // STATUS_APP_INIT_FAILURE
+    ];
+    cfg!(windows)
+        && status
+            .and_then(|status| status.code())
+            .is_some_and(|code| LOADER_FAILURES.contains(&(code as u32)))
 }
 
 pub(crate) async fn delay_zmx_title_observer_retry(failure_count: usize) {
@@ -452,9 +474,13 @@ pub(crate) async fn delay_zmx_title_observer_retry(failure_count: usize) {
     a fresh fast-retry cycle for the same dead session. Cap the backoff and
     keep waiting instead.
     */
-    const DELAYS_MS: [u64; 6] = [250, 500, 1_000, 2_000, 5_000, 60_000];
-    let delay_index = failure_count.saturating_sub(1).min(DELAYS_MS.len() - 1);
-    tokio::time::sleep(Duration::from_millis(DELAYS_MS[delay_index])).await;
+    let delay_index = failure_count
+        .saturating_sub(1)
+        .min(ZMX_TITLE_OBSERVER_RETRY_DELAYS_MS.len() - 1);
+    tokio::time::sleep(Duration::from_millis(
+        ZMX_TITLE_OBSERVER_RETRY_DELAYS_MS[delay_index],
+    ))
+    .await;
 }
 
 pub(crate) fn ingest_zmx_title_observation(

@@ -5,14 +5,14 @@ pub(crate) fn page() -> Page {
     Page {
         id: "agents",
         title: "Agents",
-        sections: vec![config(), agent_list()],
+        sections: vec![agent_list(), config(), agent_hooks()],
     }
 }
 
 pub(crate) fn config() -> Section {
     section(
         "config",
-        "Config",
+        "Defaults",
         vec![
             row("defaultPromptAgent", "Default Prompt Agent", "Choose the agent used by Git helper prompts, project board Start Work, and the default worktree first-prompt selection."),
             row("titleGenerationAgent", "Title Generation Agent", "Choose the headless agent Ghostex uses for first-prompt session title generation. Hover the info icon to see the exact command Ghostex sends.").options(SESSION_TITLE_GENERATION_AGENT_OPTIONS),
@@ -27,9 +27,20 @@ pub(crate) fn agent_list() -> Section {
         "agentList",
         "Agents",
         vec![
-            row("addAgent", "Add Agent", "Add, reorder, edit, or delete agent launchers. Expand a row to install or update its CLI, check its version, and open installation docs.").options_of(DEFAULT_SIDEBAR_AGENTS, "name", "name"),
-            row("agentResumeHooks", "Agent Hooks", "Agent resume hooks let Ghostex capture each agent's native session id and resume the exact conversation after sleep, reload, or app restart. Install a single agent's hook from its row, or install and remove every Ghostex-owned hook with Install All and Uninstall All.").options_of(AGENT_HOOK_SUPPORTED_DEFAULT_AGENTS, "name", "name"),
+            row("agentSwitches", "Turn agents on or off", "Turn on the agents you use; they appear in the New session menu, the sidebar's Select Agent and on your phone. Drag to set their order. Agents you turned off but used before stay dimmed in the list; agents you never used wait under More agents. Expand a row to edit its command, permission mode and default view, or to install or update its CLI.").options_of(DEFAULT_SIDEBAR_AGENTS, "name", "name"),
+            row("addCustomAgent", "Add custom agent", "Add your own command, or a variant of a built-in agent with other flags. Works like gives it that agent's logo, chat view, resume hook and permission handling. Custom agents can be turned off or deleted."),
             row("preferredAgentInterfaceOverrides", "Default view per agent", "Agents that support Ghostex's Chat View are marked with a chat bubble and can open in Chat or Terminal regardless of the global Default Agent View. Inherit keeps following that global setting."),
+        ],
+    )
+}
+
+pub(crate) fn agent_hooks() -> Section {
+    section(
+        "agentHooks",
+        "Session resume hooks",
+        vec![
+            row("agentResumeHooks", "Session resume hooks", "Hooks let Ghostex capture each agent's native session id and resume the exact conversation after sleep, reload, or app restart. Install one agent's hook from its row, fix every agent that is on with Fix all, or install and remove every Ghostex hook with Install all and Uninstall all.").options_of(AGENT_HOOK_SUPPORTED_DEFAULT_AGENTS, "name", "name"),
+            row("agentHooksAutoInstall", "Install the hook when I turn on an agent", "Install an agent's session resume hook as soon as you turn it on, without asking."),
         ],
     )
 }

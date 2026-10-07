@@ -68,6 +68,7 @@ pub(crate) struct NativeChatView {
     pub(super) images: super::images::ChatImageCache,
     /// The transcript's Mermaid diagrams, drawn once per source and theme.
     pub(super) mermaid: super::mermaid::ChatMermaidCache,
+    pub(super) visual: super::visual::ChatVisualCache,
     /// True while a completed turn's work rows render, which is where answered question cards are suppressed.
     pub(super) in_work_fold: bool,
     /// True while any row of a completed turn renders: its writes belong to that turn's "N files changed" fold.
@@ -155,6 +156,8 @@ pub(crate) struct NativeChatView {
     pub(crate) draft: String,
     pub(crate) draft_revision: u64,
     pub(crate) draft_id: String,
+    /// A send left this composer and has not settled; Enter does not wait for it (the core holds
+    /// later sends behind it), so only summaries read it.
     pub(crate) pending_send: bool,
     pub(crate) composer_ready: bool,
     pub(crate) expanded: HashSet<String>,
@@ -327,6 +330,7 @@ impl NativeChatView {
             table_preview: Default::default(),
             images: Default::default(),
             mermaid: Default::default(),
+            visual: Default::default(),
             in_work_fold: false,
             hide_file_changes: false,
             disclosure_motion: Default::default(),

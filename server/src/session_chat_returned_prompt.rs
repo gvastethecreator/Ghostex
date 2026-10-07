@@ -226,7 +226,7 @@ pub fn screen_shows_returned_session_chat_send(
     let Some(agent) = normalize_agent_id(agent) else {
         return false;
     };
-    if !matches!(agent.as_str(), "claude" | "openclaude" | "grok") {
+    if !matches!(agent.as_str(), "claude" | "openclaude" | "grok" | "cursor") {
         return false;
     }
     let Some(send) = last_sends()
@@ -401,10 +401,16 @@ fn record_returned_prompt(
 // Detection
 // ---------------------------------------------------------------------------
 
+/// CDXC:SessionChat 2026-10-07 WHY: Cursor CLI also hands a prompt back to its input when chat Stop (Ctrl+C) cancels the turn before Cursor recorded it, and the chat kept the sent bubble and warned "Your message might not have reached the agent"; it joins the same flow as Claude Code and Grok Build.
 fn returned_prompt_composer_text(agent: &str, screen_text: &str) -> Option<String> {
     match agent {
         "claude" | "openclaude" => claude_composer_input_text(screen_text),
         "grok" => grok_composer_input_text(screen_text),
+        "cursor" => {
+            crate::session_chat_composer::session_chat_composer_input("cursor", screen_text)
+                .filter(|input| !input.is_empty())
+                .map(|input| input.text)
+        }
         _ => None,
     }
 }
@@ -463,6 +469,7 @@ fn message_text(message: &SessionChatMessage) -> String {
 fn transcript_row_for_send(
     messages: &[SessionChatMessage],
     send: &LastChatSend,
+    agent: &str,
 ) -> Result<Option<String>, ()> {
     // A reply after this send proves acceptance even if a rewind later paints
     // the same prompt in the composer. Inspect the matching user row, not just
@@ -494,7 +501,9 @@ fn transcript_row_for_send(
         // The newest row is the agent's own output or a harness row: whatever
         // this prompt was, Claude answered it or never recorded it. A trailing
         // interrupt marker means the same thing.
-        return if last.role == SessionChatRole::System {
+        // Cursor ends a turn its Ctrl+C cancelled with "User aborted/interrupted manually." and
+        // never records the prompt it handed back to its input.
+        return if last.role == SessionChatRole::System && agent != "cursor" {
             Err(())
         } else {
             Ok(None)
@@ -544,7 +553,7 @@ pub(crate) fn schedule_session_chat_returned_prompt_detection(
     let Some(agent) = normalize_agent_id(terminal_agent.as_deref()) else {
         return;
     };
-    if !matches!(agent.as_str(), "claude" | "openclaude" | "grok") {
+    if !matches!(agent.as_str(), "claude" | "openclaude" | "grok" | "cursor") {
         return;
     }
     let Some(transcript_agent) = resolve_session_chat_transcript_agent(Some(agent.as_str())) else {
@@ -642,7 +651,7 @@ pub(crate) fn schedule_session_chat_returned_prompt_detection(
                 .await;
                 match page {
                     Ok(Ok(SessionChatTailPage::Page { messages, .. })) => {
-                        match transcript_row_for_send(&messages, &send) {
+                        match transcript_row_for_send(&messages, &send, &agent) {
                             Ok(message_id) => message_id,
                             Err(()) => {
                                 log(

@@ -910,15 +910,16 @@ impl GhostexGpuiApp {
                 .agents_sidebar_session_for_terminal(session_id)
                 .and_then(terminal_agent_bar_agent_name)
                 .unwrap_or_else(|| "this agent".to_string());
-            self.open_gpui_settings_agent_hooks_page(window, cx);
-            self.dispatch_gpui_app_modal_toast(
-                "warning",
-                &format!("{agent_name} hasn't reported its session yet"),
-                &format!(
-                    "Chat View needs the {agent_name} hooks installed, approved, and running. Check their status here. Resuming and working/done indicators also require hooks."
-                ),
-                cx,
-            );
+            /*
+            CDXC:AgentScreenDetection 2026-10-06 WHY:
+            "Not eligible" usually means the agent's hook has not reported its
+            conversation, but an agent that died before reporting lands here too
+            and the hooks page is the wrong remedy for a corpse. One bounded
+            readSessionChat decides: a session whose terminal carries a notice
+            (it exited, it is stuck on a login) opens in chat to show that
+            card; everything else keeps the hooks education path.
+            */
+            self.probe_agents_chat_notice_admission(session_id, agent_name, window, cx);
             return;
         }
         if !self.terminal_agent_bar_action_enabled(surface, session_id, action) {

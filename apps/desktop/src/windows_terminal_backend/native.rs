@@ -101,5 +101,6 @@ pub(super) fn cli_status() -> super::WindowsWslGhostexCliStatus {
         generate_title_skill_path: skill_path("ghostex-auto-rename-session"),
         move_codex_session_skill_path: skill_path("ghostex-move-codex-session"),
         help_skill_path: skill_path("ghostex-help"),
+        visuals_skill_path: skill_path("ghostex-visuals"),
     }
 }

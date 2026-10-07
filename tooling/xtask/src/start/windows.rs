@@ -24,66 +24,137 @@ pub fn system_executable(name: &str, is_wsl: bool) -> String {
     }
 }
 
+/// Which install a Windows start writes: the per-user release layout (default), Program Files (`--machine`), or `GHOSTEX_INSTALL_DIR`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum InstallScope {
+    User,
+    Machine,
+    Custom,
+}
+
+impl InstallScope {
+    /// The `-Scope` value install-windows-gpui.ps1 takes.
+    pub fn script_name(self) -> &'static str {
+        match self {
+            Self::User => "User",
+            Self::Machine => "Machine",
+            Self::Custom => "Custom",
+        }
+    }
+}
+
+/// The installed app folder (where Ghostex.exe lives), as this host and as Windows see it.
 pub struct InstallPaths {
     pub host_path: String,
     pub windows_path: String,
+    pub scope: InstallScope,
 }
 
+/// CDXC:Build 2026-10-07 DECISION:
+/// User (Q74 a): "Yes: per-user, Velopack-style, like real users; `--machine` keeps Program Files as an option." A Windows start installs into `%LOCALAPPDATA%\Ghostex\current`, the folder the release's Velopack installer puts the app in (packId Ghostex), with no administrator prompt, the same per-user Start Menu shortcut and AppUserModelID, and the same process paths users have; `--machine` keeps the `C:\Program Files\Ghostex` install for testing that case. Velopack's Update.exe and its update manifest are not faked, so a dev build never updates itself from the release feed.
+/// SEE-ALSO: tooling/install-windows-gpui.ps1 (layout, shortcut, moving off Program Files), tooling/release-gpui/windows.ps1 (vpk pack), apps/desktop/src/windows_updater.rs (the AppUserModelID).
+///
 /// CDXC:Build 2026-09-28 WHY:
 /// Windows reads GHOSTEX_INSTALL_DIR, not the generic INSTALL_DIR that Linux honours: toolchains and shells set INSTALL_DIR for their own use, and inheriting it would silently move the Windows install (macOS ignores it for the same reason). Under WSL the value may be a Windows path (`D:/Ghostex/build/local`) or a WSL path.
-pub fn resolve_install_paths(is_wsl: bool) -> Res<InstallPaths> {
+pub fn resolve_install_paths(is_wsl: bool, machine: bool, app_name: &str) -> Res<InstallPaths> {
     if let Some(configured) = env_trimmed("GHOSTEX_INSTALL_DIR") {
+        if machine {
+            bail!("--machine and GHOSTEX_INSTALL_DIR both choose where Ghostex installs; use one of them.");
+        }
         let looks_windows = configured.starts_with("\\\\")
             || (configured.len() >= 3
                 && configured.as_bytes()[0].is_ascii_alphabetic()
                 && configured.as_bytes()[1] == b':'
                 && matches!(configured.as_bytes()[2], b'\\' | b'/'));
         if is_wsl && looks_windows {
-            let windows_path = configured.replace('/', "\\");
+            let windows_path = format!(
+                "{}\\{app_name}",
+                configured.replace('/', "\\").trim_end_matches('\\')
+            );
             return Ok(InstallPaths {
                 host_path: wslpath("-u", &windows_path)?,
                 windows_path,
+                scope: InstallScope::Custom,
             });
         }
-        let host_path = std::path::absolute(&configured)?.display().to_string();
-        let windows_path = if is_wsl {
-            wslpath("-w", &host_path)?
+        let host_parent = std::path::absolute(&configured)?;
+        let windows_parent = if is_wsl {
+            wslpath("-w", &host_parent.display().to_string())?
         } else {
-            host_path.clone()
+            host_parent.display().to_string()
         };
         return Ok(InstallPaths {
-            host_path,
-            windows_path,
+            host_path: host_parent.join(app_name).display().to_string(),
+            windows_path: format!("{}\\{app_name}", windows_parent.trim_end_matches('\\')),
+            scope: InstallScope::Custom,
         });
+    }
+    let (scope, base) = if machine {
+        (InstallScope::Machine, windows_program_files(is_wsl)?)
+    } else {
+        (InstallScope::User, windows_local_app_data(is_wsl)?)
+    };
+    let base = base.trim_end_matches('\\');
+    let windows_path = match scope {
+        InstallScope::User => format!("{base}\\{app_name}\\current"),
+        _ => format!("{base}\\{app_name}"),
+    };
+    let host_path = if is_wsl {
+        wslpath("-u", &windows_path)?
+    } else {
+        windows_path.clone()
+    };
+    Ok(InstallPaths {
+        host_path,
+        windows_path,
+        scope,
+    })
+}
+
+/// The folder Windows reports through PowerShell, or the environment variable a native start already has.
+fn windows_folder(is_wsl: bool, variable: &str, expression: &str, label: &str) -> Res<String> {
+    if !is_wsl {
+        if let Some(value) = env_trimmed(variable) {
+            return Ok(value);
+        }
     }
     let out = output(Command::new(powershell(is_wsl)).current_dir(root()).args([
         "-NoProfile",
         "-NonInteractive",
         "-Command",
-        "$dir = $env:ProgramW6432; if (-not $dir) { $dir = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles) }; $dir",
+        expression,
     ]))?;
-    let windows_path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if !out.status.success() || windows_path.is_empty() {
+    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if !out.status.success() || path.is_empty() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         bail!(
             "{}",
             if stderr.is_empty() {
-                "Windows did not report its Program Files directory.".to_string()
+                format!("Windows did not report its {label} directory.")
             } else {
                 stderr
             }
         );
     }
-    if !is_wsl {
-        return Ok(InstallPaths {
-            host_path: windows_path.clone(),
-            windows_path,
-        });
-    }
-    Ok(InstallPaths {
-        host_path: wslpath("-u", &windows_path)?,
-        windows_path,
-    })
+    Ok(path)
+}
+
+fn windows_program_files(is_wsl: bool) -> Res<String> {
+    windows_folder(
+        is_wsl,
+        "ProgramW6432",
+        "$dir = $env:ProgramW6432; if (-not $dir) { $dir = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles) }; $dir",
+        "Program Files",
+    )
+}
+
+fn windows_local_app_data(is_wsl: bool) -> Res<String> {
+    windows_folder(
+        is_wsl,
+        "LOCALAPPDATA",
+        "[Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)",
+        "local application data",
+    )
 }
 
 fn wslpath(flag: &str, path: &str) -> Res<String> {
@@ -405,7 +476,11 @@ impl Start {
             "Installing {} from your desktop session...",
             self.app_name
         ));
-        self.log.detail("This start runs in Windows session 0 (SSH, or a terminal of a gxserver started over SSH), which has no desktop. Approve the administrator prompt on the desktop when it appears.");
+        self.log.detail("This start runs in Windows session 0 (SSH, or a terminal of a gxserver started over SSH), which has no desktop.");
+        if self.opts.machine {
+            self.log
+                .detail("Approve the administrator prompt on the desktop when it appears.");
+        }
         let handoff_dir = root()
             .join("build")
             .join("local-start-handoff")
@@ -421,6 +496,9 @@ impl Start {
         }
         if self.opts.profile {
             arguments.push("--profile".into());
+        }
+        if self.opts.machine {
+            arguments.push("--machine".into());
         }
         if let Some(config) = &self.isolated {
             arguments.push(format!("--isolated={}", config.variant));
@@ -537,10 +615,13 @@ impl Start {
 
     pub fn install_windows_app(&self) -> Res {
         let installed = self.windows_installed_app_path.clone().unwrap_or_default();
+        let scope = self.windows_install_scope.unwrap_or(InstallScope::User);
         self.log
             .step(&format!("Installing {} to {installed}...", self.app_name));
-        self.log
-            .detail("The default Program Files location requires administrator approval.");
+        if scope == InstallScope::Machine {
+            self.log
+                .detail("The Program Files location requires administrator approval.");
+        }
         let installer = root().join("tooling").join("install-windows-gpui.ps1");
         let out = output(
             Command::new(powershell(self.is_wsl))
@@ -556,7 +637,9 @@ impl Start {
                 .arg("-StagedAppPath")
                 .arg(windows_path_for_host_path(&self.app_path, self.is_wsl)?)
                 .arg("-InstallDir")
-                .arg(&installed),
+                .arg(&installed)
+                .arg("-Scope")
+                .arg(scope.script_name()),
         )?;
         print!("{}", String::from_utf8_lossy(&out.stdout));
         eprint!("{}", String::from_utf8_lossy(&out.stderr));
@@ -622,21 +705,27 @@ impl Start {
     ///
     /// CDXC:ServerDaemon 2026-10-03 WHY:
     /// The listeners and process paths are read with GetExtendedTcpTable and QueryFullProcessImageNameW. The PowerShell `Get-NetTCPConnection` used before goes through CIM, which refuses an SSH session's network logon token ("Cannot connect to CIM server. Access denied"), so every start run from a Ghostex terminal hosted by an SSH-started gxserver failed here after a full build.
-    pub fn windows_gxserver_endpoints(&self) -> Res<Vec<(String, Option<u64>)>> {
+    ///
+    /// CDXC:Build 2026-10-07 WHY:
+    /// The first per-user start on a machine that ran the Program Files install (or a `--machine` start after per-user ones) finds the other install's gxserver holding the port. That one is always stopped, even when it reports the same build identity, so the app launched from the new folder starts its own gxserver and wmx and the old install stops being used. Live wmx sessions keep running from the old folder's image (the same wire generation serves them).
+    /// Each endpoint comes with whether a server already running the bundled build may be kept.
+    pub fn windows_gxserver_endpoints(&self) -> Res<Vec<(String, Option<u64>, bool)>> {
         let data_dir = crate::gxserver::explicit_ghostex_home().unwrap_or_else(|| {
             crate::gxserver::local_app_data()
                 .join("Ghostex")
                 .join("Data")
         });
+        let server_in = |dir: &Path| {
+            dir.join("resources")
+                .join("native")
+                .join("gxserver.exe")
+                .display()
+                .to_string()
+                .to_lowercase()
+        };
         let server_paths: Vec<String> = [&self.installed_app_path, &self.app_path]
             .iter()
-            .map(|dir| {
-                dir.join("resources")
-                    .join("native")
-                    .join("gxserver.exe")
-                    .display()
-                    .to_string()
-            })
+            .map(|dir| server_in(dir))
             .chain(std::iter::once(
                 data_dir
                     .join("gxserver")
@@ -644,10 +733,22 @@ impl Start {
                     .join("bin")
                     .join("gxserver.exe")
                     .display()
-                    .to_string(),
+                    .to_string()
+                    .to_lowercase(),
             ))
-            .map(|path| path.to_lowercase())
             .collect();
+        let other_install_servers: Vec<String> = [
+            env_trimmed("LOCALAPPDATA")
+                .map(|dir| PathBuf::from(dir).join(&self.app_name).join("current")),
+            env_trimmed("ProgramW6432")
+                .or_else(|| env_trimmed("ProgramFiles"))
+                .map(|dir| PathBuf::from(dir).join(&self.app_name)),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|dir| server_in(&dir))
+        .filter(|path| !server_paths.contains(path))
+        .collect();
         #[cfg(windows)]
         {
             let listeners = super::windows_native::loopback_listeners().map_err(|error| {
@@ -655,16 +756,26 @@ impl Start {
             })?;
             Ok(listeners
                 .into_iter()
-                .filter(|(pid, _)| {
-                    super::windows_native::process_image_path(*pid)
-                        .is_some_and(|path| server_paths.contains(&path.to_lowercase()))
+                .filter_map(|(pid, port)| {
+                    let path = super::windows_native::process_image_path(pid)?.to_lowercase();
+                    let keep_same_build = if server_paths.contains(&path) {
+                        true
+                    } else if other_install_servers.contains(&path) {
+                        false
+                    } else {
+                        return None;
+                    };
+                    Some((
+                        format!("http://127.0.0.1:{port}"),
+                        Some(u64::from(pid)),
+                        keep_same_build,
+                    ))
                 })
-                .map(|(pid, port)| (format!("http://127.0.0.1:{port}"), Some(u64::from(pid))))
                 .collect())
         }
         #[cfg(not(windows))]
         {
-            let _ = server_paths;
+            let _ = (server_paths, other_install_servers);
             bail!("gxserver listeners are inspected only by a native Windows start.")
         }
     }

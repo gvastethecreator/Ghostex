@@ -26,6 +26,7 @@ const GHOSTEX_AGENTS_ORCHESTRATION_SKILL_NAME: &str = "ghostex-agents";
 const GHOSTEX_AUTO_RENAME_SESSION_SKILL_NAME: &str = "ghostex-auto-rename-session";
 const GHOSTEX_MOVE_CODEX_SESSION_SKILL_NAME: &str = "ghostex-move-codex-session";
 const GHOSTEX_HELP_SKILL_NAME: &str = "ghostex-help";
+const GHOSTEX_VISUALS_SKILL_NAME: &str = "ghostex-visuals";
 
 /// JS stringFlag: trimmed non-empty string or nothing.
 fn string_flag(value: Option<String>) -> Option<String> {
@@ -474,6 +475,19 @@ pub fn install_help_skill_command(args: &[String]) -> CliResult<()> {
         "ghostex guide",
         &["GHOSTEX_HELP_SKILL_SOURCE"],
         GHOSTEX_HELP_SKILL_NAME,
+    )
+}
+
+pub fn install_visuals_skill_command(args: &[String]) -> CliResult<()> {
+    /*
+    `$ghostex-visuals` teaches agents the chat's ```visual blocks and `ghostex show` pages; its
+    entry point is the `visual` verb that checks a block before the agent replies.
+    */
+    install_ghostex_agent_skill(
+        args,
+        "ghostex visual --help",
+        &["GHOSTEX_VISUALS_SKILL_SOURCE"],
+        GHOSTEX_VISUALS_SKILL_NAME,
     )
 }
 

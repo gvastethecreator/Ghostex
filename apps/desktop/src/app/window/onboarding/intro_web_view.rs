@@ -14,10 +14,11 @@ pub(crate) struct IntroWebView {
 impl IntroWebView {
     pub(crate) const SUPPORTED: bool = backend::SUPPORTED;
 
-    /// Starts loading `url` with `referrer` as its Referer, hidden until the first `place`.
-    pub(crate) fn new(window: &Window, url: &str, referrer: &str) -> Result<Self, String> {
+    /// Starts showing `html` as a page with a real https origin (so the YouTube iframe in it sends
+    /// a Referer), hidden until the first `place`.
+    pub(crate) fn new(window: &Window, html: &str) -> Result<Self, String> {
         Ok(Self {
-            backend: backend::Backend::new(window, url, referrer)?,
+            backend: backend::Backend::new(window, html)?,
             frame: Cell::new(None),
         })
     }
@@ -50,11 +51,14 @@ mod backend {
 
     pub(super) const SUPPORTED: bool = true;
 
+    /// The page's origin: WKWebView takes any https base URL for an HTML string.
+    const PAGE_BASE_URL: &str = "https://ghostex.dev/";
+
     unsafe extern "C" {
         fn GhostexGpuiIntroVideoWebViewCreate(
             parent_view: *mut c_void,
-            url: *const c_char,
-            referrer: *const c_char,
+            html: *const c_char,
+            base_url: *const c_char,
         ) -> *mut c_void;
         fn GhostexGpuiIntroVideoWebViewSetFrame(
             handle: *mut c_void,
@@ -71,11 +75,7 @@ mod backend {
     }
 
     impl Backend {
-        pub(super) fn new(
-            window: &gpui::Window,
-            url: &str,
-            referrer: &str,
-        ) -> Result<Self, String> {
+        pub(super) fn new(window: &gpui::Window, html: &str) -> Result<Self, String> {
             // gpui's own `Window::window_handle` is its app-level handle, so the trait is named.
             let parent = match HasWindowHandle::window_handle(window)
                 .map_err(|error| error.to_string())?
@@ -84,10 +84,10 @@ mod backend {
                 RawWindowHandle::AppKit(handle) => handle.ns_view.as_ptr(),
                 _ => return Err("the window has no AppKit view".to_string()),
             };
-            let url = CString::new(url).map_err(|error| error.to_string())?;
-            let referrer = CString::new(referrer).map_err(|error| error.to_string())?;
+            let html = CString::new(html).map_err(|error| error.to_string())?;
+            let base_url = CString::new(PAGE_BASE_URL).map_err(|error| error.to_string())?;
             let handle = unsafe {
-                GhostexGpuiIntroVideoWebViewCreate(parent, url.as_ptr(), referrer.as_ptr())
+                GhostexGpuiIntroVideoWebViewCreate(parent, html.as_ptr(), base_url.as_ptr())
             };
             if handle.is_null() {
                 return Err("WKWebView could not be created".to_string());
@@ -113,33 +113,51 @@ mod backend {
 
 #[cfg(target_os = "windows")]
 mod backend {
+    use std::borrow::Cow;
     use std::cell::RefCell;
     use std::rc::Rc;
+    use wry::WebViewBuilderExtWindows as _;
     use wry::dpi::{LogicalPosition, LogicalSize};
-    use wry::http::{HeaderMap, HeaderValue, header::REFERER};
+    use wry::http::{HeaderValue, Response, header::CONTENT_TYPE};
 
     pub(super) const SUPPORTED: bool = true;
+
+    /// wry serves this custom protocol at `https://ghostex.localhost/`, a secure origin YouTube
+    /// accepts as the embedding site (NavigateToString pages are `about:blank`, which it refuses).
+    const PAGE_PROTOCOL: &str = "ghostex";
+
+    /// CDXC:Onboarding 2026-10-07 WHY:
+    /// Without its own user data folder WebView2 keeps its profile next to the executable (`Ghostex.exe.WebView2`), which a machine-wide install under `C:\Program Files\Ghostex` cannot write: creation fails with E_ACCESSDENIED and the intro falls back to the "Watch the intro on YouTube" still. The profile is a cache, so it lives in Ghostex's per-user cache folder beside CEF's (the GhostexEditor helper has the same rule for its own WebView2).
+    fn data_directory() -> std::path::PathBuf {
+        ghostex_paths::GhostexPaths::resolve()
+            .cache_dir
+            .join("intro-webview2")
+    }
 
     pub(super) struct Backend {
         web_view: wry::WebView,
         opened_links: Rc<RefCell<Vec<String>>>,
+        /// Kept for the web view's lifetime; WebView2 reads it while it creates its environment.
+        _web_context: wry::WebContext,
     }
 
     impl Backend {
-        pub(super) fn new(
-            window: &gpui::Window,
-            url: &str,
-            referrer: &str,
-        ) -> Result<Self, String> {
-            let mut headers = HeaderMap::new();
-            headers.insert(
-                REFERER,
-                HeaderValue::from_str(referrer).map_err(|error| error.to_string())?,
-            );
+        pub(super) fn new(window: &gpui::Window, html: &str) -> Result<Self, String> {
+            let page: Cow<'static, [u8]> = Cow::Owned(html.as_bytes().to_vec());
             let opened_links = Rc::new(RefCell::new(Vec::new()));
             let queue = opened_links.clone();
-            let web_view = wry::WebViewBuilder::new()
-                .with_url_and_headers(url, headers)
+            let mut web_context = wry::WebContext::new(Some(data_directory()));
+            let web_view = wry::WebViewBuilder::new_with_web_context(&mut web_context)
+                .with_https_scheme(true)
+                .with_custom_protocol(PAGE_PROTOCOL.to_string(), move |_, _| {
+                    let mut response = Response::new(page.clone());
+                    response.headers_mut().insert(
+                        CONTENT_TYPE,
+                        HeaderValue::from_static("text/html; charset=utf-8"),
+                    );
+                    response
+                })
+                .with_url(format!("{PAGE_PROTOCOL}://localhost/"))
                 .with_visible(false)
                 .with_focused(false)
                 .with_background_color((0, 0, 0, 255))
@@ -152,6 +170,7 @@ mod backend {
             Ok(Self {
                 web_view,
                 opened_links,
+                _web_context: web_context,
             })
         }
 
@@ -176,11 +195,7 @@ mod backend {
     pub(super) struct Backend;
 
     impl Backend {
-        pub(super) fn new(
-            _window: &gpui::Window,
-            _url: &str,
-            _referrer: &str,
-        ) -> Result<Self, String> {
+        pub(super) fn new(_window: &gpui::Window, _html: &str) -> Result<Self, String> {
             Err("this platform has no system web view".to_string())
         }
 

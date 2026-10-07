@@ -99,6 +99,9 @@ impl GhostexGpuiApp {
             "toggleCoordinator" => Some(SidebarUiIntent::ToggleCoordinatorCollapsed {
                 sidebar_session_id: text("sessionId")?,
             }),
+            "toggleCoordinatorOlder" => Some(SidebarUiIntent::ToggleCoordinatorOlderThreads {
+                sidebar_session_id: text("sessionId")?,
+            }),
             "selectSpace" => Some(SidebarUiIntent::SelectSpace {
                 space_id: text("spaceId")?,
             }),

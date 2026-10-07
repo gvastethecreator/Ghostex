@@ -132,6 +132,7 @@ pub(crate) fn row_deadline_ms(row: &SessionRow, now_ms: u64) -> Option<u64> {
             .created_ms
             .map(|created| created + NEW_SESSION_PRIORITY_MS),
         row.timing.snoozed_until_ms,
+        super::threads::recent_thread_deadline_ms(row),
     ]
     .into_iter()
     .flatten()

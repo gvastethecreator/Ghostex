@@ -16,6 +16,13 @@ ghostex-paths = { path = "../packages/paths" }
 ghostex-docs = { path = "../packages/project-docs" }
 ghostex-find = { path = "../packages/find" }
 ghostex-settings-catalog = { path = "../packages/settings-catalog" }
+# CDXC:SessionChat 2026-10-06 SEE-ALSO:
+# `ghostex visual check` draws a chat ```visual block with the same layout crate the chat
+# clients use, and paints it to a PNG with resvg (the renderer the desktop's diagrams use).
+ghostex-gx-visual = { path = "../packages/gx-visual" }
+resvg = { version = "0.46.0", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
+# PNG encoding for the check's picture (tiny-skia's `png-format`, on by default).
+tiny-skia = "0.11"
 ghostex-agent-sync = { path = "../packages/agent-sync" }
 libc = "0.2"
 markdown = "1"

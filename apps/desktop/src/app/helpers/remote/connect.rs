@@ -774,25 +774,24 @@ pub(crate) fn gpui_extract_remote_managed_gxserver_build_identity(stdout: &str) 
         + GPUI_REMOTE_GXSERVER_BUILD_IDENTITY_START_MARKER.len();
     let payload = &stdout[start..];
     let end = payload.find(GPUI_REMOTE_GXSERVER_BUILD_IDENTITY_END_MARKER)?;
-    serde_json::from_str::<serde_json::Value>(payload[..end].trim())
+    gpui_gxserver_build_identity_from_json(payload[..end].trim())
+}
+
+pub(crate) fn gpui_bundled_remote_gxserver_build_identity(package_dir: &Path) -> Option<String> {
+    gpui_gxserver_build_identity_from_json(
+        &fs::read_to_string(package_dir.join("build-identity.json")).ok()?,
+    )
+}
+
+/// The `buildIdentity` of a gxserver package's build-identity.json.
+pub(crate) fn gpui_gxserver_build_identity_from_json(text: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(text)
         .ok()?
         .get("buildIdentity")?
         .as_str()
         .map(str::trim)
         .filter(|identity| !identity.is_empty())
         .map(str::to_string)
-}
-
-pub(crate) fn gpui_bundled_remote_gxserver_build_identity(package_dir: &Path) -> Option<String> {
-    serde_json::from_str::<serde_json::Value>(
-        &fs::read_to_string(package_dir.join("build-identity.json")).ok()?,
-    )
-    .ok()?
-    .get("buildIdentity")?
-    .as_str()
-    .map(str::trim)
-    .filter(|identity| !identity.is_empty())
-    .map(str::to_string)
 }
 
 pub(crate) fn gpui_remote_installed_gxserver_version_command() -> &'static str {

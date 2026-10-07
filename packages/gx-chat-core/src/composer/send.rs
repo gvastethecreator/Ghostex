@@ -111,7 +111,7 @@ pub fn begin(
         });
     }
     phases.push(SendPhase::MarkSubmitted);
-    state.composer.submitting = Some(Submission {
+    let mut submission = Submission {
         text: text.to_string(),
         version,
         mode,
@@ -125,9 +125,89 @@ pub fn begin(
         refresh_after_send: state.session.available_agents.is_some(),
         handoff: false,
         awaiting_gate: false,
+        drawn: false,
         send_request_id,
-    });
+    };
+    draw_at_enter(state, context, &mut submission);
+    start_or_wait(state, context, submission)
+}
+
+/// CDXC:SessionChat 2026-10-07 DECISION:
+/// User: "When I press Enter to send a message and there's an image (or maybe even without an image), the text I wrote doesn't instantly disappear from the chat box and appear in the chat transcript. Please fix this, I want this to be INSTANT." The echo (or the "Ran /x" marker, or the queued row) is drawn and published on the Enter itself, before the draft save, the gxserver draft push and the send that follow it; the closing publish of the send's chain (`CoreState::publish_awaits`) had held it until gxserver finished typing the message, about 1.2 seconds. A failed or refused send drops it again and the composer gets the text back with the error, as before.
+fn draw_at_enter(state: &mut ChatState, context: &ChatContext, submission: &mut Submission) {
+    let body = match submission.mode {
+        SubmissionMode::Send => Some(submission.text.clone()),
+        SubmissionMode::Compact => Some("/compact".to_string()),
+        // The queued row is drawn from the submission itself (`composer::document::queue`).
+        SubmissionMode::Queue => None,
+    };
+    if let Some(body) = body {
+        let images = match submission.mode {
+            SubmissionMode::Send => submission.image_paths.clone(),
+            _ => Vec::new(),
+        };
+        let drawn = draw_agent_send(state, context, &body, &images);
+        submission.pending_id = drawn.pending_id;
+        submission.marker = drawn.marker;
+    }
+    submission.drawn = true;
+    state.core.request_publish();
+}
+
+/// Starts a submission, or holds it behind the one in flight.
+///
+/// CDXC:SessionChat 2026-10-07 WHY:
+/// The composer used to ignore Enter until the previous send settled (gxserver answers a send only after it has typed it, 1.1 to 1.6 seconds), so a quick follow-up stayed in the box. Sends now line up here in order, each with its own `sendRequestId`, and one that fails or is cancelled takes every send behind it back to the composer with it, so nothing is delivered out of order and nothing typed is lost.
+fn start_or_wait(
+    state: &mut ChatState,
+    context: &ChatContext,
+    submission: Submission,
+) -> Vec<Effect> {
+    if state.composer.submitting.is_some() {
+        state.composer.waiting.push(submission);
+        return Vec::new();
+    }
+    state.composer.submitting = Some(submission);
     run_head(state, context)
+}
+
+/// The submission ahead ended: the next one waiting starts.
+///
+/// The ones an Escape cancelled while they waited go back to the composer instead, together; a
+/// send typed after that Escape still goes out.
+fn start_next(state: &mut ChatState, context: &ChatContext) -> Vec<Effect> {
+    if state.composer.submitting.is_some() {
+        return Vec::new();
+    }
+    let mut effects = Vec::new();
+    let mut returned: Option<(SubmissionMode, String)> = None;
+    while !state.composer.waiting.is_empty() {
+        let next = state.composer.waiting.remove(0);
+        if !next.cancelled {
+            state.composer.submitting = Some(next);
+            break;
+        }
+        undo_drawn(state, next.pending_id.as_deref(), next.marker.as_ref());
+        if next.handoff {
+            effects.push(Effect::HostAction {
+                action: "draftHandoffToTerminalFailed".to_string(),
+                params: Box::new(json!({ "error": "The session chat send was cancelled." })),
+            });
+        } else {
+            returned = Some(match returned {
+                Some((mode, text)) => (mode, format!("{text}\n{}", next.text)),
+                None => (next.mode, next.text),
+            });
+        }
+    }
+    if let Some((mode, text)) = returned {
+        state
+            .core
+            .fail("The session chat send was cancelled.".to_string(), None);
+        effects.push(submission_failed(mode, &text));
+    }
+    effects.extend(run_head(state, context));
+    effects
 }
 
 /// CDXC:SessionChat 2026-10-05 WHY:
@@ -208,7 +288,9 @@ fn run_head(state: &mut ChatState, context: &ChatContext) -> Vec<Effect> {
         return Vec::new();
     };
     let Some(phase) = submission.phases.first().copied() else {
-        return finish(state);
+        let mut effects = finish(state);
+        effects.extend(start_next(state, context));
+        return effects;
     };
     // CDXC:SessionChat 2026-09-17 WHY:
     // Escape can arrive while a draft save is pending, before the daemon has a send to cancel.
@@ -225,18 +307,27 @@ fn run_head(state: &mut ChatState, context: &ChatContext) -> Vec<Effect> {
     }
     let text = submission.text.clone();
     let version = submission.version.clone();
+    let handoff = submission.handoff;
     let queued_text = match submission.mode {
         SubmissionMode::Queue => text.trim().to_string(),
         _ => text.clone(),
     };
     match phase {
         SendPhase::WriteDraft => {
+            // A send that waited behind another can start after the user has typed the next
+            // message under a new identity; the stored draft is that message now, not this one.
+            if !handoff && holds_newer_typing(state, &text, version.as_ref()) {
+                if let Some(submission) = state.composer.submitting.as_mut() {
+                    submission.phases.remove(0);
+                }
+                return run_head(state, context);
+            }
             let key = draft_key(state);
             let record = StoredDraftRecord {
                 text: text.clone(),
                 updated_at: Some(context.now_millis() as f64),
                 version: version.clone(),
-                submitted: true,
+                submitted: !handoff,
                 parked: false,
             };
             state.composer.stored_draft = Some(record.clone());
@@ -284,7 +375,7 @@ fn run_head(state: &mut ChatState, context: &ChatContext) -> Vec<Effect> {
                     submission.send_request_id.clone(),
                 ),
             };
-            if !submission.awaiting_gate {
+            if !submission.drawn {
                 let drawn = draw_agent_send(state, context, &body, &images);
                 adopt_send(state, drawn);
             }
@@ -340,6 +431,22 @@ fn run_head(state: &mut ChatState, context: &ChatContext) -> Vec<Effect> {
             }]
         }
     }
+}
+
+/// Whether the stored draft is text typed after this submission, under another identity.
+fn holds_newer_typing(
+    state: &ChatState,
+    text: &str,
+    version: Option<&crate::composer::queue::DraftVersion>,
+) -> bool {
+    state.composer.stored_draft.as_ref().is_some_and(|stored| {
+        !stored.text.is_empty()
+            && stored.text != text
+            && !stored.submitted
+            && !stored.parked
+            && stored.version.as_ref().map(|stored| &stored.draft_id)
+                != version.map(|version| &version.draft_id)
+    })
 }
 
 /// What one call to [`send_to_agent`] left behind, so the caller can undo it if the call fails.
@@ -447,6 +554,7 @@ fn adopt_send(state: &mut ChatState, sent: AgentSend) {
     if let Some(submission) = state.composer.submitting.as_mut() {
         submission.pending_id = sent.pending_id;
         submission.marker = sent.marker;
+        submission.drawn = true;
     }
 }
 
@@ -547,8 +655,12 @@ pub fn settle_request(
             if let Some(submission) = state.composer.submitting.as_mut() {
                 let sent = submission.phases.first().copied();
                 submission.request = None;
-                submission.pending_id = None;
-                submission.marker = None;
+                // The echo was drawn at Enter, so it stays undoable until its own delivery
+                // answered; the draft push ahead of it can still be followed by a refused send.
+                if matches!(sent, Some(SendPhase::SendCompact | SendPhase::SendText)) {
+                    submission.pending_id = None;
+                    submission.marker = None;
+                }
                 if !submission.phases.is_empty() {
                     submission.phases.remove(0);
                 }
@@ -642,6 +754,9 @@ fn finish(state: &mut ChatState) -> Vec<Effect> {
     let Some(submission) = state.composer.submitting.take() else {
         return Vec::new();
     };
+    // A send waiting behind this one continues the same chain, which would otherwise hold this
+    // one's closing publish until the last of them answered.
+    state.core.request_publish();
     let method = if submission.handoff {
         "handoff"
     } else {
@@ -688,14 +803,32 @@ fn fail(state: &mut ChatState, message: &str) -> Vec<Effect> {
     };
     state.core.fail(message.to_string(), None);
     let mut effects = Vec::new();
-    if submission.handoff {
+    // The sends waiting behind this one go back to the composer with it, in the order they were
+    // typed, as one restore: the host answers each restore with the field it holds, so two in a
+    // row would both merge into the same stale text.
+    let mut text = submission.text.clone();
+    let mut handoffs = usize::from(submission.handoff);
+    for waiting in std::mem::take(&mut state.composer.waiting) {
+        undo_drawn(
+            state,
+            waiting.pending_id.as_deref(),
+            waiting.marker.as_ref(),
+        );
+        if waiting.handoff {
+            // A handoff never left the field, so its text is still there.
+            handoffs += 1;
+        } else if !waiting.text.is_empty() {
+            text = format!("{text}\n{}", waiting.text);
+        }
+    }
+    for _ in 0..handoffs {
         effects.push(Effect::HostAction {
             action: "draftHandoffToTerminalFailed".to_string(),
             // `params: { error: operationError }`, which is the message the bar now carries.
             params: Box::new(json!({ "error": message })),
         });
     }
-    effects.push(submission_failed(submission.mode, &submission.text));
+    effects.push(submission_failed(submission.mode, &text));
     effects
 }
 
@@ -705,11 +838,15 @@ fn undo_optimistic(state: &mut ChatState) {
         Some(submission) => (submission.pending_id.clone(), submission.marker.clone()),
         None => return,
     };
+    undo_drawn(state, pending_id.as_deref(), marker.as_ref());
+}
+
+fn undo_drawn(state: &mut ChatState, pending_id: Option<&str>, marker: Option<&(String, i64)>) {
     if let Some(pending_id) = pending_id {
-        sends::drop_send(state, &pending_id);
+        sends::drop_send(state, pending_id);
     }
     if let Some((command, sent_at)) = marker {
-        sends::drop_command_marker(state, &command, sent_at);
+        sends::drop_command_marker(state, command, *sent_at);
     }
 }
 
@@ -720,16 +857,8 @@ pub fn handoff(
     text: &str,
     version: Option<crate::composer::queue::DraftVersion>,
 ) -> Vec<Effect> {
-    let record = StoredDraftRecord {
-        text: text.to_string(),
-        updated_at: Some(context.now_millis() as f64),
-        version: version.clone(),
-        submitted: false,
-        parked: false,
-    };
-    state.composer.stored_draft = Some(record.clone());
     crate::composer::draft_sync::cancel_pending_push(state);
-    state.composer.submitting = Some(Submission {
+    let submission = Submission {
         text: text.to_string(),
         version: version.clone(),
         mode: SubmissionMode::Send,
@@ -747,15 +876,11 @@ pub fn handoff(
         refresh_after_send: false,
         handoff: true,
         awaiting_gate: false,
+        drawn: true,
         send_request_id: None,
-    });
-    let key = draft_key(state);
-    wait_storage(state, key.clone());
-    vec![Effect::WriteStorage {
-        key,
-        value: Some(encode_stored_draft(&record)),
-        durable: false,
-    }]
+    };
+    // The head phase writes the unsubmitted record a handoff parks from.
+    start_or_wait(state, context, submission)
 }
 
 /// `receiveHandoff`: a draft arrives from the terminal or from another client.
@@ -925,6 +1050,9 @@ pub fn interrupt(state: &mut ChatState, context: &ChatContext, confirm: bool) ->
     if let Some(submission) = state.composer.submitting.as_mut() {
         submission.cancelled = true;
         parked = submission.awaiting_gate;
+    }
+    for waiting in &mut state.composer.waiting {
+        waiting.cancelled = true;
     }
     // A send parked behind the gate has no answer coming to notice the cancel, so it ends here.
     let mut effects = if parked {

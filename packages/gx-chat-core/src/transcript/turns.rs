@@ -383,7 +383,9 @@ pub fn worked_duration_label(started_at: Option<i64>, completed_at: Option<i64>)
     let (Some(started_at), Some(completed_at)) = (started_at, completed_at) else {
         return "Worked".to_string();
     };
-    if completed_at < started_at {
+    // A turn the transcript times only to its prompt (a Cursor turn with no timed thinking) has no
+    // length to show; "Worked for 1s" would be invented.
+    if completed_at <= started_at {
         return "Worked".to_string();
     }
     let elapsed = (completed_at - started_at) as f64 / 1000.0;

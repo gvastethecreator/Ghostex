@@ -14,6 +14,18 @@ pub(crate) fn background_command(program: impl AsRef<OsStr>) -> Command {
     command
 }
 
+/// CDXC:PlatformSupport 2026-10-06 WHY:
+/// Every helper the daemon starts (wmx `watch-title`/`history`/`list`, git, probes) inherits its error mode. While Windows shuts down, a helper that starts can no longer initialise user32 and fails with 0xc0000142, and with the default mode Windows showed an "unable to start correctly" dialog for each one that the user had to click through. Helpers are invisible background work, so their load failures and crashes end quietly instead; session shells opt back into the default mode (`process` in zmx/scripts_windows.rs).
+#[cfg(windows)]
+pub(crate) fn suppress_helper_error_dialogs() {
+    use windows_sys::Win32::System::Diagnostics::Debug::{
+        GetErrorMode, SetErrorMode, SEM_FAILCRITICALERRORS, SEM_NOGPFAULTERRORBOX,
+    };
+    unsafe {
+        SetErrorMode(GetErrorMode() | SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+    }
+}
+
 /// The process's creation time as a Windows FILETIME (100ns ticks since 1601), or `None` once it has exited or cannot be opened.
 #[cfg(windows)]
 pub(crate) fn process_creation_filetime(process_id: i64) -> Option<u64> {

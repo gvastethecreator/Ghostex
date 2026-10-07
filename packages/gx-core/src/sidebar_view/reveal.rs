@@ -297,6 +297,14 @@ pub fn reveal_plan(
             .collapsed_coordinators
             .remove(sidebar_session_id);
     }
+    // CDXC:Coordinators 2026-10-07 WHY: a reveal never lists a coordinator's older threads; only the user's click on its "N older threads" row does (the user's 2026-10-07 decision in packages/gx-chat-core/src/extras/coordinator_threads.rs). The thread being opened is focused, and a focused thread is listed however old it is (`nest_threads`), so the probe only lists it to judge the compact cut the way the list will draw it.
+    for sidebar_session_id in &found.older_of {
+        probe
+            .ui
+            .collapse
+            .expanded_coordinator_older_threads
+            .insert(sidebar_session_id.clone());
+    }
     let opened = SidebarViewModel::build_from_scratch(core, probe, now_ms);
     plan.expand_list = !opened
         .group(&plan.group_id)
@@ -445,6 +453,8 @@ struct Located {
     effective_tag: Option<String>,
     /// The folded coordinators above the row, nearest first.
     folded_by: Vec<String>,
+    /// The coordinators above the row whose older threads it waits behind, nearest first.
+    older_of: Vec<String>,
 }
 
 fn locate(
@@ -463,9 +473,11 @@ fn locate(
     // A thread under a folded coordinator: its ancestors up the tree, and the top one, whose
     // heading is the thread's.
     let mut folded_by = Vec::new();
+    let mut older_of = Vec::new();
     let mut heading_row = sidebar_session_id;
     if let Some(index) = index.filter(|index| sessions[*index].nesting.folded) {
         let mut depth = sessions[index].nesting.depth;
+        let mut tucked = sessions[index].nesting.older_hidden;
         for ancestor in sessions[..index].iter().rev() {
             if ancestor.nesting.depth >= depth {
                 continue;
@@ -474,6 +486,10 @@ fn locate(
             if ancestor.nesting.collapsed {
                 folded_by.push(ancestor.row.sidebar_session_id.clone());
             }
+            if tucked {
+                older_of.push(ancestor.row.sidebar_session_id.clone());
+            }
+            tucked = ancestor.nesting.older_hidden;
             if depth == 0 {
                 heading_row = &ancestor.row.sidebar_session_id;
                 break;
@@ -509,6 +525,7 @@ fn locate(
         drawn,
         effective_tag: row.and_then(|row| row.effective_tag.clone()),
         folded_by,
+        older_of,
     })
 }
 

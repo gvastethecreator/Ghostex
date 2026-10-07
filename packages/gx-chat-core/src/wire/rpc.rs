@@ -47,6 +47,8 @@ pub enum ChatRpcMethod {
     /// The composer field's current text, which the HOST answers rather than gxserver.
     ReadNativeComposer,
     RunProjectDocsAction,
+    /// Every thread of a coordinator, behind its Threads panel's "N more" row.
+    ReadCoordinatorThreads,
     /// A method this build does not know; kept verbatim.
     Other(String),
 }
@@ -83,6 +85,7 @@ impl ChatRpcMethod {
             Self::ImportNativeAttachments => "importNativeAttachments",
             Self::ReadNativeComposer => "readNativeComposer",
             Self::RunProjectDocsAction => "runProjectDocsAction",
+            Self::ReadCoordinatorThreads => "readCoordinatorThreads",
             Self::Other(name) => name.as_str(),
         }
     }
@@ -118,6 +121,7 @@ impl ChatRpcMethod {
             "importNativeAttachments" => Self::ImportNativeAttachments,
             "readNativeComposer" => Self::ReadNativeComposer,
             "runProjectDocsAction" => Self::RunProjectDocsAction,
+            "readCoordinatorThreads" => Self::ReadCoordinatorThreads,
             other => Self::Other(other.to_string()),
         }
     }

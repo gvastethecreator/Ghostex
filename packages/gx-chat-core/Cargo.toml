@@ -13,6 +13,10 @@ path = "src/lib.rs"
 
 [dependencies]
 ghostex-gx-protocol = { path = "../gx-protocol" }
+# CDXC:SessionChat 2026-10-06 SEE-ALSO:
+# The visual-block drawing crate. The core marks ```visual fences and answers the phone's
+# `renderVisual` query with it; GPUI renderers reach it through the `visual` re-export.
+ghostex-gx-visual = { path = "../gx-visual" }
 # CDXC:SessionChat 2026-09-22 WHY:
 # markdown-rs is the same author's Rust port of micromark, the parser the TypeScript chat's
 # Markdown passes ran through `mdast-util-from-markdown`. The port chose it because both parse plain

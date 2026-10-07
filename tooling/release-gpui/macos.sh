@@ -14,11 +14,15 @@ set -euo pipefail
 # below (paths, version, build number, identities), so no shell state has to be
 # persisted between phase steps. The only prologue side effect that must not
 # repeat is release_gpui_prepare_output (it wipes the output dir); it runs in
-# `all` and `prepare` only, and later phases require the dir to already exist.
+# `all`, `prepare` and `prepare-sources` only, and later phases require the dir
+# to already exist.
 #
 # Phases, in order:
 #   prepare        pinned references, code-server archives, remote gxserver
-#                  packages, GhosttyKit
+#                  packages, GhosttyKit; the same as prepare-sources followed
+#                  by prepare-runtime
+#   prepare-sources  pinned references and GhosttyKit only (no runtime archive)
+#   prepare-runtime  code-server archives and remote gxserver packages
 #   build-server   opt-in cargo pre-warm of server/ (never part of `all`)
 #   stage-runtime  apps/desktop/scripts/prepare-macos-runtime.sh (or the
 #                  prepared-runtime validation)
@@ -49,10 +53,10 @@ if [[ "${1:-}" == "--phase" ]]; then
 	shift 2
 fi
 case "$PHASE" in
-all | prepare | build-server | stage-runtime | build-desktop | assemble | dmg | notarize | finalize) ;;
+all | prepare | prepare-sources | prepare-runtime | build-server | stage-runtime | build-desktop | assemble | dmg | notarize | finalize) ;;
 *)
 	echo "Unknown macOS release phase: $PHASE" >&2
-	echo "Expected one of: all prepare build-server stage-runtime build-desktop assemble dmg notarize finalize" >&2
+	echo "Expected one of: all prepare prepare-sources prepare-runtime build-server stage-runtime build-desktop assemble dmg notarize finalize" >&2
 	exit 2
 	;;
 esac
@@ -63,7 +67,7 @@ release_gpui_require_command bun
 release_gpui_require_command cargo
 release_gpui_require_command codesign
 release_gpui_require_command hdiutil
-if [[ "$PHASE" == "all" || "$PHASE" == "prepare" ]]; then
+if [[ "$PHASE" == "all" || "$PHASE" == "prepare" || "$PHASE" == "prepare-sources" ]]; then
 	release_gpui_prepare_output "$REPO_ROOT" "$OUTPUT"
 else
 	[[ -d "$OUTPUT" ]] || {
@@ -131,15 +135,43 @@ resolve_code_server_archives() {
 	CODE_SERVER_ARCHIVES_RESOLVED=1
 }
 
-phase_prepare() {
+# CDXC:Release 2026-10-07 WHY:
+# `prepare` is split into the part that reads only the checkout (references,
+# GhosttyKit) and the part that reads the runtime artifacts other jobs of the
+# run produce (the Linux code-server archives, the remote gxserver packages,
+# which it would otherwise build locally). The release job runs
+# prepare-sources and the gxserver cargo build before it awaits those
+# artifacts, instead of polling for them first (411 s idle in 10.14.0, run
+# 37558383921). `prepare` and `all` keep the original order.
+prepare_references() {
 	if [[ "$SKIP_PREPARE_REFERENCES" != "1" ]]; then
 		"$SCRIPT_DIR/prepare-references.sh"
 	fi
+}
+
+prepare_runtime_inputs() {
 	resolve_code_server_archives
 	if [[ ! -x "$REMOTE_ROOT/x64/package/bin/gxserver" || ! -x "$REMOTE_ROOT/arm64/package/bin/gxserver" ]]; then
 		"$REPO_ROOT/tooling/build-remote-gxserver-linux-release.sh" --arch all
 	fi
+}
 
+phase_prepare() {
+	prepare_references
+	prepare_runtime_inputs
+	prepare_ghosttykit
+}
+
+phase_prepare_sources() {
+	prepare_references
+	prepare_ghosttykit
+}
+
+phase_prepare_runtime() {
+	prepare_runtime_inputs
+}
+
+prepare_ghosttykit() {
 	if [[ "$USE_PREBUILT_RUST" != "1" && ! -d "$GHOSTTY_KIT" ]]; then
 		GHOSTTY_ZIG="${GHOSTEX_ZIG:-${ZIG:-}}"
 		[[ -x "$GHOSTTY_ZIG" ]] || {
@@ -464,6 +496,8 @@ all)
 	phase_finalize
 	;;
 prepare) phase_prepare ;;
+prepare-sources) phase_prepare_sources ;;
+prepare-runtime) phase_prepare_runtime ;;
 build-server) phase_build_server ;;
 stage-runtime) phase_stage_runtime ;;
 build-desktop) phase_build_desktop ;;

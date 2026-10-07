@@ -48,6 +48,12 @@ impl AssetSource for GhostexAssets {
                 .map(|svg| Some(Cow::Owned(svg.into_bytes())))
                 .ok_or_else(|| anyhow!("unknown working strip asset {key:?}"));
         }
+        // CDXC:Settings 2026-10-07 DECISION: The user said "yes show real icon": Settings > About draws the real Ghostex app icon (the same PNG the window and Dock use), not a "G" placeholder tile.
+        if path == "app-icon.png" {
+            return Ok(Some(Cow::Borrowed(include_bytes!(
+                "../resources/AppIcon.appiconset/icon_256x256.png"
+            ))));
+        }
         if let Some(key) = path.strip_prefix("onboarding/") {
             return onboarding::asset(key)
                 .map(Some)

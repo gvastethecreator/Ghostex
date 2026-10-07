@@ -1,6 +1,6 @@
-//! A coordinator's Threads panel, pinned above the composer beside Tasks and Subagents: its threads
-//! grouped by what they need, each row opening that thread. Groups, labels, order and the done fold
-//! come from the core (packages/gx-chat-core/src/extras/coordinator_threads.rs).
+//! A coordinator's Threads panel, pinned above the composer beside Tasks and Subagents: one list of
+//! its threads, each row opening that thread. Order, labels and the "N more" fold come from the core
+//! (packages/gx-chat-core/src/extras/coordinator_threads.rs).
 //!
 //! SEE-ALSO: apps/mobile/app/src/chat/native/cards/AgentPanels.tsx (`CoordinatorThreadsPanel`, the
 //! phone's twin), apps/desktop/src/app/session_chat/host_actions.rs (`openCoordinatorThread`).
@@ -14,10 +14,10 @@ use gpui::{
 };
 use serde_json::{Value, json};
 
-/// The sidebar's colours for the same states (native_sidebar/status.rs), so a thread reads the same
-/// in both places.
-const WAITING_COLOR: u32 = 0x95d7f6;
+/// The sidebar's working colour (native_sidebar/status.rs), so a thread reads the same in both
+/// places, and the amber of the "Needs your approval" tag.
 const WORKING_COLOR: u32 = 0xc68a06;
+const APPROVAL_COLOR: u32 = 0xf5a524;
 
 impl NativeChatView {
     pub(super) fn render_coordinator_threads(
@@ -47,7 +47,7 @@ impl NativeChatView {
                         .size(px(8.0 * s))
                         .rounded_full()
                         .flex_shrink_0()
-                        .bg(rgb(WAITING_COLOR))
+                        .bg(rgb(APPROVAL_COLOR))
                         .into_any_element()
                 }),
                 command: json!({"type":"toggleCoordinatorThreads","open":!open}),
@@ -64,35 +64,30 @@ impl NativeChatView {
                 .gap(px(2.0 * s))
                 .max_h(px(360.0 * s))
                 .overflow_y_scroll();
-            for group in panel["groups"].as_array().into_iter().flatten() {
-                rows = rows.child(
-                    div()
-                        .pt(px(4.0 * s))
-                        .text_size(px(10.5 * s))
-                        .text_color(p.card_muted)
-                        .child(text(group, "label").to_uppercase()),
-                );
-                for row in group["rows"].as_array().into_iter().flatten() {
-                    rows = rows.child(self.coordinator_thread_row(row, p, cx));
-                }
+            for row in panel["rows"].as_array().into_iter().flatten() {
+                rows = rows.child(self.coordinator_thread_row(row, p, cx));
             }
             body.push(rows.into_any_element());
-            let done = text(&panel, "doneLabel");
-            if !done.is_empty() {
-                let expanded = panel["showDone"] == true;
+            let more = text(&panel, "moreLabel");
+            if !more.is_empty() {
+                let expanded = panel["showAll"] == true;
                 body.push(
                     div()
-                        .id("chat-coordinator-threads-done")
+                        .id("chat-coordinator-threads-more")
                         .role(gpui::Role::Button)
-                        .aria_label(done.clone())
+                        .aria_label(if expanded {
+                            "Show fewer threads".to_string()
+                        } else {
+                            format!("Show {more} threads")
+                        })
                         .chat_cursor_pointer()
                         .text_size(px(12.0 * s))
                         .text_color(p.card_muted)
                         .hover(|style| style.text_color(p.foreground))
-                        .child(done)
+                        .child(more)
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.invoke(
-                                json!({"type":"toggleCoordinatorThreadsDone","expanded":!expanded}),
+                                json!({"type":"toggleCoordinatorThreadsMore","expanded":!expanded}),
                                 cx,
                             )
                         }))
@@ -129,34 +124,18 @@ impl NativeChatView {
         cx: &Context<Self>,
     ) -> AnyElement {
         let s = p.scale;
-        let state = row["state"].as_str().unwrap_or("finished");
-        let marker = match state {
-            "waiting" => div()
-                .size(px(8.0 * s))
-                .rounded_full()
-                .bg(rgb(WAITING_COLOR))
-                .into_any_element(),
-            "working" => div()
+        let needs_approval = row["needsApproval"] == true;
+        let marker = if row["working"] == true {
+            div()
                 .size(px(8.0 * s))
                 .rounded_full()
                 .bg(rgb(WORKING_COLOR))
-                .into_any_element(),
-            "finished" => gpui::svg()
-                .path("titlebar/circle-check.svg")
-                .size(px(13.0 * s))
-                .text_color(p.primary)
-                .into_any_element(),
-            "done" => gpui::svg()
-                .path("titlebar/circle-check-filled.svg")
-                .size(px(13.0 * s))
-                .text_color(p.muted)
-                .into_any_element(),
-            _ => div()
+        } else {
+            div()
                 .size(px(8.0 * s))
                 .rounded_full()
                 .border(px(1.5 * s))
                 .border_color(p.muted.opacity(0.7))
-                .into_any_element(),
         };
         let title = text(row, "title");
         let detail = text(row, "detail");
@@ -207,13 +186,21 @@ impl NativeChatView {
                     .flex_shrink_0()
                     .max_w(px(260.0 * s))
                     .truncate()
-                    .text_color(if state == "done" {
-                        p.card_muted
-                    } else {
-                        p.foreground
-                    })
+                    .text_color(p.foreground)
                     .child(title),
             )
+            .when(needs_approval, |this| {
+                this.child(
+                    div()
+                        .flex_shrink_0()
+                        .px(px(5.0 * s))
+                        .rounded(px(4.0 * s))
+                        .bg(gpui::Hsla::from(rgb(APPROVAL_COLOR)).opacity(0.16))
+                        .text_size(px(11.0 * s))
+                        .text_color(rgb(APPROVAL_COLOR))
+                        .child(ghostex_gx_chat_core::extras::coordinator_threads::NEEDS_APPROVAL_LABEL),
+                )
+            })
             .child(
                 div()
                     .flex_1()

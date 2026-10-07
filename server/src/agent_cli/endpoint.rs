@@ -43,7 +43,7 @@ pub(crate) async fn dispatch(
         .ok_or_else(|| error("Unknown agent CLI."))?;
     match action {
         "read" => read(definition, &home).await,
-        "start" => start(definition, &home, params).await,
+        "start" => start(definition, paths, params).await,
         "addToPath" => add_to_path(definition, &home).await,
         _ => Err(error("Unknown CLI action.")),
     }
@@ -97,9 +97,10 @@ async fn add_to_path(
 
 async fn start(
     definition: &'static Definition,
-    home: &Path,
+    paths: &GxserverPaths,
     params: &Map<String, Value>,
 ) -> Result<Value, DomainStateError> {
+    let home = paths.agent_config_home_dir();
     let key = (home.to_path_buf(), definition.agent_id.clone());
     if JOBS
         .lock()
@@ -178,6 +179,8 @@ async fn start(
     }
     state["job"] = progress;
     let home = home.to_path_buf();
+    let paths = paths.clone();
+    let installing = operation == "install";
     tokio::spawn(async move {
         /*
         CDXC:AgentProviders 2026-09-28 WHY:
@@ -219,6 +222,9 @@ async fn start(
             Ok(()) => finish(definition, &home, &key).await,
             Err(error) => Err(error),
         };
+        if result.is_ok() && installing {
+            install_chat_hooks(definition, &paths, &key).await;
+        }
         if let Ok(mut jobs) = JOBS.lock() {
             if let Some(job) = jobs.get_mut(&key) {
                 job.progress["status"] = json!(if result.is_ok() {
@@ -300,6 +306,65 @@ async fn finish(
         ));
     }
     Ok(())
+}
+
+/// CDXC:AgentHooks 2026-10-07 DECISION:
+/// User: "if user has chat as the default interface and he installs a cli through ghostex then please install the hooks automatically also at the same time". The view is the agent's own Default view when it is Chat or Terminal, else the Default Agent View, which means Chat when unset (the 2026-09-30 rule in gx-core's `PreferredInterfaceSettings::resolve`). A hook install that fails is reported in the job output; the CLI install still succeeded and the Agents page keeps offering the hook.
+async fn install_chat_hooks(
+    definition: &'static Definition,
+    paths: &GxserverPaths,
+    key: &(PathBuf, String),
+) {
+    let agent_id = definition.agent_id.clone();
+    let paths = paths.clone();
+    let outcome = tokio::task::spawn_blocking(move || {
+        let settings = crate::session_lifecycle::read_sidebar_settings(&paths);
+        let interface = |value: Option<&Value>| {
+            value
+                .and_then(Value::as_str)
+                .filter(|value| matches!(*value, "chat" | "terminal"))
+                .map(str::to_string)
+        };
+        let chat = interface(
+            settings
+                .as_ref()
+                .and_then(|settings| settings.pointer("/preferredAgentInterfaceOverrides"))
+                .and_then(|overrides| overrides.get(&agent_id)),
+        )
+        .or_else(|| {
+            interface(
+                settings
+                    .as_ref()
+                    .and_then(|s| s.get("preferredAgentInterface")),
+            )
+        })
+        .is_none_or(|view| view == "chat");
+        if !chat {
+            return Ok(false);
+        }
+        let mut params = Map::new();
+        params.insert("agentIds".into(), json!([agent_id]));
+        crate::agent_hooks::install_agent_hooks(&paths, &params).map(|_| true)
+    })
+    .await;
+    match outcome {
+        Ok(Ok(true)) => append_output(
+            key,
+            "\nInstalled Ghostex's hooks so this agent works in Chat View.\n",
+        ),
+        Ok(Ok(false)) => {}
+        Ok(Err(error)) => append_output(
+            key,
+            &format!(
+                "\nCould not install Ghostex's hooks for Chat View: {}\n",
+                error.message
+            ),
+        ),
+        Err(error) => append_output(
+            key,
+            &format!("\nCould not install Ghostex's hooks for Chat View: {error}\n"),
+        ),
+    }
 }
 
 fn set_job_status(key: &(PathBuf, String), status: &str) {

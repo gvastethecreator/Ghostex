@@ -383,7 +383,14 @@ pub(crate) fn match_cursor_statusline(line: &str) -> Option<SessionChatDetectedS
     // catalog, so a model added to it is recognised without a release; an
     // older spelling is a row's `terminalLabels`); unknown names remain
     // honest readbacks.
+    // Cursor names Claude models "Claude Fable 5" where the catalog says "Fable 5" (see
+    // `cursor_row_name_matches` in session_chat_provider_model_picker.rs).
     let value = crate::agent_model_catalog::model_value_for_label("cursor", &model_label)
+        .or_else(|| {
+            model_label.strip_prefix("Claude ").and_then(|label| {
+                crate::agent_model_catalog::model_value_for_label("cursor", label)
+            })
+        })
         .unwrap_or_else(|| model_label.to_string());
     let display_model_label = model_label
         .strip_prefix("Cursor ")

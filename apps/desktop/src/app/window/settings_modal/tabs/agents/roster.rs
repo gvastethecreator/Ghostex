@@ -1,13 +1,15 @@
-//! The Agents roster card: the session resume hooks toolbar (CDXC:AgentHooks 2026-08-28: quiet
-//! whole-set controls, a readiness chip and an info tooltip), one drag-to-reorder row per launcher
-//! (`SettingsAgentRow`: grip, icon, name with the Chat View badge, command, hook status pill, CLI
-//! action, inline hook install, disclosure), the empty state and the hook state folder; or the
-//! agent editor in the card's place.
+//! The Agents card: the summary line, one drag-to-reorder row per agent in the list (grip, icon,
+//! name with the Chat View and Custom badges, command or "Last used …", the row's problem if it
+//! has one, the on/off switch, disclosure), the step a row shows right after it was turned on,
+//! the expanded panel, "More agents", the one-time tidy-up offer and "Add custom agent" or its
+//! form.
+//!
+//! CDXC:AgentLauncher 2026-10-06 DECISION:
+//! User: "ok implement the plan", choosing A1, B2, C1 and D3 of the Agents page mockup (docs/2026-10-06/agents-settings/). A1: agents that are off but were used before stay dimmed in place in the list. B2: agents that are off and never used are a compact chip grid under "More agents"; a click turns one on. C1: custom agents sit in the same list with a Custom tag and are the only rows with Delete; "Add custom agent" is the last row. D3: a row speaks only when something is wrong, with one summary line and Fix all above the list. Every agent has a switch; built-in agents can only be turned off, never removed.
 use super::super::super::super::native_modal_kit::*;
 use super::super::super::fields::{
-    ButtonSize, ButtonVariant, card_inset, reorder_handle, reorder_order, reorder_row,
-    reorder_scroll_container, settings_button, settings_button_sized, settings_icon,
-    settings_section, tooltip_text,
+    card_inset, labeled_switch_control, reorder_handle, reorder_order, reorder_row,
+    reorder_scroll_container, settings_icon, settings_section, tooltip_text,
 };
 use super::super::super::model::SettingsTabId;
 use super::super::super::palette::SettingsPalette;
@@ -16,18 +18,15 @@ use super::cli::{ghost_icon_button, spinning_icon};
 use super::icons;
 use super::logos::{agent_icon_tile, muted_fill};
 use super::model::{
-    AgentButton, HookStatus, HookStatusItem, agents_from_hud, any_hook_removable, hook_agent_id,
-    hook_status_text, hook_supported_agents, merge_ids, reconcile_draft_ids, reorder_request_id,
-    supports_chat_view,
+    AgentButton, HookStatus, HookStatusItem, hook_agent_id, last_used_label, supports_chat_view,
 };
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, FontWeight, InteractiveElement as _, IntoElement,
-    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, Transformation,
-    Window, div, px, radians, rgb,
+    AnyElement, Context, Div, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Transformation, Window, div, px,
+    radians, rgb,
 };
 use gpui_component::{h_flex, v_flex};
-use serde_json::json;
 
 const LIST: &str = "settings-agents";
 
@@ -78,13 +77,14 @@ fn pill_colors(
     }
 }
 
-/// `AgentHookStatusIcon`.
-fn hook_status_icon(
+/// The icon of a hook's detail line (`AgentHookStatusIcon` in the row panel).
+pub(super) fn hook_detail_icon(
+    p: &SettingsPalette,
     status: Option<&HookStatusItem>,
     loading: bool,
-    color: gpui::Rgba,
     id: &str,
 ) -> AnyElement {
+    let (_, _, color) = pill_colors(p, status, loading);
     if loading {
         return spinning_icon(icons::REFRESH, 14.0, color, id);
     }
@@ -99,75 +99,16 @@ fn hook_status_icon(
         .into_any_element()
 }
 
-/// The hook status pill of a row header (`rounded-none px-2 py-1 text-[11px]`).
-pub(super) fn hook_status_pill(
-    p: &SettingsPalette,
-    status: Option<&HookStatusItem>,
-    loading: bool,
-    id: &str,
-) -> AnyElement {
-    let (background, text, icon) = pill_colors(p, status, loading);
-    h_flex()
-        .flex_shrink_0()
-        .items_center()
-        .gap(px(6.0))
-        .px(px(8.0))
-        .py(px(4.0))
-        .bg(hsla(background))
-        .text_size(px(11.0))
-        .line_height(px(15.7143))
-        .text_color(hsla(text))
-        .child(hook_status_icon(status, loading, icon, id))
-        .child(hook_status_text(status, loading))
-        .into_any_element()
-}
-
-/// The icon of a hook's detail line (`AgentHookStatusIcon` in the row panel).
-pub(super) fn hook_detail_icon(
-    p: &SettingsPalette,
-    status: Option<&HookStatusItem>,
-    loading: bool,
-    id: &str,
-) -> AnyElement {
-    let (_, _, icon) = pill_colors(p, status, loading);
-    hook_status_icon(status, loading, icon, id)
+/// The violet of the Custom tag.
+fn custom_tag_color(p: &SettingsPalette) -> gpui::Rgba {
+    if p.light {
+        rgb(0x6d28d9)
+    } else {
+        rgb(0xc4b5fd)
+    }
 }
 
 impl AgentsTab {
-    /// The roster in display order (`orderedAgents`), reconciling the dragged order with the
-    /// synced roster first (`reconcileDraftIds` on every roster change).
-    pub(super) fn ordered_agents(&mut self, cx: &Context<Self>) -> Vec<AgentButton> {
-        let agents = agents_from_hud(self.store.read(cx).hud());
-        let synced: Vec<String> = agents.iter().map(|agent| agent.agent_id.clone()).collect();
-        if synced != self.synced_agent_ids {
-            self.draft_agent_ids = reconcile_draft_ids(self.draft_agent_ids.as_deref(), &synced);
-            self.synced_agent_ids = synced.clone();
-        }
-        let order = match &self.draft_agent_ids {
-            Some(draft) => merge_ids(draft, &synced),
-            None => synced,
-        };
-        order
-            .iter()
-            .filter_map(|id| agents.iter().find(|agent| &agent.agent_id == id).cloned())
-            .collect()
-    }
-
-    fn move_agent(&mut self, from: usize, to: usize, cx: &mut Context<Self>) {
-        let ids: Vec<String> = self
-            .ordered_agents(cx)
-            .into_iter()
-            .map(|agent| agent.agent_id)
-            .collect();
-        let next = super::super::super::fields::move_index(&ids, from, to);
-        self.draft_agent_ids = Some(next.clone());
-        self.post(
-            json!({ "agentIds": next, "requestId": reorder_request_id(), "type": "syncSidebarAgentOrder" }),
-            cx,
-        );
-        cx.notify();
-    }
-
     fn toggle_expanded(&mut self, agent_id: &str, cx: &mut Context<Self>) {
         if let Some(position) = self.expanded.iter().position(|id| id == agent_id) {
             self.expanded.remove(position);
@@ -184,44 +125,23 @@ impl AgentsTab {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Div> {
-        if self.editor.is_some() {
-            let rows = self.render_editor(p, window, cx);
-            return settings_section(p, "Agent", None, None, rows);
-        }
-        let add = settings_button(
-            p,
-            "agents-add",
-            "Add Agent",
-            Some(icons::PLUS),
-            ButtonVariant::Outline,
-            false,
-            None,
-            |page: &mut Self, window, cx| {
-                page.open_editor(None, window, cx);
-                cx.notify();
-            },
-            cx,
-        );
+        self.roster_follow_hud(cx);
         let status = self
             .store
             .read(cx)
             .host_payload("agentHookStatus")
             .map(HookStatus::parse);
         let loading = self.hook_status_loading;
-        let mut rows: Vec<AnyElement> =
-            vec![self.render_hook_toolbar(p, status.as_ref(), loading, cx)];
-        if let Some(message) = status
-            .as_ref()
-            .and_then(|status| status.error_message.clone())
-        {
-            rows.push(card_inset(
-                div()
-                    .text_size(px(13.0))
-                    .text_color(hsla(p.destructive))
-                    .child(message),
-            ));
-        }
+        let all = self.all_agents(cx);
         let agents = self.ordered_agents(cx);
+        let unlisted = self.unlisted_agents(cx);
+        let mut rows: Vec<AnyElement> = Vec::new();
+        if let Some(tidy) = self.render_tidy_up(p, &all, cx) {
+            rows.push(tidy);
+        }
+        if let Some(line) = self.render_summary_line(p, &agents, status.as_ref(), loading, cx) {
+            rows.push(card_inset(line));
+        }
         if agents.is_empty() {
             rows.push(card_inset(
                 v_flex()
@@ -236,14 +156,14 @@ impl AgentsTab {
                             .line_height(px(24.9))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(hsla(p.foreground))
-                            .child("No agents configured"),
+                            .child("No agents are on"),
                     )
                     .child(
                         div()
                             .text_size(px(13.0))
                             .line_height(px(21.1))
                             .text_color(hsla(p.muted))
-                            .child("Add an agent launcher to start new sessions."),
+                            .child("Turn one on under More agents, or add a custom agent."),
                     ),
             ));
         } else {
@@ -278,172 +198,63 @@ impl AgentsTab {
             }
             rows.push(list.into_any_element());
         }
-        if let Some(status) = &status {
-            rows.push(card_inset(
-                div()
-                    .w_full()
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_ellipsis()
-                    .text_size(px(13.0))
-                    .line_height(px(18.5714))
-                    .text_color(hsla(p.muted))
-                    .child(format!("Hook state: {}", status.hook_state_directory)),
-            ));
+        if let Some(more) = self.render_more_agents(p, &unlisted, cx) {
+            rows.push(more);
         }
-        settings_section(p, "Agents", None, Some(add), rows)
+        if self.editor.is_some() {
+            let form = self.render_editor(p, window, cx);
+            rows.push(
+                v_flex()
+                    .w_full()
+                    .child(
+                        div()
+                            .px(px(20.0))
+                            .pt(px(14.0))
+                            .text_size(px(14.0))
+                            .text_color(hsla(p.foreground))
+                            .child("New custom agent"),
+                    )
+                    .children(form)
+                    .into_any_element(),
+            );
+        } else {
+            rows.push(self.render_add_custom_row(p, cx));
+        }
+        settings_section(p, "Agents", None, None, rows)
     }
 
-    fn render_hook_toolbar(
-        &mut self,
-        p: &SettingsPalette,
-        status: Option<&HookStatus>,
-        loading: bool,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let supported = hook_supported_agents().len();
-        let installed = status.map_or(0, |status| {
-            status
-                .agents
-                .iter()
-                .filter(|item| item.status == "installed")
-                .count()
-        });
-        let update_required = status.map_or(0, |status| {
-            status
-                .agents
-                .iter()
-                .filter(|item| item.status == "updateRequired")
-                .count()
-        });
-        let summary = match status {
-            Some(status) if status.error_message.is_some() => "Unable to check hooks".to_string(),
-            Some(_) if update_required > 0 => format!(
-                "{installed}/{supported} hooks ready, {}",
-                if update_required == 1 {
-                    "1 needs update".to_string()
-                } else {
-                    format!("{update_required} need update")
-                }
-            ),
-            Some(_) => format!("{installed}/{supported} hooks ready"),
-            None if loading => "Checking hooks".to_string(),
-            None => "Hook status not checked".to_string(),
-        };
-        let removable = any_hook_removable(status);
-        let chip_border = css_fade(p.hairline, 0.7);
-        let info = div()
-            .id("agents-hooks-info")
-            .flex_shrink_0()
-            .mt(px(2.0))
-            .tooltip(tooltip_text(
-                "Install hooks so Ghostex can capture each agent's native session id and resume the exact conversation after sleep, reload, or app restart. Hooks write only session metadata into Ghostex's session-state files. The existing title-based restore path remains available when a hook has not captured an id yet.",
-            ))
-            .child(settings_icon(icons::INFO_CIRCLE, 16.0, p.muted));
-        let loading_reason: SharedString = "Hook status is being checked.".into();
-        let buttons = h_flex()
-            .flex_shrink_0()
-            .flex_wrap()
+    fn render_add_custom_row(&mut self, p: &SettingsPalette, cx: &mut Context<Self>) -> AnyElement {
+        let hover = p.raised_hover;
+        h_flex()
+            .id("agents-add-custom")
+            .role(gpui::Role::Button)
+            .aria_label("Add custom agent")
+            .w_full()
+            .px(px(20.0))
+            .py(px(12.0))
+            .gap(px(10.0))
             .items_center()
-            .justify_end()
-            .gap(px(6.0))
-            .child(settings_button_sized(
-                p,
-                "agents-hooks-install-all",
-                if update_required > 0 {
-                    "Update All"
-                } else {
-                    "Install All"
-                },
-                Some(icons::DOWNLOAD),
-                ButtonVariant::Ghost,
-                ButtonSize::Sm,
-                loading,
-                Some(loading_reason.clone()),
-                |page: &mut Self, _window, cx| {
-                    page.install_hooks(None, cx);
-                    cx.notify();
-                },
-                cx,
-            ))
-            // CDXC:AgentHooks 2026-08-19-11:20 (agents.tsx): Uninstall All sits beside the install it undoes and stays disabled while status loads or no Ghostex hook is present.
-            .child(settings_button_sized(
-                p,
-                "agents-hooks-uninstall-all",
-                "Uninstall All",
-                Some(icons::TRASH),
-                ButtonVariant::Ghost,
-                ButtonSize::Sm,
-                loading || !removable,
-                Some(if loading {
-                    loading_reason.clone()
-                } else {
-                    "No Ghostex hooks are installed.".into()
-                }),
-                |page: &mut Self, _window, cx| {
-                    page.uninstall_hooks(None, cx);
-                    cx.notify();
-                },
-                cx,
-            ))
-            .child(settings_button_sized(
-                p,
-                "agents-hooks-refresh",
-                "Refresh",
-                Some(icons::REFRESH),
-                ButtonVariant::Ghost,
-                ButtonSize::Sm,
-                loading,
-                Some(loading_reason),
-                |page: &mut Self, _window, cx| {
-                    page.request_hook_status(cx);
-                    cx.notify();
-                },
-                cx,
-            ));
-        card_inset(
-            v_flex()
-                .w_full()
-                .gap(px(8.0))
-                .child(
-                    h_flex()
-                        .w_full()
-                        .min_w_0()
-                        .items_start()
-                        .gap(px(8.0))
-                        .child(info)
-                        .child(
-                            div()
-                                .min_w_0()
-                                .text_size(px(13.0))
-                                .line_height(px(20.0))
-                                .text_color(hsla(p.muted))
-                                .child("Session resume hooks let Ghostex capture each agent's native session id and resume the exact conversation."),
-                        ),
-                )
-                .child(
-                    h_flex()
-                        .w_full()
-                        .flex_wrap()
-                        .items_center()
-                        .justify_end()
-                        .gap(px(8.0))
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .px(px(8.0))
-                                .py(px(4.0))
-                                .rounded(px(6.0))
-                                .border_1()
-                                .border_color(hsla(chip_border))
-                                .text_size(px(11.0))
-                                .line_height(px(15.7143))
-                                .text_color(hsla(p.muted))
-                                .child(summary),
-                        )
-                        .child(buttons),
-                ),
-        )
+            .cursor_pointer()
+            .hover(move |this| this.bg(hsla(hover)))
+            .on_press(cx, |page, window, cx| {
+                page.open_editor(None, window, cx);
+                cx.notify();
+            })
+            .child(settings_icon(icons::PLUS, 15.0, p.muted).flex_shrink_0())
+            .child(
+                div()
+                    .text_size(px(14.0))
+                    .text_color(hsla(p.foreground))
+                    .child("Add custom agent"),
+            )
+            .child(div().flex_1())
+            .child(
+                div()
+                    .text_size(px(12.5))
+                    .text_color(hsla(p.muted))
+                    .child("Your own command, or a variant of a built-in agent"),
+            )
+            .into_any_element()
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -459,28 +270,12 @@ impl AgentsTab {
     ) -> AnyElement {
         let agent_id = agent.agent_id.clone();
         let hook_agent = hook_agent_id(agent);
-        let supports_hooks = hook_agent.is_some();
         let hook_status = hook_agent
             .as_deref()
             .and_then(|hook| status.and_then(|status| status.item(hook)));
         let pending = loading && status.is_none();
         let expanded = self.expanded.contains(&agent_id);
-        let cli_agent = super::model::default_agent_by_icon(agent.icon.as_deref())
-            .map(|default| default.agent_id.clone())
-            .unwrap_or_else(|| agent_id.clone());
-        let cli_missing =
-            self.cli_missing(&cli_agent, hook_status.map(|status| status.status.as_str()));
-        let hook_installed = hook_status.is_some_and(|status| status.status == "installed");
-        // A hook cannot be installed for a CLI that is not there; the row offers Install CLI instead.
-        let show_inline_install = supports_hooks
-            && !hook_installed
-            && hook_status.is_none_or(|status| status.status != "notRequired")
-            && !pending
-            && !cli_missing;
-        let show_cli_action = self.cli_row_action_shown(&cli_agent, cli_missing, cx);
-        if !show_cli_action {
-            self.cli_unmount(super::cli::CliSlot::Row, &cli_agent);
-        }
+        let cli_agent = self.cli_agent_id(agent);
         let name = agent.name.clone();
         let grip = reorder_handle(
             p,
@@ -503,13 +298,20 @@ impl AgentsTab {
                 .child(settings_icon(icons::GRIP_VERTICAL, 16.0, p.foreground))
                 .into_any_element(),
         );
-        let command = agent
-            .command
-            .as_deref()
-            .map(str::trim)
-            .filter(|command| !command.is_empty())
-            .unwrap_or("Not configured")
-            .to_string();
+        let subtitle = if agent.enabled {
+            agent
+                .command
+                .as_deref()
+                .map(str::trim)
+                .filter(|command| !command.is_empty())
+                .unwrap_or("Not configured")
+                .to_string()
+        } else {
+            match &agent.last_used_at {
+                Some(at) => format!("Off · {}", last_used_label(at).to_lowercase()),
+                None => "Off".to_string(),
+            }
+        };
         let chat_badge = supports_chat_view(&agent.agent_id, agent.icon.as_deref()).then(|| {
             div()
                 .id(SharedString::from(format!("agent-chat-badge-{agent_id}")))
@@ -525,9 +327,26 @@ impl AgentsTab {
                     css_fade(p.muted, 0.7),
                 ))
         });
+        let custom_tag = (!agent.is_default).then(|| {
+            let color = custom_tag_color(p);
+            div()
+                .flex_shrink_0()
+                .px(px(6.0))
+                .py(px(1.0))
+                .rounded(px(6.0))
+                .border_1()
+                .border_color(hsla(css_fade(color, 0.35)))
+                .text_size(px(11.0))
+                .line_height(px(15.0))
+                .text_color(hsla(color))
+                .child("Custom")
+        });
         let toggle_agent = agent_id.clone();
-        let edit_button = h_flex()
+        let main = h_flex()
             .id(SharedString::from(format!("agent-row-open-{agent_id}")))
+            .role(gpui::Role::Button)
+            .aria_label(SharedString::from(format!("{name} options")))
+            .aria_expanded(expanded)
             .flex_1()
             .min_w_0()
             .p(px(8.0))
@@ -535,9 +354,10 @@ impl AgentsTab {
             .items_center()
             .rounded(px(MODAL_RADIUS_CONTROL))
             .cursor_pointer()
-            .on_click(cx.listener(move |page, _: &ClickEvent, _window, cx| {
+            .when(!agent.enabled, |this| this.opacity(0.55))
+            .on_press(cx, move |page, _window, cx| {
                 page.toggle_expanded(&toggle_agent, cx);
-            }))
+            })
             .child(agent_icon_tile(agent.icon.as_deref(), p))
             .child(
                 v_flex()
@@ -559,7 +379,8 @@ impl AgentsTab {
                                     .text_color(hsla(p.foreground))
                                     .child(name.clone()),
                             )
-                            .children(chat_badge),
+                            .children(chat_badge)
+                            .children(custom_tag),
                     )
                     .child(
                         div()
@@ -570,41 +391,28 @@ impl AgentsTab {
                             .text_size(px(13.0))
                             .line_height(px(18.5714))
                             .text_color(hsla(p.muted))
-                            .child(command),
+                            .when(agent.enabled, |this| this.font_family(MODAL_MONO_FONT))
+                            .child(subtitle),
                     ),
             );
-        let pill = supports_hooks
-            .then(|| hook_status_pill(p, hook_status, pending, &format!("agent-pill-{agent_id}")));
-        let cli_action = show_cli_action
-            .then(|| self.render_cli_row_action(p, &cli_agent, cli_missing, cx))
-            .flatten();
-        let install_label = if hook_installed {
-            "Reinstall"
-        } else if hook_status.is_some_and(|status| status.status == "updateRequired") {
-            "Update hook"
-        } else {
-            "Install hook"
-        };
-        let inline_install = show_inline_install.then(|| {
-            let hook = hook_agent.clone();
-            settings_button_sized(
-                p,
-                SharedString::from(format!("agent-inline-install-{agent_id}")),
-                install_label,
-                Some(icons::DOWNLOAD),
-                ButtonVariant::Outline,
-                ButtonSize::Sm,
-                loading,
-                Some("Hook status is being checked.".into()),
-                move |page: &mut Self, _window, cx| {
-                    if let Some(hook) = hook.clone() {
-                        page.install_hooks(Some(vec![hook]), cx);
-                        cx.notify();
-                    }
-                },
-                cx,
-            )
-        });
+        let row_status = self.render_row_status(p, agent, status, loading, cx);
+        let switch_agent = agent.clone();
+        let switch = labeled_switch_control(
+            p,
+            SharedString::from(format!("agent-enabled-{agent_id}")),
+            Some(SharedString::from(name.clone())),
+            agent.enabled,
+            false,
+            None,
+            move |page: &mut Self, on, _window, cx| {
+                if on {
+                    page.turn_on_agent(&switch_agent, cx);
+                } else {
+                    page.set_agents_enabled(vec![switch_agent.agent_id.clone()], false, cx);
+                }
+            },
+            cx,
+        );
         let chevron_agent = agent_id.clone();
         let chevron_icon = settings_icon(icons::CHEVRON_DOWN, 16.0, p.foreground)
             .when(expanded, |icon| {
@@ -614,6 +422,7 @@ impl AgentsTab {
         let chevron = ghost_icon_button(
             p,
             SharedString::from(format!("agent-row-chevron-{agent_id}")),
+            format!("{name} options"),
             chevron_icon,
             false,
             expanded,
@@ -631,12 +440,20 @@ impl AgentsTab {
             .items_center()
             .hover(move |this| this.bg(hsla(hover)))
             .child(grip)
-            .child(edit_button)
-            .children(pill)
-            .children(cli_action)
-            .children(inline_install)
+            .child(main)
+            .child(
+                h_flex()
+                    .flex_shrink_0()
+                    .items_center()
+                    .gap(px(8.0))
+                    .children(row_status),
+            )
+            .child(switch)
             .child(chevron);
         let mut row = v_flex().w_full().child(header);
+        if let Some(step) = self.render_turn_on_step(p, agent, expanded, window, cx) {
+            row = row.child(step);
+        }
         if expanded {
             row = row.child(self.render_agent_panel(
                 p,

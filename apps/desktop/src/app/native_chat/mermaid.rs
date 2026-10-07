@@ -64,7 +64,7 @@ pub(crate) struct ChatMermaidCache {
 }
 
 /// The diagram's Mermaid text: the fence's lines without its opening and closing runs.
-fn fence_source(fence: &str) -> String {
+pub(super) fn fence_source(fence: &str) -> String {
     let lines = fence.lines().collect::<Vec<_>>();
     let indent_of = |line: &str| line.len() - line.trim_start_matches(' ').len();
     let indent = lines.first().map_or(0, |line| indent_of(line));
@@ -95,7 +95,7 @@ fn device_width(width: f32, height: f32, display: f32) -> u32 {
     ((wanted.min(limit) / 8.0).round() * 8.0).max(8.0) as u32
 }
 
-fn button(
+pub(super) fn button(
     id: &'static str,
     icon: &'static str,
     label: Option<&'static str>,

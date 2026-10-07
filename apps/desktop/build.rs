@@ -438,10 +438,7 @@ fn build_windows_app_resource(manifest_dir: &Path) {
     fs::write(&icon_path, icon_bytes)
         .unwrap_or_else(|error| panic!("failed to write {}: {error}", icon_path.display()));
 
-    println!("cargo:rerun-if-env-changed=GHOSTEX_GPUI_MARKETING_VERSION");
-    let package_version = env::var("GHOSTEX_GPUI_MARKETING_VERSION")
-        .unwrap_or_else(|_| env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION"));
-    println!("cargo:rustc-env=GHOSTEX_BUILD_MARKETING_VERSION={package_version}");
+    let package_version = marketing_version().0;
     let mut numeric_version = [0_u16; 4];
     for (index, component) in package_version
         .split_once('-')
@@ -512,7 +509,44 @@ fn build_windows_app_resource(manifest_dir: &Path) {
     );
 }
 
+/// The version the app reports, and whether the release tooling stamped it.
+///
+/// CDXC:Build 2026-10-07 WHY:
+/// The crate versions stay at the placeholder `0.1.0` on purpose (the release skill bumps only the root `package.json`), so `CARGO_PKG_VERSION` is never the app version. Release scripts pass `GHOSTEX_GPUI_MARKETING_VERSION`; every other build (`cargo xtask start`, `cargo check`) reads the same root `package.json` here, so a dev build on any platform shows the real version in About and the feedback footer instead of 0.1.0. The stamped flag is separate because "is this a dev build" used to be answered by "version equals the crate placeholder", which a package.json version would break.
+/// SEE-ALSO: server/build.rs reads the same two sources.
+fn marketing_version() -> (String, bool) {
+    if let Some(version) = env::var("GHOSTEX_GPUI_MARKETING_VERSION")
+        .ok()
+        .map(|version| version.trim().to_string())
+        .filter(|version| !version.is_empty())
+    {
+        return (version, true);
+    }
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
+    let package_json = manifest_dir.join("../../package.json");
+    println!("cargo:rerun-if-changed={}", package_json.display());
+    let text = fs::read_to_string(&package_json)
+        .unwrap_or_else(|error| panic!("read {}: {error}", package_json.display()));
+    let version = text
+        .lines()
+        .find_map(|line| {
+            let rest = line.trim().strip_prefix("\"version\"")?;
+            let rest = rest.trim_start().strip_prefix(':')?;
+            let rest = rest.trim_start().strip_prefix('"')?;
+            Some(rest.split('"').next()?.to_string())
+        })
+        .filter(|version| !version.is_empty())
+        .unwrap_or_else(|| panic!("no \"version\" in {}", package_json.display()));
+    (version, false)
+}
+
 fn main() {
+    // CDXC:Build 2026-10-07 WHY:
+    // The About page, telemetry and the Linux update check read GHOSTEX_BUILD_MARKETING_VERSION on every platform. It used to be emitted only from the Windows resource step, so Linux and macOS release builds showed the crate version (0.1.0) instead of the release version.
+    println!("cargo:rerun-if-env-changed=GHOSTEX_GPUI_MARKETING_VERSION");
+    let (version, stamped) = marketing_version();
+    println!("cargo:rustc-env=GHOSTEX_BUILD_MARKETING_VERSION={version}");
+    println!("cargo:rustc-env=GHOSTEX_BUILD_VERSION_STAMPED={}", u8::from(stamped));
     // CDXC:Build 2026-10-02 WHY:
     // Cargo treats a rerun-if-changed path that does not exist as always changed, and GhosttyKit.xcframework only exists on macOS. Emitting these hints on Linux and Windows reran this build script on every build and recompiled the whole ghostex-gpui crate even when nothing had changed.
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {

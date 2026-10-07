@@ -13,6 +13,7 @@ pub(crate) enum GpuiGhostexCliSettingsAction {
     InstallGenerateTitleSkill,
     InstallMoveCodexSessionSkill,
     InstallHelpSkill,
+    InstallVisualsSkill,
     InstallCuaDriverSkill,
     FinishDesktopControlSetup {
         driver_installed: bool,
@@ -46,6 +47,7 @@ impl GpuiGhostexCliSettingsAction {
             Self::InstallGenerateTitleSkill => "installGenerateTitleSkill",
             Self::InstallMoveCodexSessionSkill => "installMoveCodexSessionSkill",
             Self::InstallHelpSkill => "installHelpSkill",
+            Self::InstallVisualsSkill => "installVisualsSkill",
             Self::InstallCuaDriverSkill => "installCuaDriverSkill",
             Self::FinishDesktopControlSetup { .. } => "installCuaDriver",
             Self::FinishTrycuaUninstall { .. } => "uninstallCuaDriver",
@@ -69,6 +71,7 @@ impl GpuiGhostexCliSettingsAction {
             Self::InstallGenerateTitleSkill => "Ghostex Auto Rename Session installed",
             Self::InstallMoveCodexSessionSkill => "Ghostex Move Codex Session installed",
             Self::InstallHelpSkill => "Ghostex Help installed",
+            Self::InstallVisualsSkill => "Ghostex Visuals installed",
             Self::InstallCuaDriverSkill => "Cua Driver skill installed",
             Self::FinishDesktopControlSetup {
                 was_update: true, ..
@@ -98,6 +101,7 @@ impl GpuiGhostexCliSettingsAction {
             Self::InstallGenerateTitleSkill => "Ghostex Auto Rename Session install failed",
             Self::InstallMoveCodexSessionSkill => "Ghostex Move Codex Session install failed",
             Self::InstallHelpSkill => "Ghostex Help install failed",
+            Self::InstallVisualsSkill => "Ghostex Visuals install failed",
             Self::InstallCuaDriverSkill => "Cua Driver skill install failed",
             Self::FinishDesktopControlSetup {
                 was_update: true, ..
@@ -224,6 +228,13 @@ pub(crate) fn gpui_run_ghostex_cli_settings_action(
                 action,
                 &["guide", "install-skill"],
                 "Ghostex Help",
+            )
+        }
+        GpuiGhostexCliSettingsAction::InstallVisualsSkill => {
+            gpui_install_bundled_ghostex_skill_action(
+                action,
+                &["visual", "install-skill"],
+                "Ghostex Visuals",
             )
         }
         GpuiGhostexCliSettingsAction::InstallCuaDriverSkill => {

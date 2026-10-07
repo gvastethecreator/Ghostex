@@ -108,6 +108,12 @@ const STORES: &[ChatStore] = &[
         backend: Backend::Local,
     },
     ChatStore {
+        id: "threadsCollapsed",
+        prefix: "ghostex.chat.coordinatorThreads.collapsed",
+        collection: false,
+        backend: Backend::Local,
+    },
+    ChatStore {
         id: "claudeContext",
         prefix: "ghostex.chat.context-details.v1",
         collection: false,

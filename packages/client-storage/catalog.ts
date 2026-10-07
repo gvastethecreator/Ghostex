@@ -150,6 +150,13 @@ export const storageCatalog = Object.freeze({
     'ghostex.chat.agentTasks.collapsed',
     binary
   ),
+  threadsCollapsed: define(
+    'threadsCollapsed',
+    'Chat coordinator threads panel',
+    'packages/gx-chat-core/src/extras/coordinator_threads.rs',
+    'ghostex.chat.coordinatorThreads.collapsed',
+    binary
+  ),
   terminalExpanded: define(
     'terminalExpanded',
     'Chat terminal output',

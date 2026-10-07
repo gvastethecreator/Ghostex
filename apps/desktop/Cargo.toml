@@ -123,7 +123,7 @@ ghostex-editor-client = { path = "../../packages/editor-client" }
 sysinfo = "0.31.4"
 velopack = { version = "1.2.0", features = ["public-utils"] }
 # CDXC:Onboarding 2026-10-01 WHY: WebView2 for the first-run intro video only (window/onboarding/intro_web_view.rs; macOS uses its own WKWebView shim). The version the GhostexEditor helper already ships (apps/editor/desktop); without default features it pulls no GTK or X11 crates.
-wry = { version = "0.55", default-features = false }
+wry = { version = "0.55", default-features = false, features = ["protocol"] }
 # CDXC:Notifications 2026-10-05 WHY: Windows toasts (app/helpers/os_cli/windows_notifications.rs) are WinRT. The same major WebView2 already builds through wry, so this adds features, not a second copy.
 windows = { version = "0.61", features = [
     "Data_Xml_Dom",

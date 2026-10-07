@@ -307,6 +307,7 @@ pub(crate) fn lay_out_group_rows(
         settings.group_working_sessions,
         &held,
         &ui.collapse.collapsed_coordinators,
+        &ui.collapse.expanded_coordinator_older_threads,
         now_ms,
     );
     let section_collapse = ui

@@ -220,6 +220,14 @@ pub fn usage() -> String {
             "notify --title text [--body text] [--session-id id]",
             "Post a notification to the Ghostex bell for a session; defaults to the calling session",
         ),
+        format_help_command(
+            "show <file.html> [--title text] [--json]",
+            "Publish a self-contained HTML page and print the ```visual block that shows it as a card in the chat",
+        ),
+        format_help_command(
+            "visual check <file.json|-> [--width N] [--light] [--out file.png]",
+            "Draw a ```visual block's JSON to a PNG and print its path, so an agent can check it before replying",
+        ),
         format_help_command("run-agent <agentId>", "Run a configured agent button"),
         format_help_command(
             "run-command <commandId>",
@@ -1177,6 +1185,27 @@ What the skill teaches:
 Fallback:
   Use codex fork --all --last --yolo -C <folder-path> only when the user does
   not want to copy the session id.
+"
+    .to_string()
+}
+
+pub fn visuals_usage() -> String {
+    "Ghostex Visuals - check chat visual blocks and install the agent skill
+
+Usage:
+  gx visual --help
+  gx visual check <file.json|-> [--width N] [--light] [--out file.png]
+  gx visual install-skill [--json]
+
+Agent skill:
+  Use $ghostex-visuals when the user asks for it: charts, stats and tables go
+  in the reply as a ```visual block; mockups and small tools are HTML pages
+  published with `ghostex show`.
+
+check:
+  Draws the block's JSON (or the whole fenced block) exactly as the chat lays
+  it out and prints the path of a PNG to look at, or the error that names what
+  to fix. --width defaults to 640; use 360 for a phone.
 "
     .to_string()
 }

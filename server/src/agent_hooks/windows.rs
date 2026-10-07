@@ -63,7 +63,8 @@ pub(crate) fn notify(args: Vec<String>) -> anyhow::Result<()> {
     std::io::stdin()
         .take(1024 * 1024)
         .read_to_string(&mut input)?;
-    let mut payload: Value = serde_json::from_str(&input)?;
+    // CDXC:AgentHooks 2026-10-07 WHY: Cursor CLI runs Windows hooks as `$OutputEncoding = [System.Text.Encoding]::UTF8; Get-Content <payload> -Raw | & { $input | <command> }`, and that encoding writes a UTF-8 BOM before the JSON in pwsh and Windows PowerShell alike; serde rejected it ("expected value at line 1 column 1"), so no Cursor hook ever reached gxserver and Cursor chats never found their transcript.
+    let mut payload: Value = serde_json::from_str(input.trim_start_matches('\u{feff}'))?;
     let agent = args.get(1).map(String::as_str).unwrap_or("codex");
     if let Some(object) = payload.as_object_mut() {
         object.entry("agent").or_insert_with(|| json!(agent));

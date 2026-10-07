@@ -148,6 +148,27 @@ fn attention_source(session: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
+/// A waiting thread is blocked on something only the user can grant: an approval card, or attention
+/// that is no question at all (a permission notification, a folder-trust dialog). A question in its
+/// chat is the coordinator's to answer, so it does not count.
+/// A screen wait (Empryo's only signal) follows the same rule: a screen that blocks input is the
+/// user's, a question read off the screen is the coordinator's.
+pub fn thread_needs_user_approval(session: &Value) -> bool {
+    let screen = recorded_screen_wait(session);
+    if screen.as_ref().is_some_and(|wait| wait.blocking) {
+        return true;
+    }
+    if let Some(prompt) =
+        session_chat_prompt_setting(session).and_then(|stored| parse_stored_session_chat_prompt(&stored))
+    {
+        return matches!(prompt, SessionChatInteractivePrompt::Approval { .. });
+    }
+    if screen.is_some() {
+        return false;
+    }
+    crate::session_chat_async_questions::pending_question_count(session) == 0
+}
+
 /// The prompt a thread is showing: the stored question or approval card, or the async questions
 /// Claude asks without blocking.
 pub fn thread_prompt(session: &Value) -> Option<ThreadPrompt> {

@@ -577,6 +577,8 @@ fn read_session_chat_transcript_selection(
             SessionChatOptionAgent::Pi => return None,
             // Empryo's model rides its tab state, which the stored reading takes from meta.json.
             SessionChatOptionAgent::Empryo => return None,
+            // ZCode's statusline names no catalog values chat needs.
+            SessionChatOptionAgent::Zcode => return None,
         })?;
     let path = crate::session_chat::resolve_session_chat_transcript_path(
         transcript_agent,

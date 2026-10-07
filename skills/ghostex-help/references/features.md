@@ -740,6 +740,14 @@ Sign in with Device Code shows its link and the one-time code to enter in any
 browser, handy on a remote computer. When Codex quits to the terminal (after
 Update now on its update prompt, or `/logout`), the chat says so and offers
 Restart Codex, which starts it again on the same conversation.
+When Cursor isn't signed in, its chat shows Sign in to Cursor: Sign in opens
+Cursor's sign-in page in the browser, and the card then shows the sign-in link,
+which also works from your phone or another computer. The chat continues by
+itself once you're signed in. If Cursor closes without signing in, the card's
+Sign in starts it again. Cursor's plan approval (Ready to build?: build here,
+build in the cloud, or propose changes), its requests to switch mode, and its
+questions are answered from the chat too, and the plan shows in the
+conversation.
 OpenCode v2 supports streamed replies, reasoning, tool results, image attachments,
 questions, permissions, queued prompts, and conversation rewind in Chat. Install
 its hooks in Settings > Agents, then open a new OpenCode session to connect it.
@@ -767,6 +775,8 @@ ZCode supports chat messages, thinking, tool results, attachments, and imported
 conversation history. Install its hooks in Settings > Agents to connect new
 conversations and keep activity in sync. ZCode runs in the same terminal, so
 you can switch to Terminal for its setup, model menus, and permission prompts.
+When ZCode exits, its chat says so and offers Restart ZCode and Open terminal;
+Chat View opens for such a session even if ZCode never connected its hooks.
 Freebuff supports chat messages, its replies and thinking, tool results, and its
 questions: when Freebuff asks a question, it appears as a card in the chat, one
 question at a time, and the answer goes to Freebuff as if you had picked it in
@@ -815,6 +825,19 @@ Mermaid diagrams an agent writes (a ```mermaid block) are drawn as diagrams in
 the desktop and mobile chats once the block is complete. Source switches to the
 diagram's text and Copy copies it. On desktop, the expand button opens a larger
 view you can zoom and pan. The web chat shows the diagram's source.
+
+Agents can show charts, tables, stat tiles, and short text layouts right in the
+chat, drawn in the chat's own colors on desktop, web, and mobile. For things a
+chart can't show, such as a UI mockup or a small interactive tool, the agent
+writes an HTML page and the chat shows a card whose Open button opens the page
+in the browser. Agents do this when you ask for `$ghostex-visuals` in your
+prompt; they never use it on their own. Install the skill from Settings >
+Integrations (Ghostex Visuals) or with `ghostex visual install-skill`. Pages
+open in a sandbox and can't reach your computer's files or Ghostex. Commands:
+`ghostex show <file.html>`
+publishes a page and prints the block that shows its card, and
+`ghostex visual check <file.json>` draws a chart block to an image so the agent
+can check it before replying.
 
 Use Cmd+P (Recent Sessions) to jump between chats across projects, or
 Cmd+[ and Cmd+] to go back and forward through visited sessions, the same keys
@@ -1350,18 +1373,38 @@ Related settings: `terminalFontFamily`, `terminalFontSize`,
 ## Agents, actions, and orchestration
 
 Agents are the launch buttons per project: Claude Code, Codex, Gemini CLI,
-OpenCode, Pi, and more are built in, and custom commands can be added in
-Settings > Agents. An agent row whose CLI is missing shows Install CLI, and one
-with a newer release shows Update CLI. Expand an agent row to install or update
-its CLI, see its installed version (and the newer one when available) and
-command output, or open its Install docs link. Claude Code, Codex, Cursor Agent
+OpenCode, Pi, and more are built in. In Settings > Agents every agent has a
+switch: turn on the agents you use and they appear in the New session menu, the
+sidebar's Select Agent and on your phone; drag the rows to set their order.
+Turning an agent off keeps its settings and its place, so turning it back on
+restores it. Agents you turned off but used before stay dimmed in the list;
+agents you never used wait under More agents, where one click turns one on.
+Turning on an agent whose CLI is missing offers its install right in its row;
+when the CLI is already there, Ghostex asks once whether to turn on its session
+resume hook (Install the hook when I turn on an agent, in the Session resume
+hooks card, skips the question). An agent that is on shows on its own row when
+its CLI is not installed or its resume hook is off, with the button that fixes
+it; for the agents you have used, a line above the list sums these up, with Fix
+all. An available CLI update shows as Update available on its row. The first time
+you open the page after using Ghostex for a while, it offers once to turn off
+the built-in agents you never used; nothing turns off by itself. Add custom
+agent, at the end of the list, adds your own command or a variant of a built-in
+agent: Works like gives it that agent's logo, chat view, resume hook and
+permission handling. Custom agents can be turned off, or deleted from their
+expanded row; built-in agents are only turned off. Expand an agent row to edit
+its name, command, permission mode and default view, duplicate it as a custom
+agent, install or update its CLI, see its installed version (and the newer one
+when available) and command output, or open its Install docs link. Claude Code, Codex, Cursor Agent
 and Grok Build install through their official installers (PowerShell on
 Windows). When an installer leaves its folder off PATH (Claude Code's does), Ghostex
 adds it to your user PATH so new terminals find the command; Add to PATH
 does the same for a CLI installed earlier. Installs run one at a time and wait
 their turn. Ghostex selects an updater for recognized installations; choose the
 original installation method when it cannot be detected. mise is offered for supported CLIs and is the
-default install choice when available. Existing mise tools, including custom
+default install choice when it can install that CLI on your computer; otherwise
+(Cursor on Windows, or a CLI mise installs with npm when npm is missing) the
+official installer or npm is. When Chat is your default view, installing a CLI
+here also installs the Ghostex hooks its chat needs. Existing mise tools, including custom
 backends, update through mise with their version pins bumped to the latest
 release; older versions remain available for running sessions. For example,
 ZCode can also be installed with `mise use --global 'npm:zcode-app-cli[prerelease=true]@latest'`.
@@ -1498,9 +1541,11 @@ Cross-agent orchestration also works through the `$ghostex-cli` skill. For
    did. Agents message each other the same way, so several sessions can split a
    job between them and report back without you relaying every step.
 
-Related settings: Settings > Agents (Default Prompt Agent, Agent approvals,
-Agent Hooks, Default view per agent), `agentAcceptAllEnabled`,
-`showQuickModelPickerInTerminal` (Option+P model picker).
+Related settings: Settings > Agents (agent switches, Add custom agent, Default
+view per agent; Defaults: Default Prompt Agent, Title Generation Agent, Agent
+approvals; Session resume hooks), `agentAcceptAllEnabled`,
+`agentHooksAutoInstall`, `showQuickModelPickerInTerminal` (Option+P model
+picker).
 
 ## Coordinators
 
@@ -1537,13 +1582,18 @@ version of the Projects features in Cursor and Claude Code.
 - **Threads in the sidebar**: a coordinator's row shows a crown in
   place of its agent's logo, and a crew icon
   with one number: how many of its threads are working; when none are
-  working, how many are waiting on you; when neither, how many thread sessions
-  it has in the sidebar. The icon and number are orange when the number counts
+  working, how many are waiting on you; when neither, how many threads it
+  lists. The icon and number are orange when the number counts
   working threads, light blue when it counts threads waiting on you, and grey
-  when it counts them all. Its
-  threads sit indented right under it with their own status dots; the chevron
-  beside the crown folds them away and back (remembered across restarts), and a
-  folded coordinator keeps its number and colour. Click a thread to watch it or
+  otherwise. Its
+  threads sit indented right under it with their own status dots: the ones
+  working, waiting, or active in the last 2 hours. Older threads wait behind an
+  "N older threads" row at the end, which lists them all (and "Hide older
+  threads" tucks them away again; both remembered across restarts). The chevron
+  that replaces the crown when you hover the coordinator folds its threads away
+  and back, and a folded coordinator keeps its number and colour. Opening a
+  coordinator's chat leaves both as you set them; opening one of its threads
+  unfolds the coordinator so the thread shows. Click a thread to watch it or
   talk to it directly; answer its questions and approvals there. A thread keeps
   the name its coordinator gave it, like the coordinator keeps its own (Rename in
   the sidebar still changes it). Pinning the
@@ -1559,10 +1609,15 @@ version of the Projects features in Cursor and Claude Code.
   everything it knew. Ask the coordinator to keep a thread open if you want to
   look at it.
 - **Threads panel in the chat**: above the coordinator's message box, the
-  Threads panel lists its threads under Waiting on you, Working and Finished,
-  each with one line (what it asks, what it is doing, or how its last report
-  began) and its branch; tap or click a thread to open it, and use "N done" to
-  list the finished ones. It shows on the phone and in the browser too.
+  Threads panel lists the working threads first, then the ones active in the
+  last 2 hours, each with one line (what it is doing or how its last report
+  began) and its branch; "N more" lists every other thread, closed ones
+  included, and "Show fewer" folds them again. Tap or click any thread to open
+  it and talk to it. A thread stuck on something only you can allow (a
+  permission prompt or a folder-trust question) carries an amber "Needs your
+  approval" tag. Fold the panel with its header and it stays folded the next
+  time you open a coordinator's chat. It shows on the phone and in the browser
+  too.
 - **Reports come back by themselves**: when a thread finishes a turn, Ghostex
   sends its final message to the coordinator (a "Message from" card in its
   chat); when a thread waits on a question, an approval, or a screen such as
@@ -2103,7 +2158,8 @@ docs directory), `hideProjectHeaderDiffStats`,
   on (`openInTitlebarButtonHidden`).
 - Settings > Integrations installs the bundled agent skills (Ghostex CLI,
   Ghostex Help, Computer Use and Browser Use through Fast Computer & Browser
-  Use, SpaceO through SpaceO, Embedded Browser Use, Project Board Beads) and
+  Use, SpaceO through SpaceO, Embedded Browser Use, Project Board Beads,
+  Ghostex Visuals) and
   shows their install status; an installed skill's row shows the command you
   type to use it, such as `$ghostex-computer-use`. Skills are copied
   into the global skill folders every agent CLI reads. When the computer is

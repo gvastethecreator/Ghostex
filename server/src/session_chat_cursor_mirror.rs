@@ -391,12 +391,88 @@ fn strip_text_prefix(full: &str, prefix: &str) -> Option<String> {
         .map(|rest| rest.trim().to_string())
 }
 
+/// CDXC:SessionChat 2026-10-07 WHY: Cursor's records carry no time, and the chat sorts a row without one before every row that has one, so a slash command sent from the chat (`/plan`, `/model`) stayed under the whole conversation. The time Cursor writes into each user query (`Wednesday, Oct 7, 2026, 4:19 AM (UTC+4)`) starts the clock `merge_cursor_transcript` stamps every line with, so a command lands between the turns it was sent between. A stamp in another format leaves the lines unstamped, as before.
+fn turn_timestamp_ms(record: &Map<String, Value>) -> Option<i64> {
+    if record.get("role").and_then(Value::as_str) != Some("user") {
+        return None;
+    }
+    let items = record.get("message")?.get("content")?.as_array()?;
+    items.iter().find_map(|item| {
+        let text = item.get("text").and_then(Value::as_str)?;
+        let start = text.find("<timestamp>")? + "<timestamp>".len();
+        let end = start + text[start..].find("</timestamp>")?;
+        parse_cursor_timestamp(&text[start..end])
+    })
+}
+
+/// `Wednesday, Oct 7, 2026, 4:19 AM (UTC+4)` (or `UTC-5:30`, or `UTC`) in epoch milliseconds.
+fn parse_cursor_timestamp(text: &str) -> Option<i64> {
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    let (local, zone) = text.trim().rsplit_once(" (")?;
+    let zone = zone.strip_suffix(')')?.strip_prefix("UTC")?;
+    let offset_minutes = match zone.chars().next() {
+        None => 0,
+        Some(sign @ ('+' | '-')) => {
+            let (hours, minutes) = zone[1..].split_once(':').unwrap_or((&zone[1..], "0"));
+            let minutes = hours.parse::<i64>().ok()? * 60 + minutes.parse::<i64>().ok()?;
+            if sign == '-' {
+                -minutes
+            } else {
+                minutes
+            }
+        }
+        Some(_) => return None,
+    };
+    let [_, month_day, year, time] = local.split(", ").collect::<Vec<_>>()[..] else {
+        return None;
+    };
+    let (month, day) = month_day.split_once(' ')?;
+    let month = MONTHS.iter().position(|name| *name == month)? as u32 + 1;
+    let (clock, meridiem) = time.split_once(' ')?;
+    let (hour, minute) = clock.split_once(':')?;
+    let hour: u32 = hour.parse().ok()?;
+    let hour = match (meridiem, hour) {
+        ("AM", 12) => 0,
+        ("AM", hour) => hour,
+        ("PM", 12) => 12,
+        ("PM", hour) => hour + 12,
+        _ => return None,
+    };
+    let local = chrono::NaiveDate::from_ymd_opt(year.parse().ok()?, month, day.parse().ok()?)?
+        .and_hms_opt(hour, minute.parse().ok()?, 0)?;
+    Some(local.and_utc().timestamp_millis() - offset_minutes * 60_000)
+}
+
 fn push_raw_line(out: &mut Vec<u8>, line: &[u8]) {
     out.extend_from_slice(line);
     out.push(b'\n');
 }
 
-fn push_thinking_line(out: &mut Vec<u8>, step: &CursorStep, turn: usize, index: usize) {
+/// `line` with the clock's time as `ghostexTimestamp`; a line that is not a JSON object stays as is.
+fn stamped_line(line: &[u8], clock: Option<i64>) -> Vec<u8> {
+    match (clock, serde_json::from_slice::<Map<String, Value>>(line)) {
+        (Some(stamp), Ok(mut record)) => {
+            record.insert("ghostexTimestamp".into(), json!(stamp));
+            Value::Object(record).to_string().into_bytes()
+        }
+        _ => line.to_vec(),
+    }
+}
+
+/// Moves the clock forward to `at`, never back.
+fn advance_clock(clock: &mut Option<i64>, at: i64) {
+    *clock = Some(clock.map_or(at, |current| current.max(at)));
+}
+
+fn push_thinking_line(
+    out: &mut Vec<u8>,
+    step: &CursorStep,
+    turn: usize,
+    index: usize,
+    clock: &mut Option<i64>,
+) {
     let CursorStep::Thinking {
         text,
         duration_ms,
@@ -405,6 +481,10 @@ fn push_thinking_line(out: &mut Vec<u8>, step: &CursorStep, turn: usize, index: 
     else {
         return;
     };
+    if let Some(ended_at_ms) = ended_at_ms.and_then(|at| i64::try_from(at).ok()) {
+        advance_clock(clock, ended_at_ms);
+    }
+    let timestamp = *clock;
     let mut block = json!({ "type": "thinking", "text": text });
     if let Some(duration_ms) = duration_ms {
         block["durationMs"] = json!(duration_ms);
@@ -412,12 +492,15 @@ fn push_thinking_line(out: &mut Vec<u8>, step: &CursorStep, turn: usize, index: 
     if let Some(ended_at_ms) = ended_at_ms {
         block["endedAt"] = json!(ended_at_ms);
     }
-    let line = json!({
+    let mut line = json!({
         "role": "assistant",
         "message": { "content": [block] },
         "origin": "cursor-store",
         "ghostexId": format!("thinking:{turn}:{index}"),
     });
+    if let Some(timestamp) = timestamp {
+        line["ghostexTimestamp"] = json!(timestamp);
+    }
     out.extend_from_slice(line.to_string().as_bytes());
     out.push(b'\n');
 }
@@ -430,8 +513,17 @@ enum RecordText {
 
 /// Re-serialize an assistant record with its (single) text block removed or
 /// replaced. Skips the line entirely when nothing visible would remain.
-fn push_record_line(out: &mut Vec<u8>, line: &[u8], record: Map<String, Value>, text: RecordText) {
+fn push_record_line(
+    out: &mut Vec<u8>,
+    line: &[u8],
+    record: Map<String, Value>,
+    text: RecordText,
+    clock: Option<i64>,
+) {
     let mut record = record;
+    if let Some(stamp) = clock {
+        record.insert("ghostexTimestamp".into(), json!(stamp));
+    }
     let mut removed_everything = false;
     if !matches!(text, RecordText::Keep) {
         if let Some(items) = record
@@ -460,7 +552,7 @@ fn push_record_line(out: &mut Vec<u8>, line: &[u8], record: Map<String, Value>, 
         return;
     }
     if matches!(text, RecordText::Keep) {
-        push_raw_line(out, line);
+        push_raw_line(out, &stamped_line(line, clock));
     } else {
         out.extend_from_slice(Value::Object(record).to_string().as_bytes());
         out.push(b'\n');
@@ -478,13 +570,26 @@ impl<'a> TurnWalk<'a> {
         self.steps.get(self.index)
     }
 
-    fn flush_thinking(&mut self, out: &mut Vec<u8>) {
+    /// When the turn's first thought began, which is when Cursor started on the prompt.
+    fn first_thought_started_at(&self) -> Option<i64> {
+        self.steps.iter().find_map(|step| match step {
+            CursorStep::Thinking {
+                duration_ms,
+                ended_at_ms: Some(ended_at_ms),
+                ..
+            } => i64::try_from(ended_at_ms.saturating_sub(duration_ms.unwrap_or(0))).ok(),
+            _ => None,
+        })
+    }
+
+    fn flush_thinking(&mut self, out: &mut Vec<u8>, clock: &mut Option<i64>) {
         while let Some(step @ CursorStep::Thinking { .. }) = self.peek() {
-            push_thinking_line(out, step, self.turn, self.index);
+            push_thinking_line(out, step, self.turn, self.index, clock);
             self.index += 1;
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn merge_assistant(
         &mut self,
         out: &mut Vec<u8>,
@@ -493,6 +598,7 @@ impl<'a> TurnWalk<'a> {
         text: Option<String>,
         text_block_count: usize,
         tool_count: usize,
+        clock: &mut Option<i64>,
     ) {
         let rewritable = text_block_count == 1;
         let mut remaining_text = text;
@@ -512,7 +618,7 @@ impl<'a> TurnWalk<'a> {
                         remaining_text = None;
                         rewrite = RecordText::Remove;
                     }
-                    push_thinking_line(out, step, self.turn, self.index);
+                    push_thinking_line(out, step, self.turn, self.index, clock);
                     self.index += 1;
                 }
                 CursorStep::Text(step_text) => {
@@ -556,9 +662,9 @@ impl<'a> TurnWalk<'a> {
             }
         }
 
-        push_record_line(out, line, record, rewrite);
+        push_record_line(out, line, record, rewrite, *clock);
         for (index, step) in deferred {
-            push_thinking_line(out, step, self.turn, index);
+            push_thinking_line(out, step, self.turn, index, clock);
         }
     }
 }
@@ -583,46 +689,65 @@ fn merge_cursor_transcript(raw: &[u8], turns: &[Vec<CursorStep>]) -> Vec<u8> {
     };
     let mut turn_index = 0usize;
     let mut raw_offset = 0usize;
+    // CDXC:SessionChat 2026-10-07 WHY: a turn's lines all carried the minute its prompt was sent, so every finished Cursor turn read "Worked for 1s". The time only moves forward: a prompt starts at its first thought's start when that falls in the prompt's minute, and each thought's end moves it on, so rows keep their order and a turn's length is real; a turn with no timed thoughts reads "Worked", as it did with no times at all.
+    let mut clock: Option<i64> = None;
     for line in raw[..complete_end].split(|byte| *byte == b'\n') {
         let offset = raw_offset;
         raw_offset += line.len() + 1;
         if line.iter().all(u8::is_ascii_whitespace) {
             continue;
         }
-        let identified =
-            serde_json::from_slice::<Map<String, Value>>(line)
-                .ok()
-                .map(|mut record| {
-                    record.insert("ghostexId".into(), json!(format!("raw:{offset}")));
-                    Value::Object(record).to_string().into_bytes()
-                });
+        let mut prompt_minute = None;
+        let identified = match serde_json::from_slice::<Map<String, Value>>(line) {
+            Ok(mut record) => {
+                prompt_minute = turn_timestamp_ms(&record);
+                record.insert("ghostexId".into(), json!(format!("raw:{offset}")));
+                Some(Value::Object(record).to_string().into_bytes())
+            }
+            Err(_) => None,
+        };
         let line = identified.as_deref().unwrap_or(line);
         match classify_raw_line(line) {
             RawLine::User(line) => {
-                walk.flush_thinking(&mut out);
+                walk.flush_thinking(&mut out, &mut clock);
                 walk = TurnWalk {
                     turn: turn_index,
                     steps: turns.get(turn_index).map(Vec::as_slice).unwrap_or(&[]),
                     index: 0,
                 };
                 turn_index += 1;
-                push_raw_line(&mut out, line);
+                if let Some(minute) = prompt_minute {
+                    let started = walk
+                        .first_thought_started_at()
+                        .filter(|start| (minute..minute + 60_000).contains(start))
+                        .unwrap_or(minute);
+                    advance_clock(&mut clock, started);
+                }
+                push_raw_line(&mut out, &stamped_line(line, clock));
             }
             RawLine::Event(line) => {
-                walk.flush_thinking(&mut out);
-                push_raw_line(&mut out, line);
+                walk.flush_thinking(&mut out, &mut clock);
+                push_raw_line(&mut out, &stamped_line(line, clock));
             }
-            RawLine::Other(line) => push_raw_line(&mut out, line),
+            RawLine::Other(line) => push_raw_line(&mut out, &stamped_line(line, clock)),
             RawLine::Assistant {
                 line,
                 record,
                 text,
                 text_block_count,
                 tool_count,
-            } => walk.merge_assistant(&mut out, line, record, text, text_block_count, tool_count),
+            } => walk.merge_assistant(
+                &mut out,
+                line,
+                record,
+                text,
+                text_block_count,
+                tool_count,
+                &mut clock,
+            ),
         }
     }
-    walk.flush_thinking(&mut out);
+    walk.flush_thinking(&mut out, &mut clock);
     out
 }
 

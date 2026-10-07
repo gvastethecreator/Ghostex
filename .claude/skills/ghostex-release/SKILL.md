@@ -243,6 +243,20 @@ context:
 bun run release:watch -- --run <run-id> --exit-on-change --interval 120   # run in the background; re-launch after each exit
 ```
 
+Job shape worth knowing while watching (since 2026-10-07, first shipped with
+the release after 10.14.0; watch that one closely):
+
+- Each Windows architecture is two jobs. `windows_<arch> / native runtime (<arch>)`
+  compiles gxserver, ghostex, wmx and the prompt editor (~12 min) and uploads
+  them as `release-windows-native-runtime-<arch>`; `windows_<arch> / build`
+  compiles the desktop app at the same time, then waits for that artifact
+  ("Await the native runtime binaries of this run"), downloads it and packages.
+  If the runtime job fails, the build job fails at that wait with the artifact
+  list; read the runtime job's log, not the build job's.
+- macOS compiles gxserver before it waits for the Linux runtime artifacts, so
+  "Await the runtime artifacts of this run" now comes after
+  "Cargo build gxserver" and is usually short.
+
 Exit codes: `0` finished (only Homebrew jobs may have failed), `1` a job
 failed, `2` `--max-minutes` elapsed, `3` `gh` failed five polls in a row. With
 `--exit-on-change`, a stdout line `run <id> completed:` means the run is over,
@@ -261,6 +275,12 @@ while any other exit `0` means only that a job changed state.
    `bun run release:actions -- X.Y.Z --reuse-from-run <failed-run-id>` (add
    `--skip-*` flags to limit the scope to the failed platforms). Its stages
    amend the live release.
+   A Windows platform is reused or rebuilt as a whole: reuse only ever reads
+   the `windows_<arch> / build` job's provenance, so a failed
+   `native runtime (<arch>)` job means its `build` job failed too and both
+   rerun on the redispatch. Re-running only the failed `build` job in the same
+   run also works when its runtime job succeeded: the runtime artifact stays
+   on the run (unverified: no Windows job has been re-run this way yet).
 4. **`gates` failed only** (typecheck/test): fix it, push, and redispatch with
    `--reuse-from-run`. Builds are reused, and only the publish stages waited on gates.
 5. **Every product built but publishing failed**: re-run the publish only,

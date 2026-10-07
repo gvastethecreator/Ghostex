@@ -186,6 +186,8 @@ pub struct SidebarCollapseState {
     pub expanded_hover_actions: BTreeSet<String>,
     /// Coordinators whose threads are folded away, by the coordinator's sidebar row id.
     pub collapsed_coordinators: BTreeSet<String>,
+    /// Coordinators whose older threads (idle for two hours) the user listed, by sidebar row id.
+    pub expanded_coordinator_older_threads: BTreeSet<String>,
     pub section_collapse: BTreeMap<String, SectionCollapse>,
     /// Keyed by section key (`local`, `remote:<machine>`).
     pub selected_space_by_section: BTreeMap<String, String>,

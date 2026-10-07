@@ -81,6 +81,11 @@ pub(crate) enum GpuiSidebarAgentMetadataWrite {
         agent_ids: Vec<String>,
         request_id: String,
     },
+    /// Settings › Agents switches: turn agents on or off without deleting them.
+    SetEnabled {
+        agent_ids: Vec<String>,
+        enabled: bool,
+    },
 }
 
 impl GpuiSidebarAgentMetadataWrite {

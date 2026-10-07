@@ -36,6 +36,11 @@ pub enum SidebarUiIntent {
     ToggleCoordinatorCollapsed {
         sidebar_session_id: String,
     },
+    /// List or tuck away a coordinator's older threads (its "N older threads" row), by the
+    /// coordinator's sidebar row id.
+    ToggleCoordinatorOlderThreads {
+        sidebar_session_id: String,
+    },
     /// Filter the section the machine tab is on by a Space. The renderer's `selectSpace`.
     SelectSpace {
         space_id: String,
