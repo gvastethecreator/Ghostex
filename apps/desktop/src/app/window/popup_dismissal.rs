@@ -1,6 +1,6 @@
-//! When a popup that closes on click-away (the new-thread picker and the chat's option menus) has
-//! really been dismissed. App modals never close on click-away (CDXC:AppModal 2026-09-30 in
-//! app/window/modal_window_frame.rs).
+//! When a popup that closes on click-away (the new-thread picker, the chat's option menus and
+//! Quick Access) has really been dismissed. The other app modals never close on click-away
+//! (CDXC:AppModal 2026-09-30 in app/window/modal_window_frame.rs).
 //!
 //! CDXC:AppModal 2026-09-30 WHY:
 //! On Linux the window manager can move keyboard focus without a click: Hyprland (Omarchy's default) and other focus-follows-mouse setups focus the main window as soon as the pointer crosses onto it, so every popup that closed on focus loss closed when the mouse moved (Cmd+N's picker, the Saved Prompts Quick Access from a right-click, the chat's model menu, which flashed and vanished because the pointer is still over its trigger). Taking focus back fights the window manager on every pointer motion. So on Linux a focus loss dismisses a popup only once no Ghostex window holds focus (focus left the app), and a press in the main window after the popup opened is the click-away. macOS and Windows focus only on a click, so their focus loss stays the dismissal.

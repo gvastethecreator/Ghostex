@@ -79,6 +79,9 @@ pub(crate) struct GpuiQuickAccessWindow {
     glass: bool,
     /// Where the open menus' stand-ins sit while the menus draw in their frosted host windows.
     menu_frames: QuickAccessMenuFrames,
+    /// Set once the window has been active, so the inactive report a window gets before it is
+    /// first shown never reads as a click away.
+    was_active: bool,
     focus_handle: FocusHandle,
     subscriptions: Vec<Subscription>,
 }
@@ -100,6 +103,23 @@ impl GpuiQuickAccessWindow {
                     cx.notify();
                 }
             },
+        );
+        let activation = cx.observe_window_activation(window, |this: &mut Self, window, cx| {
+            if window.is_window_active() {
+                this.was_active = true;
+            } else if this.was_active {
+                crate::app::window::popup_dismissal::dismiss_on_focus_loss(
+                    this,
+                    window,
+                    cx,
+                    |this, _window, cx| this.close_on_click_away(cx),
+                );
+            }
+        });
+        let press = crate::app::window::popup_dismissal::observe_main_window_press(
+            window,
+            cx,
+            |this: &mut Self, _window, cx| this.close_on_click_away(cx),
         );
         let release = cx.on_release(|_, cx| {
             use crate::app::window::frosted_host::{FrostedHostKind, hide_frosted_host};
@@ -133,8 +153,9 @@ impl GpuiQuickAccessWindow {
             loading_timer: None,
             glass: crate::app::helpers::window_glass_active(),
             menu_frames: QuickAccessMenuFrames::default(),
+            was_active: window.is_window_active(),
             focus_handle: cx.focus_handle(),
-            subscriptions: vec![change, release],
+            subscriptions: vec![change, activation, press, release],
         }
     }
 
@@ -326,6 +347,15 @@ impl GpuiQuickAccessWindow {
 
     fn close(&mut self, cx: &mut Context<Self>) {
         self.post(json!({ "type": "close" }), cx);
+    }
+
+    /// CDXC:AppModal 2026-10-08 DECISION:
+    /// User, of Quick Access: "please make clicking away when this modal is shown to close this modal". A click outside Quick Access (on the main window or another app) closes it as Escape does. Quick Access is the one app modal that does; the rest keep the 2026-09-30 "let's not make the modals close when i click away anymore" rule (window/modal_window_frame.rs). While a saved prompt is being written or edited it stays open, so a stray click never throws the draft away.
+    fn close_on_click_away(&mut self, cx: &mut Context<Self>) {
+        if self.editor_input.is_some() {
+            return;
+        }
+        self.close(cx);
     }
 
     fn move_selection(&mut self, direction: i32, cx: &mut Context<Self>) -> bool {

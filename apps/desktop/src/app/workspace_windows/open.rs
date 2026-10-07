@@ -287,7 +287,11 @@ pub(crate) fn open_workspace_window(
                 resized, otherwise every dropdown open self-closed within
                 one frame.
                 */
-                if note_workspace_window_frame(window, cx) {
+                let change = note_workspace_window_frame(window, cx);
+                if change == WorkspaceWindowFrameChange::Resized {
+                    app.close_floating_windows_on_resize(window, cx);
+                }
+                if change != WorkspaceWindowFrameChange::Unchanged {
                     app.close_gpui_titlebar_popup(None, window, cx);
                     app.schedule_gpui_new_thread_picker_recycle(cx);
                 }

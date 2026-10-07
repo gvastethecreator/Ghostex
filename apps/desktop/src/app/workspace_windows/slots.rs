@@ -128,12 +128,22 @@ pub(super) fn restored_workspace_window_bounds(
     )
 }
 
-/// Records the window's frame; returns whether it moved or resized since it last reported, in
-/// which case the slot's frame file is written after a short quiet period.
-pub(super) fn note_workspace_window_frame(window: &Window, cx: &App) -> bool {
+/// How a workspace window's frame changed since it last reported.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum WorkspaceWindowFrameChange {
+    Unchanged,
+    /// Same size and state, somewhere else (the windows it owns follow it, owned_windows.rs).
+    Moved,
+    /// A new size, or maximized, restored or full screen.
+    Resized,
+}
+
+/// Records the window's frame and says how it changed since it last reported; when it changed,
+/// the slot's frame file is written after a short quiet period.
+pub(super) fn note_workspace_window_frame(window: &Window, cx: &App) -> WorkspaceWindowFrameChange {
     let window_id = gpui::Window::window_handle(window).window_id();
     let frame = gpui_window_frame_state_from_window(window, cx);
-    let changed_slot = WORKSPACE_WINDOWS.with(|windows| {
+    let changed = WORKSPACE_WINDOWS.with(|windows| {
         let mut windows = windows.borrow_mut();
         let entry = windows
             .iter_mut()
@@ -141,11 +151,19 @@ pub(super) fn note_workspace_window_frame(window: &Window, cx: &App) -> bool {
         if entry.frame == frame || entry.closing {
             return None;
         }
+        let resized = match (&entry.frame, &frame) {
+            (Some(before), Some(after)) => {
+                before.state != after.state
+                    || before.width != after.width
+                    || before.height != after.height
+            }
+            _ => false,
+        };
         entry.frame = frame;
-        Some(entry.slot)
+        Some((entry.slot, resized))
     });
-    let Some(slot) = changed_slot else {
-        return false;
+    let Some((slot, resized)) = changed else {
+        return WorkspaceWindowFrameChange::Unchanged;
     };
     if slot == 0 {
         // Slot 0 keeps the single window's own frame persistence (helpers/os_cli).
@@ -159,7 +177,11 @@ pub(super) fn note_workspace_window_frame(window: &Window, cx: &App) -> bool {
         })
         .detach();
     }
-    true
+    if resized {
+        WorkspaceWindowFrameChange::Resized
+    } else {
+        WorkspaceWindowFrameChange::Moved
+    }
 }
 
 /// Seeds slot 0's frame record when its window opens, as the single window always did.
