@@ -344,6 +344,9 @@ pub fn search_agent_prompts(
         if let Some(error) = &cached.index.opencode_error {
             payload["opencodeError"] = json!(error);
         }
+        if let Some(error) = &cached.index.empryo_error {
+            payload["empryoError"] = json!(error);
+        }
         if include_facets {
             payload["projects"] = json!(cached
                 .index
@@ -614,9 +617,15 @@ pub fn resolve_agent_prompt_launch(
             }
             "fork" => {
                 let agent = fork_agent.unwrap_or(rec.agent);
+                let Some(command) = agent.fresh_session_argv(&rec.text, accept_all) else {
+                    return Err(PromptSearchError::invalid(format!(
+                        "A prompt cannot be forked into {}: it takes no starting prompt. Fork it into another agent.",
+                        agent.label()
+                    )));
+                };
                 PromptLaunchPlan::Launch {
                     agent,
-                    command: agent.fresh_session_argv(&rec.text, accept_all),
+                    command,
                     cwd: rec.project.clone(),
                     cwd_exists: !rec.project.is_empty()
                         && std::path::Path::new(&rec.project).is_dir(),

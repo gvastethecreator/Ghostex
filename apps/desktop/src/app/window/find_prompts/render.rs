@@ -14,7 +14,8 @@
 //! CDXC:PromptSearch 2026-09-16 DECISION:
 //! User: while prompts load, Find shows skeleton rows shaped like the rendered result list (day header, agent column, prompt line, time and title line) filling the whole results area, and a paragraph-shaped skeleton in the preview pane, instead of a centered spinner.
 use super::model::{
-    FIND_PROMPT_AGENTS, FindAction, ViewRow, format_day_header, format_last_active_compact,
+    FIND_PROMPT_AGENTS, FIND_PROMPT_FORK_AGENT_COUNT, FindAction, ViewRow, format_day_header,
+    format_last_active_compact,
 };
 use super::window::{
     FIND_PLACEHOLDER, FIND_PLACEHOLDER_SHORT, FindMenu, FindNoticeKind, GpuiFindPromptsModalWindow,
@@ -988,7 +989,7 @@ impl GpuiFindPromptsModalWindow {
 
     fn render_fork_overlay(&self, cx: &mut Context<Self>) -> AnyElement {
         let p = self.p;
-        let chips = FIND_PROMPT_AGENTS
+        let chips = FIND_PROMPT_AGENTS[..FIND_PROMPT_FORK_AGENT_COUNT]
             .iter()
             .enumerate()
             .map(|(index, agent)| {

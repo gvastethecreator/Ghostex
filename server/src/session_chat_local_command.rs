@@ -453,6 +453,9 @@ pub fn session_chat_local_command_output(
     if agent == Some("codex") {
         return crate::session_chat_codex_dialog::codex_command_output(command, before, after);
     }
+    if agent == Some("empryo") {
+        return crate::session_chat_empryo_command::empryo_command_output(before, after);
+    }
     let before = normalize_local_command_screen(agent, before);
     let after = normalize_local_command_screen(agent, after);
     let before_history = screen_history(&before);

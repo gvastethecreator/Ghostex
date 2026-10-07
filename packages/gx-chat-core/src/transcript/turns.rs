@@ -13,7 +13,7 @@ use ghostex_gx_protocol::{ChatBlock, ChatMessage, ChatRole};
 use crate::transcript::foreign::STREAMING_ID;
 use crate::transcript::jsstr::js_trim;
 use crate::transcript::noise::{
-    is_command_output_turn, is_command_turn, is_compaction_record, is_hidden_message,
+    is_command_output_turn, is_command_turn, is_hidden_message, is_setting_status, is_turn_seam,
     suppressed_turn_label,
 };
 
@@ -119,7 +119,7 @@ pub fn summary_mode_turns(
                 let seam = final_at.is_none_or(|final_at| *at > final_at);
                 is_command_output_turn(row)
                     || suppressed_turn_label(row).as_deref() == Some("Interrupted")
-                    || (seam && is_compaction_record(row))
+                    || (seam && is_turn_seam(row))
                     // A side question stays in view in summary mode too.
                     || crate::transcript::side_question::is_side_question_message(row)
             })
@@ -167,9 +167,11 @@ pub fn partition_completed_work(messages: &[ChatMessage]) -> (Vec<ChatMessage>, 
     let mut collapsed_work = Vec::new();
     for message in messages {
         // The "Interrupted" marker stays in view as it does in summary mode; Claude's used to be a user row, gxserver's own is a system row.
+        // A model or effort change made while the turn ran stays in view too, as a status row.
         if is_visible_assistant_artifact(message)
             || message.role == ChatRole::User
             || suppressed_turn_label(message).as_deref() == Some("Interrupted")
+            || is_setting_status(message)
         {
             visible_artifacts.push(message.clone());
         } else {
@@ -320,7 +322,7 @@ pub fn completed_work_render_items(
         let trailing_compactions: Vec<&ChatMessage> = final_index
             .map_or(&[][..], |at| &turn_messages[at + 1..])
             .iter()
-            .filter(|row| is_compaction_record(row))
+            .filter(|row| is_turn_seam(row))
             .collect();
         let raw_start = raw_index(&message.id).expect("a rendered row comes from the raw list");
         let raw_end = messages

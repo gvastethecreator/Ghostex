@@ -301,7 +301,7 @@ pub(super) fn parse_cursor_record(builder: &mut TranscriptBuilder, record: &Map<
 
 /// Claude has no diff format: `Edit`/`MultiEdit` carry the replaced strings and
 /// `Write` the whole file, so changed-line counts come from those payloads.
-fn claude_patch_changes(
+pub(super) fn claude_patch_changes(
     name: &str,
     arguments: &Value,
     command: Option<&str>,

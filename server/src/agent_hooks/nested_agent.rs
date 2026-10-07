@@ -40,13 +40,13 @@ fn has_ancestor_named(pid: u32, name: &str) -> bool {
 }
 
 #[cfg(windows)]
-struct ProcessTable {
+pub(super) struct ProcessTable {
     rows: std::collections::HashMap<u32, (u32, String)>,
 }
 
 #[cfg(windows)]
 impl ProcessTable {
-    fn read() -> Self {
+    pub(super) fn read() -> Self {
         use std::mem::{size_of, zeroed};
         use windows_sys::Win32::{
             Foundation::{CloseHandle, INVALID_HANDLE_VALUE},
@@ -81,7 +81,7 @@ impl ProcessTable {
 
     /// The parent, when it still exists and was created no later than `pid`: Windows keeps a dead
     /// parent's pid and hands it to new processes.
-    fn parent(&self, pid: u32) -> Option<u32> {
+    pub(super) fn parent(&self, pid: u32) -> Option<u32> {
         let (parent, _) = self.rows.get(&pid)?;
         let parent = *parent;
         if parent == 0 || parent == pid || !self.rows.contains_key(&parent) {
@@ -90,7 +90,7 @@ impl ProcessTable {
         (created(parent)? <= created(pid)?).then_some(parent)
     }
 
-    fn executable_stem(&self, pid: u32) -> Option<String> {
+    pub(super) fn executable_stem(&self, pid: u32) -> Option<String> {
         let (_, exe) = self.rows.get(&pid)?;
         Some(exe.strip_suffix(".exe").unwrap_or(exe).to_string())
     }
@@ -117,19 +117,19 @@ fn created(pid: u32) -> Option<u64> {
 
 /// POSIX reparents an orphan to init, so a parent pid is never stale; each link is read on demand.
 #[cfg(not(windows))]
-struct ProcessTable;
+pub(super) struct ProcessTable;
 
 #[cfg(not(windows))]
 impl ProcessTable {
-    fn read() -> Self {
+    pub(super) fn read() -> Self {
         Self
     }
 
-    fn parent(&self, pid: u32) -> Option<u32> {
+    pub(super) fn parent(&self, pid: u32) -> Option<u32> {
         posix::parent(pid).filter(|parent| *parent > 1 && *parent != pid)
     }
 
-    fn executable_stem(&self, pid: u32) -> Option<String> {
+    pub(super) fn executable_stem(&self, pid: u32) -> Option<String> {
         posix::name(pid)
     }
 }

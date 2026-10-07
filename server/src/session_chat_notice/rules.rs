@@ -801,10 +801,11 @@ pub(super) fn notice_rules(agent: SessionChatOptionAgent) -> &'static [NoticeRul
         SessionChatOptionAgent::Codex => CODEX_RULES,
         SessionChatOptionAgent::Cursor => CURSOR_RULES,
         SessionChatOptionAgent::Zcode => ZCODE_RULES,
-        // Grok, Hermes, Omp and Pi have no phrase-catalog rules here. Hermes
+        // Grok, Hermes, Omp, Pi and Empryo have no phrase-catalog rules here. Hermes
         // and Pi have source-derived focused-component detectors after this
         // catalog; the other agents rely on measured composer readiness.
         SessionChatOptionAgent::Antigravity
+        | SessionChatOptionAgent::Empryo
         | SessionChatOptionAgent::Grok
         | SessionChatOptionAgent::Hermes
         | SessionChatOptionAgent::Omp
@@ -854,6 +855,7 @@ pub fn session_chat_notice_kind_blocks_input(kind: &str) -> bool {
         SESSION_CHAT_NOTICE_HERMES_INPUT_BLOCKED => true,
         SESSION_CHAT_NOTICE_OMP_INPUT_BLOCKED => true,
         SESSION_CHAT_NOTICE_PI_INPUT_BLOCKED => true,
+        SESSION_CHAT_NOTICE_EMPRYO_INPUT_BLOCKED => true,
         /*
         CDXC:SessionChat 2026-08-21: the resume-usage picker owns
         the input line, and unlike the dialogs in the catalog it does not merely

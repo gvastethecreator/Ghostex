@@ -115,6 +115,7 @@ fn message_steps_verify_the_paste_before_the_separate_enter() {
             SessionChatSendStep::VerifySubmitted {
                 agent: "claude".to_string(),
                 text: "hi".to_string(),
+                submit: "\r".to_string(),
             },
         ]
     );
@@ -149,6 +150,7 @@ fn message_steps_verify_the_paste_before_the_separate_enter() {
             SessionChatSendStep::VerifySubmitted {
                 agent: "claude".to_string(),
                 text: "what is this".to_string(),
+                submit: "\r".to_string(),
             },
         ]
     );

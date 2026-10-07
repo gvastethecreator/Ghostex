@@ -1568,6 +1568,11 @@
   --session-agent-icon-color: var(--ghostex-zcode-logo, #fff);
 }
 
+.session-floating-agent-icon[data-agent-icon='empryo'],
+.session-header-agent-icon[data-agent-icon='empryo'] {
+  --session-agent-icon-color: #1fa31d;
+}
+
 .session-floating-agent-tabler-icon[data-agent-icon='browser'],
 .session-header-agent-tabler-icon[data-agent-icon='browser'] {
   --session-agent-icon-color: #82b7ff;

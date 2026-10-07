@@ -18,6 +18,7 @@ pub enum ModelPickerProvider {
     Hermes,
     Pi,
     Omp,
+    Empryo,
 }
 
 impl ModelPickerProvider {
@@ -33,6 +34,7 @@ impl ModelPickerProvider {
             Self::Hermes => "hermes",
             Self::Pi => "pi",
             Self::Omp => "omp",
+            Self::Empryo => "empryo",
         }
     }
 
@@ -48,6 +50,7 @@ impl ModelPickerProvider {
             "hermes" => Some(Self::Hermes),
             "pi" => Some(Self::Pi),
             "omp" => Some(Self::Omp),
+            "empryo" => Some(Self::Empryo),
             _ => None,
         }
     }
@@ -120,7 +123,7 @@ pub fn model_pick_scope(
 }
 
 /// Shown for every agent whose picker cannot apply a choice to one session: Cursor, Grok,
-/// Antigravity.
+/// Antigravity, and Empryo, whose `/models` saves the model as its default (its effort is per tab).
 pub const MODEL_PICKER_DEFAULT_SCOPE_ONLY_REASON: &str =
     "This agent's model picker always saves the choice as its default.";
 
@@ -151,6 +154,7 @@ pub fn model_picker_provider(icon: Option<&str>) -> Option<ModelPickerProvider> 
         "hermes-agent" => Some(ModelPickerProvider::Hermes),
         "pi" => Some(ModelPickerProvider::Pi),
         "omp" => Some(ModelPickerProvider::Omp),
+        "empryo" => Some(ModelPickerProvider::Empryo),
         _ => None,
     }
 }

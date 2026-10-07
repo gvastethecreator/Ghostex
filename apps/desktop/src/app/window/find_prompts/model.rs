@@ -10,8 +10,12 @@ use serde::Deserialize;
 use std::ops::Range;
 
 /// `FIND_PROMPT_AGENTS`: the fork and filter order.
-pub(crate) const FIND_PROMPT_AGENTS: [&str; 6] =
-    ["claude", "codex", "pi", "opencode", "cursor", "grok"];
+pub(crate) const FIND_PROMPT_AGENTS: [&str; 7] = [
+    "claude", "codex", "pi", "opencode", "cursor", "grok", "empryo",
+];
+/// The fork targets are the leading agents of `FIND_PROMPT_AGENTS`: Empryo's terminal app takes
+/// no starting prompt, so it filters and resumes but is never forked into.
+pub(crate) const FIND_PROMPT_FORK_AGENT_COUNT: usize = 6;
 /// Rows fetched per page (`FIND_PROMPTS_PAGE_SIZE`).
 pub(crate) const FIND_PROMPTS_PAGE_SIZE: usize = 120;
 /// The window is 1080px wide, so a row shows about 130 characters of its prompt. Longer lines
@@ -83,6 +87,7 @@ struct WireSearchResult {
     matched: usize,
     offset: usize,
     opencode_error: Option<String>,
+    empryo_error: Option<String>,
     projects: Option<Vec<ProjectFacet>>,
     rows: Vec<WireRow>,
     total: usize,
@@ -118,8 +123,9 @@ pub(crate) struct SearchPage {
     pub(crate) total: usize,
     pub(crate) projects: Option<Vec<ProjectFacet>>,
     /// Facet colors in `FIND_PROMPT_AGENTS` order; `None` where the server sent none.
-    pub(crate) agent_colors: Option<[Option<Rgba>; 6]>,
+    pub(crate) agent_colors: Option<[Option<Rgba>; FIND_PROMPT_AGENTS.len()]>,
     pub(crate) opencode_error: Option<String>,
+    pub(crate) empryo_error: Option<String>,
 }
 
 /// Parses `/api/searchAgentPrompts` and prepares every row (flattened line, match ranges, footer).
@@ -134,7 +140,7 @@ pub(crate) fn parse_search_page(value: serde_json::Value) -> Result<SearchPage, 
         a: 1.0,
     };
     let agent_colors = wire.agents.map(|facets| {
-        let mut colors = [None; 6];
+        let mut colors = [None; FIND_PROMPT_AGENTS.len()];
         for facet in facets {
             if let Some(index) = FIND_PROMPT_AGENTS
                 .iter()
@@ -193,6 +199,7 @@ pub(crate) fn parse_search_page(value: serde_json::Value) -> Result<SearchPage, 
         projects: wire.projects,
         agent_colors,
         opencode_error: wire.opencode_error.filter(|error| !error.is_empty()),
+        empryo_error: wire.empryo_error.filter(|error| !error.is_empty()),
     })
 }
 

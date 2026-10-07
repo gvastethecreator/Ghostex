@@ -20,7 +20,11 @@ pub(super) fn classify_terminal_title_status(
             "gemini" => get_gemini_title_state(title, true),
             "grok" => get_grok_title_state(title),
             "pi" => get_pi_title_state(title, true),
-            "opencode" => None,
+            /*
+            CDXC:AgentScreenDetection 2026-10-06 WHY:
+            Empryo titles its terminal "<tab> · working — Empryo (beta)". The middle dot is one of Claude Code's spinner frames, so the scan for unrecognised agents read every Empryo title as Claude's and the next title tick idled the turn Empryo's hooks had just started (observed live 2026-10-06, session G8p0d). Empryo's status comes from its hooks alone, so its titles carry no status signal.
+            */
+            "opencode" | "empryo" => None,
             _ => None,
         };
         return state.map(|state| signal(agent_name, state));
@@ -82,6 +86,7 @@ pub(super) fn normalize_status_agent_name(value: Option<&str>) -> Option<String>
             | "copilot"
             | "grok"
             | "opencode"
+            | "empryo"
             | "pi"
     )
     .then(|| mapped.to_string())

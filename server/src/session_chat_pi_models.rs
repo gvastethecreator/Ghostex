@@ -37,12 +37,18 @@ pub(crate) fn is_pi_thinking_level(level: &str) -> bool {
 /// OMP's efforts, lowest first (`THINKING_EFFORTS` in pi-catalog); `off` is not one of them.
 const OMP_EFFORTS: [&str; 6] = ["minimal", "low", "medium", "high", "xhigh", "max"];
 
+/// CDXC:AgentProviders 2026-10-06 WHY:
+/// Empryo 3.9.0-beta's `--list-models` prints each ready provider's models as `provider/id` with no reasoning levels, and the levels a model takes come from its models.dev entry inside Empryo (`off, low, medium, high, xhigh, max` for the subscription GPT and Claude models, `off, high, max` for GLM-5.2). Every row offers this ladder, and a level the model lacks is refused by the picker with the ladder Empryo's own `/effort` panel shows for it.
+const EMPRYO_EFFORTS: [&str; 6] = ["off", "low", "medium", "high", "xhigh", "max"];
+
 const PI_MODELS_REQUEST: &str = "{\"id\":\"ghostex-models\",\"type\":\"get_available_models\"}\n";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum PiFamilyAgent {
     Pi,
     Omp,
+    /// Not a Pi fork, but its lineup comes from its CLI the same way.
+    Empryo,
 }
 
 impl PiFamilyAgent {
@@ -50,6 +56,7 @@ impl PiFamilyAgent {
         match id {
             "pi" => Some(Self::Pi),
             "omp" => Some(Self::Omp),
+            "empryo" => Some(Self::Empryo),
             _ => None,
         }
     }
@@ -58,6 +65,7 @@ impl PiFamilyAgent {
         match agent {
             SessionChatOptionAgent::Pi => Some(Self::Pi),
             SessionChatOptionAgent::Omp => Some(Self::Omp),
+            SessionChatOptionAgent::Empryo => Some(Self::Empryo),
             _ => None,
         }
     }
@@ -67,6 +75,7 @@ impl PiFamilyAgent {
         match self {
             Self::Pi => "pi",
             Self::Omp => "omp",
+            Self::Empryo => "empryo",
         }
     }
 
@@ -74,6 +83,7 @@ impl PiFamilyAgent {
         match self {
             Self::Pi => "Pi Agent",
             Self::Omp => "OMP",
+            Self::Empryo => "Empryo",
         }
     }
 }
@@ -179,6 +189,14 @@ fn read_lineup(agent: PiFamilyAgent) -> Option<Value> {
                 .filter_map(omp_model_row)
                 .collect::<Vec<_>>()
         }
+        PiFamilyAgent::Empryo => {
+            let output = run_cli(&program, &["--list-models"], None, &home, |_| false)?;
+            let rows = empryo_model_rows(&output);
+            if rows.is_empty() {
+                return None;
+            }
+            rows
+        }
     };
     let (default, scoped) = pinned_models(agent, &home);
     Some(build_catalog(agent, models, default.as_deref(), &scoped))
@@ -225,7 +243,75 @@ fn pinned_models(agent: PiFamilyAgent, home: &Path) -> (Option<String>, Vec<Stri
                     .unwrap_or_default();
             (omp_default_role(&config), Vec::new())
         }
+        // A project's own `.empryo/config.json` can name another; the lineup is the user's.
+        PiFamilyAgent::Empryo => (
+            empryo_config_default_model(&crate::agent_hooks::config::empryo_home(
+                &crate::agent_hooks::config::HookPaths::from_paths(
+                    &crate::paths::get_gxserver_paths(None),
+                ),
+            )),
+            Vec::new(),
+        ),
     }
+}
+
+/// `empryo --list-models`: a `<Name> (<id>)` line per ready provider, then one
+/// `  <id>/<model>  <N>k ctx  <prices>` line per model. Empryo's statusline names the model
+/// `<Name>/<model>`.
+fn empryo_model_rows(output: &str) -> Vec<LineupModel> {
+    let mut rows = Vec::new();
+    let mut provider: Option<(String, String)> = None;
+    for line in output.lines() {
+        let line = crate::session_chat_options::strip_ansi_sgr(line);
+        if !line.starts_with(char::is_whitespace) {
+            let head = line.trim().trim_end_matches("[custom]").trim_end();
+            provider = head
+                .strip_suffix(')')
+                .and_then(|head| head.rsplit_once(" ("))
+                .map(|(name, id)| (name.trim().to_string(), id.trim().to_string()))
+                .filter(|(name, id)| !name.is_empty() && !id.is_empty());
+            continue;
+        }
+        let Some((name, id)) = provider.as_ref() else {
+            continue;
+        };
+        let mut words = line.split_whitespace();
+        let Some(model) = words
+            .next()
+            .and_then(|value| value.strip_prefix(&format!("{id}/")))
+            .filter(|model| !model.is_empty())
+        else {
+            continue;
+        };
+        let context_window = match (words.next(), words.next()) {
+            (Some(size), Some("ctx")) => size
+                .strip_suffix('k')
+                .and_then(|thousands| thousands.parse::<u64>().ok())
+                .map(|thousands| thousands * 1000),
+            _ => None,
+        };
+        rows.push(LineupModel {
+            provider: id.clone(),
+            id: model.to_string(),
+            name: model.to_string(),
+            efforts: EMPRYO_EFFORTS.to_vec(),
+            terminal_labels: vec![format!("{name}/{model}")],
+            context_window,
+        });
+    }
+    rows
+}
+
+/// The `defaultModel` (`provider/model`) of the Empryo `config.json` in `dir`.
+pub(crate) fn empryo_config_default_model(dir: &Path) -> Option<String> {
+    let config: Value =
+        serde_json::from_slice(&std::fs::read(dir.join("config.json")).ok()?).ok()?;
+    config
+        .get("defaultModel")?
+        .as_str()
+        .map(str::trim)
+        .filter(|model| model.contains('/'))
+        .map(str::to_string)
 }
 
 /// `modelRoles.default` from OMP's `config.yml`, without its `:<level>` suffix.
@@ -528,6 +614,7 @@ fn build_catalog(
     let levels: &[&str] = match agent {
         PiFamilyAgent::Pi => &PI_THINKING_LEVELS,
         PiFamilyAgent::Omp => &OMP_EFFORTS,
+        PiFamilyAgent::Empryo => &EMPRYO_EFFORTS,
     };
     let efforts: Vec<&str> = levels
         .iter()
@@ -560,8 +647,13 @@ pub fn read_pi_family_selection(
 ) -> Option<SessionChatDetectedSelection> {
     let family = PiFamilyAgent::from_option_agent(agent)?;
     let catalog = pi_family_model_catalog(family);
-    let path = transcript_path(repository, project_id, session_id);
-    let model = path.as_deref().and_then(transcript_model);
+    let (path, model) = if family == PiFamilyAgent::Empryo {
+        (None, empryo_tab_model(repository, project_id, session_id))
+    } else {
+        let path = transcript_path(repository, project_id, session_id);
+        let model = path.as_deref().and_then(transcript_model);
+        (path, model)
+    };
     let status = path
         .as_deref()
         .filter(|_| family == PiFamilyAgent::Pi)
@@ -638,6 +730,69 @@ fn transcript_path(
     )
 }
 
+/// The model of the Empryo tab the session shows (`activeModel` in its `meta.json`, beside the
+/// `session.jsonl` the hooks report), which Empryo rewrites the moment `/models` picks one.
+fn empryo_tab_model(
+    repository: &DomainRepository<'_>,
+    project_id: &str,
+    session_id: &str,
+) -> Option<String> {
+    let session = repository.get_session(project_id, session_id).ok()??;
+    empryo_tab_model_at(&empryo_session_log(repository, &session)?)
+}
+
+/// An Empryo session row's `session.jsonl`: the path its hooks reported, else the folder
+/// `empryo --session` opens, `<cwd>/.empryo/sessions/<agentSessionId>/` under the session's working
+/// folder (its project's path when it has none), which is where a launch model's seeded session
+/// lives before any hook has named it.
+pub(crate) fn empryo_session_log(
+    repository: &DomainRepository<'_>,
+    session: &Value,
+) -> Option<std::path::PathBuf> {
+    if let Some(path) = read_runtime_text(session, "agentSessionPath") {
+        return Some(path.into());
+    }
+    let id = read_runtime_text(session, "agentSessionId")
+        .filter(|id| crate::session_chat_empryo_mirror::is_safe_empryo_session_id(id))?;
+    let text = |value: &Value, key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(str::to_string)
+    };
+    let cwd = text(session, "cwd").or_else(|| {
+        let project = repository
+            .get_project(&text(session, "projectId")?)
+            .ok()??;
+        text(&project, "path")
+    })?;
+    Some(
+        Path::new(&cwd)
+            .join(".empryo")
+            .join("sessions")
+            .join(id)
+            .join("session.jsonl"),
+    )
+}
+
+/// [`empryo_tab_model`] for the `session.jsonl` at `log`.
+pub(crate) fn empryo_tab_model_at(log: &Path) -> Option<String> {
+    let meta = std::fs::read(log.with_file_name("meta.json")).ok()?;
+    let meta = serde_json::from_slice::<Value>(&meta).ok()?;
+    let active = meta.get("activeTabId").and_then(Value::as_str);
+    let tabs = meta.get("tabs")?.as_array()?;
+    tabs.iter()
+        .find(|tab| tab.get("id").and_then(Value::as_str) == active)
+        .or_else(|| tabs.first())?
+        .get("activeModel")?
+        .as_str()
+        .map(str::trim)
+        .filter(|model| model.contains('/'))
+        .map(str::to_string)
+}
+
 /// The last `model_change` in the transcript's tail, as `provider/id`: Pi writes `provider` and
 /// `modelId`, OMP writes `model` already joined.
 fn transcript_model(path: &Path) -> Option<String> {
@@ -664,22 +819,70 @@ fn transcript_model(path: &Path) -> Option<String> {
     })
 }
 
+/// Lowercase alphanumeric words joined by `-`, so `Claude Opus 5.5` and `claude-opus-5-5` compare.
+fn spelled(text: &str) -> String {
+    text.to_lowercase()
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+/// Whether an Empryo display name (a model panel row, `Subscriptions · Claude Pro/Max Claude Opus
+/// 5`, or the input box border's `Anthropic-sub/Claude Opus 5.5`) ends with the model `id`, or with
+/// the id less a trailing `-YYYYMMDD` date.
+pub(crate) fn empryo_name_spells_id(name: &str, id: &str) -> bool {
+    let name = format!("-{}", spelled(name));
+    let id = spelled(id);
+    let undated = match id.rsplit_once('-') {
+        Some((head, date)) if date.len() == 8 && date.bytes().all(|byte| byte.is_ascii_digit()) => {
+            Some(head.to_string())
+        }
+        _ => None,
+    };
+    std::iter::once(id)
+        .chain(undated)
+        .any(|id| name.ends_with(&format!("-{id}")))
+}
+
+/// Whether the model Empryo 3.9.1-beta shows on its input box border, `<vendor>/<display name>`
+/// (only the name in a narrow box), is `value` (`provider/id`): the name spells the id, and the
+/// vendor, when shown, names the provider. Empryo prints `<Vendor>-sub` for its `proxy` and
+/// `subscriptions` providers, `<Vendor>-<provider name without spaces>` for any other, and the bare
+/// vendor for the vendor's own provider, which is what tells `subscriptions/gpt-6-luna` from
+/// `opencode-go/gpt-6-luna`.
+pub(crate) fn empryo_shown_names_value(shown: &str, value: &str) -> bool {
+    let Some((provider, id)) = value.split_once('/') else {
+        return false;
+    };
+    if !empryo_name_spells_id(shown, id) {
+        return false;
+    }
+    let Some((vendor, _)) = shown.split_once('/') else {
+        return true;
+    };
+    let compact = |text: &str| spelled(text).replace('-', "");
+    match vendor.rsplit_once('-') {
+        Some((_, "sub")) => matches!(provider, "proxy" | "subscriptions"),
+        Some((_, suffix)) => compact(suffix) == compact(provider),
+        None => compact(vendor) == compact(provider),
+    }
+}
+
 /// The catalog row a statusline reading names, when the reading is not a row's value already:
-/// the one row whose `terminalLabels` holds it, or, when several do, the one the transcript
-/// recorded. `None` leaves the reading as it is.
+/// the one row whose `terminalLabels` holds it (for Empryo, else the one its display name names),
+/// or, when several do, the one the transcript recorded. `None` leaves the reading as it is.
 pub(crate) fn pi_family_catalog_value(
     catalog: &Value,
     shown: &str,
     recorded: Option<&str>,
 ) -> Option<String> {
-    let rows = catalog
+    let (agent, rows) = catalog
         .get("agents")?
         .as_object()?
         .iter()
-        .find(|(agent, _)| PiFamilyAgent::from_id(agent).is_some())?
-        .1
-        .get("models")?
-        .as_array()?;
+        .find_map(|(agent, entry)| PiFamilyAgent::from_id(agent).map(|agent| (agent, entry)))?;
+    let rows = rows.get("models")?.as_array()?;
     fn value_of(row: &Value) -> Option<&str> {
         row.get("value").and_then(Value::as_str)
     }
@@ -695,6 +898,15 @@ pub(crate) fn pi_family_catalog_value(
         })
         .filter_map(value_of)
         .collect();
+    // Empryo 3.9.1-beta names the model by display name (`OpenAI-sub/GPT-6 Luna`), never its id.
+    let candidates = if candidates.is_empty() && agent == PiFamilyAgent::Empryo {
+        rows.iter()
+            .filter_map(value_of)
+            .filter(|value| empryo_shown_names_value(shown, value))
+            .collect()
+    } else {
+        candidates
+    };
     if let Some(recorded) = recorded.filter(|recorded| candidates.contains(recorded)) {
         return Some(recorded.to_string());
     }

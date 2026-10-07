@@ -4,6 +4,11 @@ use super::*;
 // Line/segment preparation
 // ---------------------------------------------------------------------------
 
+/// A Nerd Font icon glyph (the private-use planes), which agents such as Empryo draw before labels.
+pub(crate) fn is_nerd_font_icon(ch: char) -> bool {
+    matches!(ch as u32, 0xE000..=0xF8FF | 0xF0000..=0x10FFFF)
+}
+
 /// Removes terminal control sequences while preserving visible text.
 /// CDXC:AgentScreenDetection 2026-09-18 WHY:
 /// Codex chat notices use VT captures, but dialog answers recheck plain captures.

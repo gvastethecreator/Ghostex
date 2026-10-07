@@ -75,6 +75,7 @@ pub(crate) fn workspace_tab_agent_icon_path(agent_icon: &str) -> Option<&'static
         "mastra" => Some("agent-icons/mastra.svg"),
         "zcode" => Some("agent-icons/zcode.svg"),
         "devin" => Some("agent-icons/devin.svg"),
+        "empryo" => Some("agent-icons/empryo.svg"),
         "factory-droid" => Some("agent-icons/factory-droid.svg"),
         "freebuff" => Some("agent-icons/freebuff.svg"),
         "gemini" => Some("agent-icons/gemini.svg"),
@@ -123,6 +124,7 @@ pub(crate) fn workspace_tab_agent_icon_accent_color(agent_icon: &str) -> u32 {
             }
         }
         "devin" => 0x3ea6ff,
+        "empryo" => 0x1fa31d,
         "factory-droid" => 0xff7a1a,
         "gemini" => 0x8b9aff,
         "grok-build" => 0xffffff,

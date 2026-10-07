@@ -5,7 +5,7 @@ use crate::paths::GxserverPaths;
 use super::probing::{normalize_environment_path, unique_path_bufs};
 
 pub(crate) const NOTIFY_HOOK_MARKER: &str = "ghostex-gxserver-agent-notify-hook-marker";
-pub(crate) const NOTIFY_HOOK_VERSION: usize = 10;
+pub(crate) const NOTIFY_HOOK_VERSION: usize = 11;
 pub(crate) const STATUSLINE_HOOK_MARKER: &str = "ghostex-gxserver-agent-statusline-hook-marker";
 pub(crate) const STATUSLINE_HOOK_VERSION: usize = 1;
 pub(crate) const OPENCODE_PLUGIN_MARKER: &str = "ghostex-opencode-session-plugin-marker";
@@ -114,6 +114,10 @@ pub(crate) const HOOK_DEFINITIONS: &[HookDefinition] = &[
     HookDefinition {
         agent_id: "qoder",
         cli_command: "qodercli",
+    },
+    HookDefinition {
+        agent_id: "empryo",
+        cli_command: "empryo",
     },
     HookDefinition {
         agent_id: "opencode",
@@ -240,6 +244,7 @@ pub(crate) fn command_agent(agent_id: &str) -> Option<&'static str> {
         "hermes-agent" => Some("hermes-agent"),
         "codebuddy" => Some("codebuddy"),
         "qoder" => Some("qoder"),
+        "empryo" => Some("empryo"),
         "opencode" => Some("opencode"),
         "kimi" => Some("kimi"),
         "openclaude" => Some("openclaude"),
@@ -260,7 +265,7 @@ pub(crate) const CODEX_INTERRUPT_HOOK_TIMEOUT_SECONDS: i64 = 3;
 
 pub(crate) fn nested_timeout(agent_id: &str) -> Option<i64> {
     match agent_id {
-        "codex" | "grok" | "zcode" => Some(5),
+        "codex" | "grok" | "zcode" | "empryo" => Some(5),
         "command-code" | "devin" => Some(10),
         "gemini" => Some(10000),
         // `openclaude` is deliberately absent: OpenClaude is a Claude-shaped
@@ -430,6 +435,20 @@ pub(crate) fn all_hook_events(agent_id: &str) -> Vec<&'static str> {
             "PostToolUse",
         ],
         "qoder" => &["SessionStart", "Stop", "SessionEnd", "PreToolUse"],
+        /*
+        CDXC:AgentHooks 2026-10-06 DECISION:
+        "gxserver installs Claude-format command hooks into `~/.empryo/hooks.json`, never `~/.empryo/config.json`, because Empryo rewrites config.json at startup. The events are SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, Stop, StopFailure and SessionEnd, mapped with the existing Claude activity rules."
+        */
+        "empryo" => &[
+            "SessionStart",
+            "UserPromptSubmit",
+            "PreToolUse",
+            "PostToolUse",
+            "PostToolUseFailure",
+            "Stop",
+            "StopFailure",
+            "SessionEnd",
+        ],
         // Kimi Code writes one `[[hooks]]` table per event and treats `matcher`
         // as a regex, so Ghostex registers each event without a matcher.
         "kimi" => &[
@@ -482,6 +501,23 @@ pub(crate) fn resolve_config_directory(
             .map(|subpath| path.join(subpath))
             .unwrap_or(path),
         None => home_dir.join(fallback_relative_path),
+    }
+}
+
+/// CDXC:AgentProviders 2026-10-07 WHY: Empryo's own folder, where it reads `hooks.json` and its global `config.json` and keeps `threads.db`. Empryo 3.9.1 resolves it as `%LOCALAPPDATA%\Empryo` (else `<home>\AppData\Local\Empryo`) on Windows and `$HOME/.empryo` elsewhere, and its main home ignores `EMPRYO_HOME` (only its computer-use and browser helpers read that), so honouring `EMPRYO_HOME` or using `~/.empryo` on Windows wrote hooks where Empryo never looks (measured live 2026-10-07). Its global agent profiles are the exception: `<home>/.empryo/agents` on every platform (coordinators/role.rs). `packages/find` (`scan/empryo.rs`) resolves this folder for `threads.db`.
+pub(crate) fn empryo_home(hook_paths: &HookPaths) -> PathBuf {
+    if cfg!(windows) {
+        let local_app_data = hook_paths
+            .respect_config_environment
+            .then(|| std::env::var_os("LOCALAPPDATA"))
+            .flatten()
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute());
+        local_app_data
+            .unwrap_or_else(|| hook_paths.home_dir.join("AppData").join("Local"))
+            .join("Empryo")
+    } else {
+        hook_paths.home_dir.join(".empryo")
     }
 }
 

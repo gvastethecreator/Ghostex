@@ -115,6 +115,7 @@ pub(crate) fn agent_hooks_logo_for_agent_id(agent_id: &str) -> Option<AgentHooks
         "openclaude" => logo("agent-icons/openclaude.svg", 0xf0a68a),
         "command-code" => logo("agent-icons/command-code.svg", 0x22d3ee),
         "devin" => logo("agent-icons/devin.svg", 0x3ea6ff),
+        "empryo" => logo("agent-icons/empryo.svg", 0x1fa31d),
         "mastra" => logo("agent-icons/mastra.svg", 0xffffff),
         "zcode" => logo("agent-icons/zcode.svg", 0xffffff),
         _ => return None,

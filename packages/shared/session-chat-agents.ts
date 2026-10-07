@@ -37,6 +37,7 @@ export const SESSION_CHAT_SUPPORTED_AGENTS = new Set([
   "openclaude",
   "codex",
   "cursor",
+  "empryo",
   "grok",
   "grok-build",
   "hermes",
@@ -52,6 +53,7 @@ export type SessionChatTranscriptAgent =
   | "claude"
   | "codex"
   | "cursor"
+  | "empryo"
   | "grok"
   | "hermes"
   | "pi"
@@ -81,6 +83,7 @@ export function resolveSessionChatTranscriptAgent(
       normalized === "cursor cli"
     )
       return "cursor";
+    if (normalized === "empryo") return "empryo";
     if (normalized === "grok" || normalized === "grok-build") return "grok";
     if (
       normalized === "hermes" ||

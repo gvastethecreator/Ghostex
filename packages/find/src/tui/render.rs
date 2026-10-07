@@ -410,7 +410,7 @@ impl<'a> Tui<'a> {
             b.push_str("\r\n");
         }
         b.push_str("\r\n\x1b[90mSelect none to show all agents.\x1b[0m\r\n");
-        b.push_str("\r\n\x1b[90m↑/↓ or ^p/^n move · Enter/Space toggle · 1-6 quick toggle · Esc close\x1b[0m\r\n");
+        b.push_str("\r\n\x1b[90m↑/↓ or ^p/^n move · Enter/Space toggle · 1-7 quick toggle · Esc close\x1b[0m\r\n");
     }
 
     fn write_project_filter_picker(&self, b: &mut String, max_rows: usize) {

@@ -552,6 +552,7 @@ impl Driver<'_> {
             self.zmx_name,
             self.source,
             &payload,
+            crate::session_chat_send::SESSION_CHAT_SUBMIT,
             self.cancelled,
         )
         .await

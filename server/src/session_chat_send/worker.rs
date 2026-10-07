@@ -564,7 +564,83 @@ pub(super) async fn run_session_chat_send_worker(
                         break;
                     }
                 }
-                SessionChatSendStep::VerifySubmitted { agent, text } => {
+                SessionChatSendStep::SelectEmpryoTab { wait_ms } => {
+                    if let Err(message) = crate::session_chat_empryo_tabs::select_empryo_own_tab(
+                        &project_id,
+                        &session_id,
+                        &zmx_name,
+                        &source,
+                        wait_ms,
+                    )
+                    .await
+                    {
+                        // Nothing was typed and the window is not showing this session yet, which
+                        // a queue holds and retries like an input box that is not up.
+                        outcome = Err(SessionChatSendError::new(
+                            SessionChatSendFailure::ComposerNotReady,
+                            message,
+                        ));
+                        break;
+                    }
+                }
+                SessionChatSendStep::ReadEmpryoDraft => {
+                    let Some(input) = capture_session_terminal_text_vt(&zmx_name)
+                        .await
+                        .filter(|screen| {
+                            !crate::session_chat_composer::empryo_input_unfocused(screen)
+                        })
+                        .and_then(|screen| {
+                            crate::session_chat_composer::session_chat_composer_input(
+                                "empryo", &screen,
+                            )
+                        })
+                    else {
+                        outcome = Err(SessionChatSendError::not_attempted(
+                            SESSION_CHAT_COMPOSER_NOT_READY.to_string(),
+                        ));
+                        break;
+                    };
+                    // Text the capture cannot tell from Empryo's tip is not carried, and the
+                    // handoff then clears nothing, so a typed draft stays in the terminal.
+                    if let Some(sink) = captured_draft.take() {
+                        let _ = sink.send(CapturedTerminalDraft {
+                            content: (!input.text_is_empty() && !input.text_unreadable())
+                                .then_some(input.text),
+                            ..CapturedTerminalDraft::default()
+                        });
+                    }
+                }
+                SessionChatSendStep::GuardEmpryoDraft { replacement } => {
+                    let input =
+                        capture_session_terminal_text_vt(&zmx_name)
+                            .await
+                            .and_then(|screen| {
+                                crate::session_chat_composer::session_chat_composer_input(
+                                    "empryo", &screen,
+                                )
+                            });
+                    if input.as_ref().is_some_and(|input| input.text_unreadable()) {
+                        outcome = Err(SessionChatSendError::not_attempted(
+                            EMPRYO_DRAFT_UNREADABLE.to_string(),
+                        ));
+                        break;
+                    }
+                    let held = input
+                        .filter(|input| !input.text_is_empty())
+                        .map(|input| input.text);
+                    if held.is_some_and(|held| held != replacement.trim()) {
+                        outcome = Err(SessionChatSendError::new(
+                            SessionChatSendFailure::Write,
+                            "The terminal has different unsent text. Both drafts have been kept; the Chat draft is in Recovered.".to_string(),
+                        ));
+                        break;
+                    }
+                }
+                SessionChatSendStep::VerifySubmitted {
+                    agent,
+                    text,
+                    submit,
+                } => {
                     if let Err(error) = crate::session_chat_send_submit::confirm_submitted(
                         &agent,
                         &project_id,
@@ -572,6 +648,7 @@ pub(super) async fn run_session_chat_send_worker(
                         &zmx_name,
                         &source,
                         &text,
+                        &submit,
                         &|| job_generation != generation.load(Ordering::SeqCst),
                     )
                     .await
@@ -697,7 +774,10 @@ pub(super) async fn run_session_chat_send_worker(
                     composer_agent = crate::agents::identity::normalize_agent_id(agent.as_deref())
                         .as_deref()
                         .filter(|agent| {
-                            matches!(*agent, "claude" | "openclaude" | "codex" | "grok")
+                            matches!(
+                                *agent,
+                                "claude" | "openclaude" | "codex" | "grok" | "empryo"
+                            )
                         })
                         .map(str::to_string);
                     let wait = composer_repaint::wait_for_send_composer(

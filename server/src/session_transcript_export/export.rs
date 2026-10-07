@@ -153,6 +153,7 @@ pub(super) fn agent_display_name(agent: SessionChatTranscriptAgent) -> &'static 
         SessionChatTranscriptAgent::Claude => "Claude",
         SessionChatTranscriptAgent::Codex => "Codex",
         SessionChatTranscriptAgent::Cursor => "Cursor CLI",
+        SessionChatTranscriptAgent::Empryo => "Empryo",
         SessionChatTranscriptAgent::Grok => "Grok",
         SessionChatTranscriptAgent::Hermes => "Hermes Agent",
         SessionChatTranscriptAgent::OpenCode => "OpenCode",

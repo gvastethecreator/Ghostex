@@ -57,6 +57,19 @@ pub(crate) fn create_attach_session_metadata_with_observed_state(
     } else {
         None
     };
+    let probed_session = if probe.lifecycle_state == "missing"
+        && explicit_startup_text.is_none()
+        && queued_launch_startup_text.is_none()
+    {
+        crate::agents::seed_empryo_wake_session(
+            repository,
+            &project,
+            probed_session,
+            agent_settings,
+        )?
+    } else {
+        probed_session
+    };
     let startup_text = explicit_startup_text
         .clone()
         .or(queued_launch_startup_text.clone())
@@ -204,6 +217,19 @@ pub(crate) fn start_session_provider_with_observed_state(
     } else {
         None
     };
+    let probed_session = if probe.lifecycle_state == "missing"
+        && explicit_startup_text.is_none()
+        && queued_launch_startup_text.is_none()
+    {
+        crate::agents::seed_empryo_wake_session(
+            repository,
+            &project,
+            probed_session,
+            agent_settings,
+        )?
+    } else {
+        probed_session
+    };
     let startup_text = explicit_startup_text
         .clone()
         .or(queued_launch_startup_text)
@@ -331,6 +357,7 @@ pub(crate) fn start_session_provider_with_observed_state(
     if crate::agentbox::is_agentbox_session(&session) {
         crate::agentbox::wake_agentbox_activity_poller();
     }
+    crate::session_chat_empryo_tabs::select_empryo_own_tab_after_start(&session, None);
     Ok((
         json!({
             "exitCode": start.result.exit_code,

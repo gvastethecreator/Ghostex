@@ -16,6 +16,9 @@ delayed Enter.
 */
 pub const SESSION_CHAT_CLEAR_INPUT_SETTLE_MS: u64 = 150;
 pub const SESSION_CHAT_SUBMIT: &str = "\r";
+/// Empryo's Alt+Q, which sends its input at once while idle and queues it as a turn of its own
+/// while one runs; Enter there would steer the running turn instead.
+pub const SESSION_CHAT_EMPRYO_SUBMIT: &str = "\u{1b}q";
 /*
 CDXC:Clipboard 2026-08-24:
 Why the Enter is closed-loop. The old sequence wrote the paste body, slept
@@ -82,6 +85,10 @@ pub(super) const SESSION_CHAT_SHELL_PROMPT_NOT_REACHED: &str =
     "The agent did not exit back to the shell, so the resume command was not typed.";
 pub const SESSION_CHAT_COMPOSER_NOT_READY: &str =
     "The agent's input box is not on screen, so nothing was sent.";
+/// Empryo's input box shows text this terminal's screen capture cannot tell apart from its tip
+/// (the capture has no cursor), so placing a Chat draft there, which would clear it, stops.
+pub(super) const EMPRYO_DRAFT_UNREADABLE: &str =
+    "This terminal's screen does not show its cursor, so Ghostex cannot tell text typed in Empryo's input box from its tip and did not replace it. The Chat draft is still in the chat.";
 pub(super) const SESSION_CHAT_CLAUDE_PANEL_NOT_DISMISSED: &str =
     "The Claude Code panel over the input box did not close, so nothing was sent.";
 pub(super) const SESSION_CHAT_CODEX_SIDE_NOT_CLOSED: &str =

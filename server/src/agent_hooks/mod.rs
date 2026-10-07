@@ -1,4 +1,5 @@
 pub mod api;
+mod ancestor_session;
 pub(crate) mod claude_retention;
 pub(crate) mod codex_status_line;
 pub(crate) mod codex_trust;
@@ -25,6 +26,7 @@ pub use api::{
     install_agent_hooks, read_agent_hook_status, repair_installed_agent_hook_paths,
     uninstall_agent_hooks,
 };
+pub(crate) use ancestor_session::adopt_ancestor_session_routing;
 pub use notify_runtime::run_notify_hook;
 pub(crate) use resolution::read_claude_hook_surface_records;
 pub(crate) use resolution::read_codex_hook_session_identities;

@@ -613,6 +613,7 @@ pub const SESSION_TITLE_GENERATION_AGENT_OPTIONS: &[Opt] = &[
     opt("Grok Build", "grok"),
     opt("Pi Agent", "pi"),
     opt("Antigravity CLI", "antigravity"),
+    opt("Empryo", "empryo"),
     opt("Custom", "custom"),
 ];
 

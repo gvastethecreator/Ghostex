@@ -90,6 +90,7 @@ pub fn default_agent_id_for_icon(icon: Option<&str>) -> Option<&'static str> {
         "mastra" => "mastra",
         "zcode" => "zcode",
         "freebuff" => "freebuff",
+        "empryo" => "empryo",
         _ => return None,
     })
 }
@@ -121,6 +122,7 @@ fn default_session_agent_title_name(lowercased: &str) -> Option<&'static str> {
         "mastra" | "mastracode" => "Mastra Code",
         "devin" => "Devin",
         "droid" | "factory-droid" => "Factory Droid",
+        "empryo" | "em" => "Empryo",
         "freebuff" => "Freebuff",
         "gemini" => "Gemini",
         "grok" | "grok-build" => "Grok Build",
@@ -174,7 +176,14 @@ impl TitleGenerationSettings {
             .filter(|agent| {
                 matches!(
                     *agent,
-                    "codex" | "cursor" | "claude" | "grok" | "pi" | "antigravity" | "custom"
+                    "codex"
+                        | "cursor"
+                        | "claude"
+                        | "grok"
+                        | "pi"
+                        | "antigravity"
+                        | "empryo"
+                        | "custom"
                 )
             })
             .unwrap_or("codex")

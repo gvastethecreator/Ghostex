@@ -3,12 +3,14 @@ use serde_json::{Map, Value};
 #[cfg(not(windows))]
 mod claude_background;
 mod claude_identity;
+mod empryo_wake;
 mod hermes_profile;
 #[cfg(windows)]
 mod windows;
 use super::*;
 #[cfg(not(windows))]
 use claude_background::build_claude_attach_or_resume_command;
+pub(crate) use empryo_wake::seed_empryo_wake_session;
 #[cfg(windows)]
 pub(crate) use windows::*;
 
@@ -220,6 +222,14 @@ pub(crate) fn to_agent_resume_input(
     */
     let agent_id = resume_agent_family_id(configured_agent_id, &agent_config, &launch_settings);
     let stored_agent_command = read_text_from_map(&runtime_settings, "agentCommand");
+    // A custom Empryo row whose launch settings lost the command still names it here.
+    let agent_id = agent_id.map(|id| {
+        if is_custom_agent_id(&id) && command_runs_empryo(stored_agent_command.as_deref()) {
+            "empryo".to_string()
+        } else {
+            id
+        }
+    });
     let configured_agent_command = read_text_from_map(&agent_config, "command");
     let base_command = if let Some(command) =
         read_text_from_map(&runtime_settings, "accountCommand")
@@ -479,12 +489,16 @@ pub(crate) fn build_agent_resume_command(
                 quote_shell_double_arg(&reference)
             )
         }),
-        "omp" => exact_reference.map(|reference| {
-            format!(
-                "{agent_command} --session {}",
-                quote_shell_double_arg(&reference)
-            )
-        }),
+        // CDXC:AgentProviders 2026-10-06 DECISION: "Resume. `empryo --session <id>`. The process-identity scan reads `--session` from argv." SEE-ALSO: extract_agent_process_session_id in server/src/zmx/process_identity.rs.
+        // A session with no written folder: see `get_empryo_session_reference`.
+        "omp" | "empryo" => exact_reference
+            .map(|reference| {
+                format!(
+                    "{agent_command} --session {}",
+                    quote_shell_double_arg(&reference)
+                )
+            })
+            .or_else(|| (agent_id == "empryo").then(|| agent_command.to_string())),
         "codex" => {
             let reference = codex_reference?;
             if options.display {
@@ -627,7 +641,7 @@ pub(crate) fn build_agent_resume_copy_command(input: &AgentResumeInput) -> Optio
                 quote_shell_double_arg(&reference)
             )
         }),
-        "omp" => exact_reference.map(|reference| {
+        "omp" | "empryo" => exact_reference.map(|reference| {
             format!(
                 "{agent_command} --session {}",
                 quote_shell_double_arg(&reference)
@@ -711,13 +725,20 @@ pub(crate) fn resume_agent_family_id(
     launch_settings: &Map<String, Value>,
 ) -> Option<String> {
     let configured = agent_id?;
-    if !configured
-        .trim()
-        .to_ascii_lowercase()
-        .starts_with("custom-")
-    {
+    if !is_custom_agent_id(&configured) {
         return Some(configured);
     }
+    /*
+    CDXC:AgentProviders 2026-10-06 WHY:
+    Before Empryo was a built-in agent it ran as a custom agent with no icon, so those rows named no CLI family and a row that had already run woke to nothing (a session that ran gets only a resume command). A custom agent whose command runs Empryo is the Empryo family, the spec's "old Empryo rows keep opening"; other custom wrappers keep the icon rule.
+    */
+    let runs_empryo = [
+        read_text_from_map(agent_config, "command"),
+        read_text_from_map(agent_config, "agentCommand"),
+        read_text_from_map(launch_settings, "agentCommand"),
+    ]
+    .iter()
+    .any(|command| command_runs_empryo(command.as_deref()));
     read_text_from_map(agent_config, "icon")
         .or_else(|| read_text_from_map(launch_settings, "icon"))
         .and_then(|icon| {
@@ -725,16 +746,25 @@ pub(crate) fn resume_agent_family_id(
                 .map(str::to_string)
                 .or_else(|| normalize_agent_id(Some(&icon)))
         })
+        .or_else(|| runs_empryo.then(|| "empryo".to_string()))
         .or(Some(configured))
+}
+
+fn is_custom_agent_id(agent_id: &str) -> bool {
+    agent_id.trim().to_ascii_lowercase().starts_with("custom-")
+}
+
+fn command_runs_empryo(command: Option<&str>) -> bool {
+    command.and_then(infer_agent_id_from_command).as_deref() == Some("empryo")
 }
 
 pub(crate) fn restorable_agent_id(value: Option<&str>) -> Option<&str> {
     let value = value?.trim();
     match value {
         "amp" | "antigravity" | "claude" | "codebuddy" | "codex" | "command-code" | "copilot"
-        | "cursor" | "devin" | "droid" | "freebuff" | "gemini" | "grok" | "hermes-agent"
-        | "kimi" | "kiro" | "omp" | "openclaude" | "opencode" | "pi" | "qoder" | "rovodev"
-        | "zcode" => Some(value),
+        | "cursor" | "devin" | "droid" | "empryo" | "freebuff" | "gemini" | "grok"
+        | "hermes-agent" | "kimi" | "kiro" | "omp" | "openclaude" | "opencode" | "pi" | "qoder"
+        | "rovodev" | "zcode" => Some(value),
         _ => None,
     }
 }
@@ -748,8 +778,40 @@ pub(crate) fn get_exact_agent_session_reference(
         "cursor" => get_cursor_session_reference(input),
         "omp" => get_omp_session_reference(input),
         "pi" => get_pi_session_reference(input),
+        "empryo" => get_empryo_session_reference(input),
         _ => input.agent_session_id.clone(),
     }
+}
+
+/// CDXC:SessionIdentity 2026-10-06 WHY:
+/// Empryo reports its session id when it mounts but writes `.empryo/sessions/<id>/` only with the first prompt, so waking a session that slept before its first message ran `empryo --session <id>` for a folder that never existed and Empryo printed "Session not found" (seen live 2026-10-06). Only a written session folder resumes; a session without one is seeded a fresh folder before it wakes (`seed_empryo_wake_session`), and a plan built without that seeding runs a fresh `empryo` (a missing resume command would leave the pane unstarted).
+fn get_empryo_session_reference(input: &AgentResumeInput) -> Option<String> {
+    let session_id = input.agent_session_id.as_deref()?.trim();
+    if !crate::session_chat_empryo_mirror::is_safe_empryo_session_id(session_id) {
+        return None;
+    }
+    let written = |folder: &std::path::Path| {
+        folder.join("meta.json").is_file() || folder.join("session.jsonl").is_file()
+    };
+    let hook_folder = input
+        .agent_session_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(crate::resume_lookup::expand_home)
+        .and_then(|path| path.parent().map(std::path::Path::to_path_buf));
+    let mut candidates = hook_folder.into_iter().chain(
+        [
+            input.project_path.as_deref().map(std::path::PathBuf::from),
+            Some(crate::resume_lookup::home_dir()),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|root| root.join(".empryo").join("sessions").join(session_id)),
+    );
+    candidates
+        .any(|folder| written(&folder))
+        .then(|| session_id.to_string())
 }
 
 pub(crate) fn get_codex_session_reference(input: &AgentResumeInput) -> Option<String> {

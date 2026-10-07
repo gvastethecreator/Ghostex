@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 use super::{
     build_agent_tui_clear_input, capture_session_terminal_text_vt, write_session_chat_payload,
-    SessionChatSendError, SessionChatSendFailure, AGENT_TUI_CLEAR_LINE_SLACK,
-    SESSION_CHAT_CLEAR_INPUT_SETTLE_MS, SESSION_CHAT_COMPOSER_WAIT_TIMEOUT_MS,
-    SESSION_CHAT_INTERRUPT, SESSION_CHAT_SEND_CANCELLED,
+    SessionChatSendError, SessionChatSendFailure, AGENT_TUI_CLEAR_INPUT_LINE,
+    AGENT_TUI_CLEAR_LINE_SLACK, AGENT_TUI_CLEAR_MAX_LINES, SESSION_CHAT_CLEAR_INPUT_SETTLE_MS,
+    SESSION_CHAT_COMPOSER_WAIT_TIMEOUT_MS, SESSION_CHAT_INTERRUPT, SESSION_CHAT_SEND_CANCELLED,
 };
 use crate::session_chat_composer::{
     detect_session_chat_composer_readiness, session_chat_composer_input, SessionChatComposerState,
@@ -14,6 +14,8 @@ use crate::session_chat_composer::{
 enum ComposerClearMethod {
     InterruptOnce,
     KillLines,
+    /// Ctrl+U alone, once before the box is read and again while text is left.
+    KillLinesBackward,
 }
 
 fn composer_clear_method(agent: &str) -> Option<ComposerClearMethod> {
@@ -22,8 +24,22 @@ fn composer_clear_method(agent: &str) -> Option<ComposerClearMethod> {
             Some(ComposerClearMethod::InterruptOnce)
         }
         "antigravity" | "openclaude" => Some(ComposerClearMethod::KillLines),
+        /*
+        CDXC:SessionChat 2026-10-06 WHY:
+        Empryo 3.9.0-beta quits on Ctrl+C in an empty input and opens its command palette on Ctrl+K, so the shared Ctrl+U/Ctrl+K burst typed every chat message into the palette. Ctrl+U clears its input line, a folded paste included, and does nothing to an empty one, so the clear is Ctrl+U alone: one burst before the box is read (a capture without a cursor cannot tell its tip from typed text), then more while text is left. Attached images take Ctrl+C (EMPRYO_ATTACHMENT_SEED).
+        */
+        "empryo" => Some(ComposerClearMethod::KillLinesBackward),
         _ => None,
     }
+}
+
+/// CDXC:SessionChat 2026-10-06 WHY:
+/// Empryo's attached images survive Ctrl+U and Backspace; only its Ctrl+C clear drops them, and only while the box holds text (Ctrl+C on an empty box quits Empryo). So a box holding just images first gets this one character, and Ctrl+C follows once a capture shows it typed.
+const EMPRYO_ATTACHMENT_SEED: &str = "x";
+
+fn kill_lines_backward(rows: usize) -> String {
+    AGENT_TUI_CLEAR_INPUT_LINE
+        .repeat((rows + AGENT_TUI_CLEAR_LINE_SLACK).min(AGENT_TUI_CLEAR_MAX_LINES))
 }
 
 pub(super) fn supports_verified_composer_clear(agent: &str) -> bool {
@@ -53,6 +69,8 @@ pub async fn clear_session_chat_composer(
     let method = composer_clear_method(&agent);
     let mut interrupt_sent = false;
     let mut shell_escape_sent = false;
+    let mut backward_burst_sent = false;
+    let mut attachment_seed_sent = false;
     let mut composer_seen = false;
     let mut not_ready_reason = None;
     loop {
@@ -81,7 +99,10 @@ pub async fn clear_session_chat_composer(
             } else {
                 composer_seen = true;
                 if let Some(input) = session_chat_composer_input(&agent, &screen) {
-                    if input.is_empty() && !input.shell_mode {
+                    let backward_burst_due =
+                        matches!(method, Some(ComposerClearMethod::KillLinesBackward))
+                            && !backward_burst_sent;
+                    if input.is_empty() && !input.shell_mode && !backward_burst_due {
                         return Ok(());
                     }
                     if cancelled() {
@@ -108,6 +129,48 @@ pub async fn clear_session_chat_composer(
                                 Some(build_agent_tui_clear_input(
                                     input.rows + AGENT_TUI_CLEAR_LINE_SLACK,
                                 ))
+                            }
+                            Some(ComposerClearMethod::KillLinesBackward)
+                                if input.attachments() > 0 && input.text_unreadable() =>
+                            {
+                                // The seed could never be seen typed, so the Ctrl+C that drops the
+                                // images is never safe here (it quits Empryo on an empty box).
+                                if attachment_seed_sent {
+                                    let _ = write_session_chat_payload(
+                                        project_id,
+                                        session_id,
+                                        zmx_name,
+                                        source,
+                                        &kill_lines_backward(input.rows),
+                                    )
+                                    .await;
+                                }
+                                return Err(SessionChatSendError::new(
+                                    SessionChatSendFailure::ComposerNotCleared,
+                                    "Empryo's input box holds an attached image that Ghostex cannot clear in this terminal. Remove it in the terminal, then send again. Your chat draft has been kept.".to_string(),
+                                ));
+                            }
+                            Some(ComposerClearMethod::KillLinesBackward) => {
+                                backward_burst_sent = true;
+                                Some(
+                                    if input.attachments() > 0
+                                        && input.text_is_empty()
+                                        && !attachment_seed_sent
+                                    {
+                                        attachment_seed_sent = true;
+                                        EMPRYO_ATTACHMENT_SEED.to_string()
+                                    } else if input.attachments() > 0
+                                        && !input.text_is_empty()
+                                        && !interrupt_sent
+                                    {
+                                        // Text is on screen in this capture, so Ctrl+C clears the box. One
+                                        // press only: a second could reach the box this one emptied.
+                                        interrupt_sent = true;
+                                        "\u{3}".to_string()
+                                    } else {
+                                        kill_lines_backward(input.rows)
+                                    },
+                                )
                             }
                             _ => None,
                         }
@@ -158,31 +221,54 @@ async fn place_session_chat_draft(
     }
     let agent = crate::session_chat_composer::session_chat_composer_agent_id(&target.session)
         .or_else(|| crate::session_chat_follower::session_chat_agent_for_session(&target.session));
-    // Capture already saves and clears the old input through the agent's editor.
-    // A second clear burst here would erase keystrokes typed after that handshake.
-    let mut steps = vec![
-        super::SessionChatSendStep::WaitForComposer {
-            agent: agent.clone(),
-            settle_ms: super::SESSION_CHAT_COMPOSER_WAIT_SETTLE_MS,
-            timeout_ms: super::SESSION_CHAT_COMPOSER_WAIT_TIMEOUT_MS,
-        },
-        super::SessionChatSendStep::PreserveTerminalDraft {
-            replacement: Some(content.to_string()),
-            state_dir: state_dir.to_path_buf(),
-            prompt_editor_input: if agent.as_deref() == Some("grok") {
-                super::SESSION_CHAT_GROK_PROMPT_EDITOR_INPUT
-            } else {
-                super::SESSION_CHAT_PROMPT_EDITOR_INPUT
-            }
-            .to_string(),
-        },
-        super::SessionChatSendStep::WaitForComposer {
-            agent: agent.clone(),
-            settle_ms: super::SESSION_CHAT_COMPOSER_WAIT_SETTLE_MS,
-            timeout_ms: super::SESSION_CHAT_COMPOSER_WAIT_TIMEOUT_MS,
-        },
-        super::SessionChatSendStep::Write(super::build_session_chat_paste_bytes(content)),
-    ];
+    let mut steps = if agent.as_deref() == Some("empryo") {
+        // Empryo has no prompt-editor handshake (Ctrl+G opens its Git menu; CDXC:Drafts
+        // 2026-10-06 in handoff_http.rs): keep any other text in its input box, clear only the
+        // same text, and type the draft the way a chat send does.
+        vec![
+            super::SessionChatSendStep::WaitForComposer {
+                agent: agent.clone(),
+                settle_ms: super::SESSION_CHAT_COMPOSER_WAIT_SETTLE_MS,
+                timeout_ms: super::SESSION_CHAT_COMPOSER_WAIT_TIMEOUT_MS,
+            },
+            super::SessionChatSendStep::SelectEmpryoTab {
+                wait_ms: crate::session_chat_empryo_tabs::EMPRYO_SEND_TAB_WAIT_MS,
+            },
+            super::SessionChatSendStep::GuardEmpryoDraft {
+                replacement: content.to_string(),
+            },
+            super::SessionChatSendStep::ClearComposer {
+                agent: "empryo".to_string(),
+            },
+            super::SessionChatSendStep::Write(super::build_empryo_input_bytes(content)),
+        ]
+    } else {
+        // Capture already saves and clears the old input through the agent's editor.
+        // A second clear burst here would erase keystrokes typed after that handshake.
+        vec![
+            super::SessionChatSendStep::WaitForComposer {
+                agent: agent.clone(),
+                settle_ms: super::SESSION_CHAT_COMPOSER_WAIT_SETTLE_MS,
+                timeout_ms: super::SESSION_CHAT_COMPOSER_WAIT_TIMEOUT_MS,
+            },
+            super::SessionChatSendStep::PreserveTerminalDraft {
+                replacement: Some(content.to_string()),
+                state_dir: state_dir.to_path_buf(),
+                prompt_editor_input: if agent.as_deref() == Some("grok") {
+                    super::SESSION_CHAT_GROK_PROMPT_EDITOR_INPUT
+                } else {
+                    super::SESSION_CHAT_PROMPT_EDITOR_INPUT
+                }
+                .to_string(),
+            },
+            super::SessionChatSendStep::WaitForComposer {
+                agent: agent.clone(),
+                settle_ms: super::SESSION_CHAT_COMPOSER_WAIT_SETTLE_MS,
+                timeout_ms: super::SESSION_CHAT_COMPOSER_WAIT_TIMEOUT_MS,
+            },
+            super::SessionChatSendStep::Write(super::build_session_chat_paste_bytes(content)),
+        ]
+    };
     if let Some(verify) = super::session_chat_verify_step(content) {
         steps.push(verify);
     }

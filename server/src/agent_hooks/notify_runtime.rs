@@ -68,6 +68,15 @@ pub fn run_notify_hook(args: Vec<String>) -> Result<Option<String>, DomainStateE
         .or_else(|| read_state_string(&state, "agent"))
         .unwrap_or_else(|| "codex".to_string());
     let agent_key = normalized_hook_agent_key(&agent_name);
+    /*
+    CDXC:AgentHooks 2026-10-06 DECISION:
+    "The notify hook drops any event whose environment has `EMPRYO_PROJECT_DIR` set while its agent isn't `empryo`." Empryo also runs the hooks in `~/.claude/settings.json` and `~/.codex/hooks.json`, which would report every Empryo event as Claude's and as Codex's too. Empryo's shell tool runs without EMPRYO_PROJECT_DIR, so this guard never drops an agent started from it.
+    */
+    if agent_key == "empryo" {
+        super::ancestor_session::adopt_ancestor_session_routing();
+    } else if env_string("EMPRYO_PROJECT_DIR").is_some() {
+        return Ok(None);
+    }
     let event_name = first_string([
         payload.get("hook_event_name"),
         payload.get("hookEventName"),
@@ -100,6 +109,8 @@ pub fn run_notify_hook(args: Vec<String>) -> Result<Option<String>, DomainStateE
                 .to_string_lossy()
                 .into_owned(),
         )
+    } else if agent_key == "empryo" {
+        empryo_session_log_path(session_id.as_deref())
     } else {
         first_path([
             payload.get("transcript_path"),
@@ -343,6 +354,21 @@ fn is_actual_user_message_prompt(prompt: &str) -> bool {
     };
     !crate::agents::activity::is_first_prompt_claim_meta_prompt(&normalized)
         && !crate::agents::activity::is_first_prompt_claim_slash_command(Some(prompt), &normalized)
+}
+
+/// CDXC:AgentHooks 2026-10-06 DECISION:
+/// "The notify hook derives `<EMPRYO_PROJECT_DIR>/.empryo/sessions/<session_id>/session.jsonl` and posts it as the session path. Empryo sends no `transcript_path`, and the file may appear only after the first prompt."
+fn empryo_session_log_path(session_id: Option<&str>) -> Option<String> {
+    let session_id = session_id?;
+    let project_dir = env_string("EMPRYO_PROJECT_DIR")?;
+    Some(
+        Path::new(&project_dir)
+            .join(".empryo/sessions")
+            .join(session_id)
+            .join("session.jsonl")
+            .to_string_lossy()
+            .into_owned(),
+    )
 }
 
 /// A `setsid` process cannot open `/dev/tty`; Windows has no controlling terminal, so every hook counts there.

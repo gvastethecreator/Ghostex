@@ -13,6 +13,11 @@ pub fn detect_session_chat_selection(
     text: &str,
 ) -> Option<SessionChatDetectedSelection> {
     let scanned_lines = scan_window(text);
+    let empryo_head = if agent == SessionChatOptionAgent::Empryo {
+        crate::session_chat_composer::empryo_input_head(&scanned_lines)
+    } else {
+        None
+    };
     let mut found = SessionChatDetectedSelection::default();
     // Index of the topmost line that supplied any value; the footer capture
     // starts there.
@@ -48,6 +53,21 @@ pub fn detect_session_chat_selection(
                     found = selection;
                     topmost_match = Some(index);
                     break;
+                }
+                continue;
+            }
+            SessionChatOptionAgent::Empryo => {
+                if let Some(selection) = match_empryo_statusline(scanned) {
+                    found = selection;
+                    topmost_match = Some(index);
+                    break;
+                }
+                // The border line is the whole reading; the rows below it are the input box.
+                if empryo_head == Some(index) {
+                    if let Some(selection) = match_empryo_input_head(scanned) {
+                        found = selection;
+                        break;
+                    }
                 }
                 continue;
             }
@@ -125,6 +145,9 @@ pub fn detect_session_chat_selection(
                 SessionChatOptionAgent::Omp => {
                     unreachable!("Omp is parsed as a complete statusline")
                 }
+                SessionChatOptionAgent::Empryo => {
+                    unreachable!("Empryo is parsed as a complete statusline")
+                }
                 SessionChatOptionAgent::Pi => unreachable!("Pi is parsed as a complete statusline"),
                 // ZCode has no segment grammar: it is an option agent only so
                 // the notice classifier accepts it (see the enum's CDXC).
@@ -200,6 +223,15 @@ fn claude_ultracode_on_lines(lines: &[String]) -> Option<bool> {
         lines[top]
             .split(|ch: char| ch == '\u{2500}' || ch.is_whitespace())
             .any(|word| word == "ultracode"),
+    )
+}
+
+/// Agents whose questions exist only on their screen: no hook announces them, so the prompt
+/// detectors in `detect_session_chat_terminal_state` are the only reading of them.
+pub(crate) fn session_chat_questions_only_on_screen(agent: Option<&str>) -> bool {
+    matches!(
+        agent.map(str::trim),
+        Some("cursor" | "cursor-agent" | "freebuff" | "empryo")
     )
 }
 
@@ -314,6 +346,22 @@ pub fn detect_session_chat_terminal_state(
     let mut notice = screen.and_then(|capture| {
         crate::session_chat_notice::classify_session_chat_terminal_notice(agent_id, &capture.text)
     });
+    if notice.is_none() && agent == Some(SessionChatOptionAgent::Empryo) {
+        notice = screen
+            .zip(
+                repository
+                    .get_session(project_id, session_id)
+                    .ok()
+                    .flatten(),
+            )
+            .and_then(|(capture, session)| {
+                crate::session_chat_empryo_blocking::empryo_rate_limit_notice_for_session(
+                    repository,
+                    &session,
+                    &capture.text,
+                )
+            });
+    }
     if let Some(notice) = notice.as_mut() {
         crate::session_chat_codex_lock::enrich_notice(repository, project_id, session_id, notice);
     }
@@ -406,12 +454,19 @@ pub fn detect_session_chat_terminal_state(
         (None, true)
     };
     let prompt = screen.and_then(|capture| {
-        crate::session_chat::detect_cursor_question_prompt(agent_id, &capture.text).or_else(|| {
-            crate::session_chat_freebuff_question::detect_freebuff_question_prompt(
-                agent_id,
-                &capture.text,
-            )
-        })
+        crate::session_chat::detect_cursor_question_prompt(agent_id, &capture.text)
+            .or_else(|| {
+                crate::session_chat_freebuff_question::detect_freebuff_question_prompt(
+                    agent_id,
+                    &capture.text,
+                )
+            })
+            .or_else(|| {
+                crate::session_chat_empryo_question::detect_empryo_question_prompt(
+                    agent_id,
+                    &capture.text,
+                )
+            })
     });
     /*
     CDXC:AgentScreenDetection (settled 2026-08-30): probed only counts once

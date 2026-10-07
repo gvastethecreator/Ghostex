@@ -50,6 +50,38 @@ pub(crate) fn process_creation_filetime(process_id: i64) -> Option<u64> {
     }
 }
 
+/// Whether `pid` names a process that has not exited: `runtime::is_process_running` on Unix, and
+/// on Windows (where that answers `false` for every pid) the process's exit code still being
+/// STILL_ACTIVE.
+pub(crate) fn process_is_alive(pid: u32) -> bool {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::{
+            Foundation::{CloseHandle, STILL_ACTIVE},
+            System::Threading::{
+                GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+            },
+        };
+        if pid == 0 {
+            return false;
+        }
+        unsafe {
+            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if process.is_null() {
+                return false;
+            }
+            let mut code = 0u32;
+            let read = GetExitCodeProcess(process, &mut code);
+            CloseHandle(process);
+            read != 0 && code == STILL_ACTIVE as u32
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        crate::runtime::is_process_running(pid)
+    }
+}
+
 /// Whether this process runs an executable image that is no longer the installed file at its path.
 ///
 /// CDXC:ServerDaemon 2026-09-28 WHY:

@@ -40,6 +40,7 @@ pub const KNOWN_AGENT_IDS: &[&str] = &[
     "mastra",
     "devin",
     "droid",
+    "empryo",
     "freebuff",
     "gemini",
     "grok",

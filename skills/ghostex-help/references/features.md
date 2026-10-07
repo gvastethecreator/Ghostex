@@ -578,6 +578,9 @@ syncs those names without running a first-prompt title job or blocking terminal
 input. Pi and OMP use the Title Generation Agent for first-prompt names.
 Manual Generate Name and `/rename` in chat remain available for Claude and Codex.
 In a Hermes chat, `/rename <name>` is sent as Hermes' own `/title <name>`.
+Renaming an Empryo session from Ghostex (the Rename dialog or `ghostex rename-command`)
+types Empryo's own `/tab rename <name>`, so Empryo keeps the name too, and the
+Rename dialog's Generate Name can name an Empryo session from its recent messages.
 ZCode sessions rename from the sidebar and `ghostex rename-command` too: the name
 is saved in ZCode's own session store once its session row exists (after the
 first prompt), and ZCode's automatic naming will not replace it. Before that,
@@ -587,6 +590,12 @@ Fork (a session's right-click menu, or More actions in its chat) opens the new
 session beside the original and switches to it. It starts as
 `Fork: <original name>` and saves that name through the agent's own rename
 command so it survives reopening the conversation.
+Fork works for Claude, Codex, Pi and Empryo sessions. Empryo has no command-line
+fork, so Ghostex copies the Empryo conversation up to its last finished
+reply under a new id and opens that copy; fork an Empryo session once a turn has
+finished. The copy gets its own copies of Empryo's checkpoints, so undo works in
+the fork, and deleting or closing either session leaves the other's checkpoints
+alone.
 Once a conversation has forks, a small branch button in the chat's top right
 lists every session that shares the earlier history, including the thread you
 forked away from, and switches to the one you pick; a stopped branch is resumed
@@ -661,6 +670,10 @@ when you open it.
   project and Days buttons under the search field filter and group the results,
   the star on a result stars it, pull down rebuilds the index, and tapping a
   result shows the whole prompt with Resume, Fork, Copy and Star.
+  Empryo prompts are listed too, from every repository Empryo has run in, and
+  resuming one reopens that Empryo session. A prompt can be forked into Claude,
+  Codex, Pi, OpenCode, Cursor or Grok, never into Empryo, which cannot start a
+  session from a prompt.
 - Delayed Actions opens Session Automations. Send Enter defaults to **When all
   agents finish**. It can also run after a delay, when this agent finishes, or
   **When a specific agent finishes**. Choose the specific agent from the Agent sessions
@@ -773,6 +786,31 @@ named after your first message. Switch to Terminal for sign-in, `/model`, and
 Freebuff's other commands and settings. For agents whose models the chat cannot
 list, such as Freebuff, the model menu offers Switch model in CLI, which opens
 the session's terminal.
+Empryo chats show your messages as you typed them (without the repository map
+Empryo adds for its model), its replies and thinking, and the tools it runs with
+their results, and they can be exported like any other chat. Empryo saves a
+reply when the turn ends, and on longer turns sometimes a progress snapshot while
+it works, so the chat fills in step by step rather than word by word, with the
+working strip shown until the turn ends. One Ghostex session follows one Empryo
+tab, the tab of your latest message; Empryo's other tabs show only in its
+terminal.
+Messages sent from the chat (or with `ghostex send-message`) go into Empryo's
+input box. While Empryo is working, a message is queued as its own turn after
+the current one, the way Alt+Q queues in Empryo, instead of steering the
+running turn. Multi-line messages arrive whole, typed line by line, so Empryo
+never picks up an image from your clipboard with them. When Empryo asks a
+question, it appears as a card in the chat; pick an option or type your own
+answer for its Other row. When Empryo asks for
+permission (a web page, files outside the project, a risky command), the card
+offers its Allow and Deny choices. A repository whose `.empryo/config.json`
+Empryo ignores until you trust it shows a card with a Trust button, which runs
+`/trust`; Empryo applies that config after a restart. Cards also explain when
+Empryo has no model to use and when its provider rate-limits a turn. Slash
+commands sent from the chat show in it with what they printed. Commands that
+open an Empryo panel (`/router`, `/models`, `/settings` and the like) show a card
+while the panel is open, with Close panel and Terminal View; a message sent from
+the chat closes the panel first. The Ghostex phone app opens Empryo sessions in
+chat too, with the same cards, and offers Fork and Make Coordinator on them.
 Scrolling up collapses the composer; returning to the bottom expands it.
 Settings > Chat > Keep chat box expanded while scrolling leaves the desktop
 chat box at full size instead (`sessionChatKeepComposerExpanded`, off by default).
@@ -1097,12 +1135,26 @@ agent's default alone. If the agent refuses a level, the picker shows its reason
 Until Ghostex has read the agent's model list, the pill shows the model with
 Change it in the CLI.
 
+In an Empryo chat the picker lists the models `empryo --list-models` shows for
+every provider Empryo has ready, grouped by provider and keyed `provider/model`
+(for example `subscriptions/gpt-6-luna`). Picking a model opens Empryo's own
+`/models` panel in the session and selects that model there, which also makes it
+Empryo's default model, as picking it in Empryo would. Picking a level types
+`/effort <level>`, which applies to that Empryo tab. Every model offers off, low,
+medium, high, xhigh and max; if the model takes fewer, the picker shows the
+levels Empryo offers for it. To start an Empryo session on a chosen model, pick
+it on Empryo's tab in a new chat, or run
+`ghostex create-agent empryo --project-id <id> --model <provider/model> --effort <level>`:
+that session starts on the model without changing Empryo's default, the level is
+set as soon as Empryo is up, and your first message waits until it is.
+
 On the phone, tapping the model pill opens the same picker as a sheet, without
 keyboard shortcuts. Tap a model to highlight it; its reasoning levels appear under
 it, and tapping one sets the level. Then tap Use in this session, or Save as
 default to also make it the agent's default for new sessions (agents other than
 Claude show a single Apply button, which saves the default; in a Hermes, Pi, or
-OMP chat it applies to this session only).
+OMP chat it applies to this session only; in an Empryo chat it saves the model as
+Empryo's default and sets the level for that tab).
 Tap the info icon on the highlighted model to read what it is for. The bottom
 buttons work as on the computer; long-press one (Claude only) to apply the change
 to this session alone. In a session that has started, the phone's picker shows
@@ -1377,6 +1429,16 @@ and update it with `npm install -g zcode-app-cli@latest`, as documented at
 [the ZCode installation docs](https://github.com/kingsword09/zcode-cli).
 Freebuff launches with `freebuff` and installs with `npm install -g freebuff`;
 sign in once in its terminal the first time it starts.
+Empryo launches with `empryo` (`em` works too) and installs with
+`curl -fsSL https://empryo.com/install.sh | bash`, which puts it in
+`~/.empryo/bin` (on Windows, `irm https://empryo.com/install.ps1 | iex` in
+PowerShell). Ghostex installs its hooks into Empryo's `hooks.json` (in `~/.empryo`,
+or `%LOCALAPPDATA%\Empryo` on Windows) and never touches Empryo's `config.json`,
+so an Empryo session shows working and idle and comes back after a restart with
+`empryo --session <id>`. On Windows without WSL, Empryo's chat, fork, picker and
+coordinator work, but its sidebar status does not follow its hooks yet. Empryo has
+no launch option to accept every approval, so Agent approvals does not apply to it;
+Empryo's own `/yolo` does that instead.
 Agent Hooks let gxserver watch agent status, questions, and
 completions for chat and notifications. Installing the Claude Code hooks also
 sets Claude Code's transcript retention (`cleanupPeriodDays`) so past
@@ -1512,7 +1574,7 @@ version of the Projects features in Cursor and Claude Code.
   arrow beside its agent button) and choose **New Coordinator…**, the first
   item of that menu. On the phone, open the same menu from the project's agent
   button and pick **New Coordinator…** at its top. Name it, pick
-  Claude, Codex or ZCode and its model (Opus 5.5 on Claude, GLM 5.3 Flash on
+  Claude, Codex, ZCode or Empryo and its model (Opus 5.5 on Claude, GLM 5.3 Flash on
   ZCode; without a choice each agent starts on its own default) and the effort
   the model takes — medium by default, which is plenty for routing work — and
   optionally give it a one-line goal and a first request;
@@ -1521,8 +1583,8 @@ version of the Projects features in Cursor and Claude Code.
   first message (Rename in the sidebar still changes it; left blank, it is
   named once from its first conversation). A project can have several
   coordinators, one per stream of work.
-- **Turn a session into a coordinator**: right-click a Claude, Codex or ZCode
-  session in the sidebar, open **Advanced** and choose **Make Coordinator**
+- **Turn a session into a coordinator**: right-click a Claude, Codex, ZCode or
+  Empryo session in the sidebar, open **Advanced** and choose **Make Coordinator**
   (optionally with a goal); on the phone it is in the session's menu too.
   The session keeps its conversation and is never restarted or interrupted:
   it gets the crown right away, and the coordinator playbook waits in its
@@ -1604,8 +1666,11 @@ version of the Projects features in Cursor and Claude Code.
   a status of every thread", "use a cheaper model for threads", "don't merge
   anything without asking" all work in plain words.
 
-Coordinators run on Claude, Codex or ZCode; threads can be any configured
-agent. From a terminal or another agent: `ghostex coordinator create --title <name>
+Coordinators run on Claude, Codex, ZCode or Empryo; threads can be any configured
+agent. An Empryo coordinator runs as the Empryo agent `ghostex-coordinator`: Ghostex
+keeps its playbook in `~/.empryo/agents/ghostex-coordinator.md` and switches the
+session to it with `/agent ghostex-coordinator` before anything else, so leave that
+file in place. From a terminal or another agent: `ghostex coordinator create --title <name>
 [--model <m>] [--effort <e>] [--goal <text>] [--task <first request>]`, `ghostex coordinator
 promote <session> [--goal <text>]` (make an existing session a coordinator), `ghostex coordinator status`,
 `ghostex coordinator options` (the agents, models and efforts a coordinator can use),

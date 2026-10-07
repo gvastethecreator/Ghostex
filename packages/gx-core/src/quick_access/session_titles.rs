@@ -73,6 +73,7 @@ const DEFAULT_SESSION_AGENT_TITLE_NAMES: &[&str] = &[
     "Mastra Code",
     "Devin",
     "Factory Droid",
+    "Empryo",
     "Freebuff",
     "Gemini",
     "Grok Build",
@@ -207,6 +208,8 @@ fn normalize_terminal_title(title: &str) -> Option<String> {
         .strip_prefix("Freebuff: ")
         .map(js_trim)
         .unwrap_or(sanitized);
+    // Empryo's `<tab> · working — Empryo (beta)` title (CDXC:SessionTitles in server/src/agents/terminal_title.rs).
+    let sanitized = strip_empryo_title_suffix(sanitized);
     if let Some(cursor) = normalize_cursor_title(sanitized) {
         return cursor;
     }
@@ -217,6 +220,53 @@ fn normalize_terminal_title(title: &str) -> Option<String> {
         return Some(pi);
     }
     (!sanitized.is_empty()).then(|| sanitized.to_string())
+}
+
+/// Same rule as gxserver's `strip_empryo_title_suffix`.
+fn strip_empryo_title_suffix(title: &str) -> &str {
+    const SUFFIX: &str = " \u{2014} empryo";
+    let trimmed = title.trim_end();
+    // Most titles are not Empryo's; skip the lower-casing for them.
+    if !trimmed
+        .as_bytes()
+        .windows("empryo".len())
+        .any(|window| window.eq_ignore_ascii_case(b"empryo"))
+    {
+        return title;
+    }
+    // Rows from before the built-in agent read ` — empryo`; ASCII folding keeps byte offsets.
+    let folded = trimmed.to_ascii_lowercase();
+    let body = if is_empryo_channel_tail(folded.strip_prefix("empryo")) {
+        ""
+    } else {
+        match folded.rfind(SUFFIX) {
+            Some(index) if is_empryo_channel_tail(Some(&folded[index + SUFFIX.len()..])) => {
+                &trimmed[..index]
+            }
+            _ => return title,
+        }
+    };
+    let body = body.trim_end();
+    let body = body
+        .strip_suffix(" \u{00b7} working")
+        .unwrap_or(body)
+        .trim_end();
+    if body.is_empty() {
+        "Empryo"
+    } else {
+        body
+    }
+}
+
+fn is_empryo_channel_tail(tail: Option<&str>) -> bool {
+    match tail {
+        Some("") => true,
+        Some(rest) => rest
+            .strip_prefix(" (")
+            .and_then(|inner| inner.strip_suffix(')'))
+            .is_some_and(|inner| !inner.is_empty() && !inner.contains(['(', ')'])),
+        None => false,
+    }
 }
 
 /// `/^(?:OC\s*\|\s*)+/iu`.

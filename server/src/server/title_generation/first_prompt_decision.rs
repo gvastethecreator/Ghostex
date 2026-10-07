@@ -145,6 +145,8 @@ pub(crate) fn agent_session_title_command(agent_name: Option<&str>, title: &str)
     match normalize_agent_name(agent_name).as_deref() {
         Some("pi") | Some("omp") => format!("/name {title}"),
         Some("hermes-agent") => format!("/title {title}"),
+        // Empryo has no `/rename`; `/tab rename <name>` names the tab and the session it saves.
+        Some("empryo") => format!("/tab rename {title}"),
         _ => format!("/rename {title}"),
     }
 }

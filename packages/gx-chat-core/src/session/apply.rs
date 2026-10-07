@@ -10,6 +10,7 @@ use crate::session::fold::{merge_draft_state, merge_options_detail};
 use crate::session::pagination::{page_has_more, PageBoundary};
 use crate::session::text::normalize_pending_text;
 use crate::state::ChatState;
+use crate::transcript::deferred_work::keep_held_work;
 
 /// The identity fields a read or a frame can carry.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -303,6 +304,15 @@ pub fn apply_authoritative(
                 .and_then(|at| state.messages.list.get(*at))
                 .is_some_and(|old| old.deferred_work.is_some());
         state.messages.note_arrival(message, carried);
+    }
+    let loaded = state.transcript_view.deferred.len();
+    keep_held_work(
+        &state.messages,
+        &next_messages,
+        &mut state.transcript_view.deferred,
+    );
+    if state.transcript_view.deferred.len() != loaded {
+        state.transcript_view.detail_revision += 1;
     }
     state.messages.replace_list(&next_messages);
     state.session.lifecycle = result.lifecycle.clone();

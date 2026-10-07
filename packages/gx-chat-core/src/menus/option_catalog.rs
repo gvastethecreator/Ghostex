@@ -320,7 +320,7 @@ enum CatalogOptions {
         agent: Box<CatalogAgent>,
         catalog: Box<AgentModelCatalog>,
     },
-    /// Pi and OMP: the lineup their own CLI lists, which gxserver sends with the session.
+    /// Pi, OMP and Empryo: the lineup their own CLI lists, which gxserver sends with the session.
     PiFamily {
         agent: Box<CatalogAgent>,
         catalog: Box<AgentModelCatalog>,
@@ -469,9 +469,9 @@ impl SessionOptionCatalog {
     /// `/effort low` on the way back from Haiku to Sonnet and overwrote the Medium the user had
     /// picked. Codex's picker needs an effort with every model, so it keeps the fallback.
     ///
-    /// Pi and OMP clamp their current level to the nearest one the new model supports, so a model
-    /// pick whose level the new model lacks sends none and lets the CLI clamp, instead of falling
-    /// to the model's lowest level (`off`).
+    /// Pi, OMP and Empryo clamp their current level to the nearest one the new model supports, so a
+    /// model pick whose level the new model lacks sends none and lets the CLI clamp, instead of
+    /// falling to the model's lowest level (`off`).
     pub fn agent_keeps_effort(&self) -> bool {
         matches!(
             self.options,
@@ -943,25 +943,12 @@ fn build_pi_family_catalog(
     }
 }
 
-/// Until gxserver has read the CLI's lineup, Pi's pills mirror the model and level its statusline
-/// reports and hand the change to the terminal.
-fn pi_catalog() -> SessionOptionCatalog {
+/// Until gxserver has read the CLI's lineup, Pi's, OMP's and Empryo's pills mirror the model and
+/// level their statusline reports and hand the change to the terminal.
+fn cli_lineup_handoff_catalog(icon: &str) -> SessionOptionCatalog {
     SessionOptionCatalog {
         model: handoff("model", "Model", OptionCategory::Model, None),
-        model_icon: "pi".to_string(),
-        options: CatalogOptions::Fixed(vec![handoff(
-            "effort",
-            "Reasoning effort",
-            OptionCategory::ThoughtLevel,
-            None,
-        )]),
-    }
-}
-
-fn omp_catalog() -> SessionOptionCatalog {
-    SessionOptionCatalog {
-        model: handoff("model", "Model", OptionCategory::Model, None),
-        model_icon: "omp".to_string(),
+        model_icon: icon.to_string(),
         options: CatalogOptions::Fixed(vec![handoff(
             "effort",
             "Reasoning effort",
@@ -1000,16 +987,13 @@ pub fn session_option_catalog(
                 None => hermes_catalog(),
             });
         }
-        "omp" => {
-            return Some(match catalog.agents.get("omp") {
-                Some(agent) => build_pi_family_catalog(catalog, agent, "omp"),
-                None => omp_catalog(),
-            });
-        }
-        "pi" => {
-            return Some(match catalog.agents.get("pi") {
-                Some(agent) => build_pi_family_catalog(catalog, agent, "pi"),
-                None => pi_catalog(),
+        // CDXC:AgentProviders 2026-10-06 DECISION:
+        // Sven (Empryo harness spec): "As a Ghostex user, I want to pick Empryo's model and effort in the chat, so that I switch lanes without typing slash commands", from "the models my Empryo actually has". Empryo's lineup is `empryo --list-models`, grouped by provider; a pick types Empryo's own `/models` and `/effort`.
+        // SEE-ALSO: server/src/session_chat_pi_models.rs reads the lineups, server/src/session_chat_empryo_picker.rs types an Empryo pick.
+        id @ ("pi" | "omp" | "empryo") => {
+            return Some(match catalog.agents.get(id) {
+                Some(agent) => build_pi_family_catalog(catalog, agent, id),
+                None => cli_lineup_handoff_catalog(id),
             });
         }
         _ => return None,

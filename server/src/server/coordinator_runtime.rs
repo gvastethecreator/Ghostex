@@ -11,8 +11,7 @@ use super::*;
 use crate::coordinators::{
     self, agent_message, classify_thread_session, clear_thread_pending_message, list_threads,
     record_thread_report, report_body, set_thread_observed_working, set_thread_resolved,
-    thread_prompt, MessageSender, SessionKey, ThreadProgress, ThreadRecord, ThreadReport,
-    ThreadState,
+    MessageSender, SessionKey, ThreadProgress, ThreadRecord, ThreadReport, ThreadState,
 };
 use crate::presentation::effective_lifecycle_state;
 use crate::session_chat_queue_runtime::SessionChatTranscriptGate;
@@ -49,6 +48,8 @@ struct SupervisorMemory {
     /// The `sendRequestId` of each report still waiting to reach its coordinator, by coordinator
     /// and report text, so a retried report is the same send to gxserver's send ledger.
     report_send_ids: HashMap<(SessionKey, String), String>,
+    /// Empryo coordinators: when their role was last checked, and how often it was typed again.
+    empryo_roles: HashMap<SessionKey, EmpryoRoleCheck>,
 }
 
 enum ReportKind {
@@ -205,17 +206,19 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
         return Vec::new();
     };
     let repository = DomainRepository::new(&db, state.metadata.server_id.as_str());
+    let Ok(threads) = list_threads(&db) else {
+        return Vec::new();
+    };
+    refresh_thread_screen_waits(state, &repository, &threads);
     for (project_id, session_id) in
         crate::coordinators::refresh_coordinator_panels(&db, &repository)
     {
         republish_coordinator_chat(state, &project_id, &session_id);
     }
-    let Ok(threads) = list_threads(&db) else {
-        return Vec::new();
-    };
     let Ok(mut memory) = memory.lock() else {
         return Vec::new();
     };
+    repair_empryo_coordinator_roles(state, &db, &repository, &mut memory);
     let open = threads
         .into_iter()
         .filter(|thread| !thread.is_resolved())
@@ -246,7 +249,7 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
     let mut names: Option<HashMap<String, String>> = None;
     let mut pending: std::collections::BTreeMap<SessionKey, Vec<PendingReport>> =
         std::collections::BTreeMap::new();
-    for thread in open {
+    for mut thread in open {
         let coordinator_key = thread.coordinator_key();
         let alive = *coordinator_alive
             .entry(coordinator_key.clone())
@@ -318,20 +321,9 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
             has_run: true,
         };
         let hook_state = classify_thread_session(Some(&session), as_run, &now_iso, false);
-        // A thread stuck on a screen that blocks input (folder trust, an expired login, a usage
-        // limit) never works and never asks through a hook, so it would never report. The chat's
-        // own cached notice says so without a new screen capture.
-        let blocking_notice = (hook_state != ThreadState::Working && lifecycle == "running")
-            .then(|| {
-                crate::session_chat_options::cached_session_chat_terminal_notice(
-                    state,
-                    &thread.project_id,
-                    &thread.session_id,
-                )
-            })
-            .flatten()
-            .filter(|notice| notice.blocks_input() && !notice.auto_trust);
-        let state_now = if blocking_notice.is_some() {
+        let state_now = if is_running_empryo(&session) {
+            empryo_thread_state(&db, &mut memory, &mut thread, &session, hook_state)
+        } else if hook_state == ThreadState::Waiting && coordinators::waits_on_screen(&session) {
             ThreadState::Waiting
         } else if hook_state != ThreadState::Working
             && hook_state != ThreadState::Sleeping
@@ -362,17 +354,8 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
             }
             ThreadState::Waiting => {
                 memory.not_working_since.remove(&key);
-                let prompt = match (&blocking_notice, thread_prompt(&session)) {
-                    (Some(notice), _) => Some((
-                        format!("notice:{}:{}", notice.kind, notice.title),
-                        match notice.detail.as_deref().map(str::trim).filter(|detail| !detail.is_empty()) {
-                            Some(detail) => format!("Its screen shows: {}\n\n{detail}\n\nSomeone has to answer it in that thread.", notice.title.trim()),
-                            None => format!("Its screen shows: {}\n\nSomeone has to answer it in that thread.", notice.title.trim()),
-                        },
-                    )),
-                    (None, Some(prompt)) => Some((format!("prompt:{}", prompt.key), prompt.summary)),
-                    (None, None) => None,
-                };
+                let prompt = coordinators::waiting_prompt(&session)
+                    .map(|prompt| (prompt.key, prompt.summary));
                 let (prompt_key, summary) = match prompt {
                     Some(prompt) => prompt,
                     None => (
@@ -444,6 +427,157 @@ fn tick(state: &AppState, memory: &Mutex<SupervisorMemory>) -> Vec<Delivery> {
         });
     }
     deliveries
+}
+
+#[derive(Default)]
+struct EmpryoRoleCheck {
+    checked_at: i64,
+    retyped: usize,
+}
+
+/// A running session whose agent is Empryo.
+fn is_running_empryo(session: &Value) -> bool {
+    effective_lifecycle_state(session) == "running"
+        && crate::session_chat_follower::session_chat_agent_for_session(session).as_deref()
+            == Some("empryo")
+}
+
+/// How often an Empryo coordinator's role is checked on its screen, and how often it is typed
+/// again before the supervisor gives up on that coordinator.
+const EMPRYO_ROLE_CHECK_EVERY_MS: i64 = 30_000;
+const EMPRYO_ROLE_RETYPES: usize = 3;
+
+/// CDXC:Coordinators 2026-10-07 WHY:
+/// Empryo 3.9.1-beta sets `/agent` on the window's current chat only: a first window draws its input box before its engine has restored the tab, and the restore (or another window joining the engine) writes the tab back without the agent, so a coordinator queued its `/agent ghostex-coordinator` line, saw it accepted, and still ran without its role (seen live 2026-10-07). The engine records the tab's profile in its session's `meta.json` (and logs `"agent":null` after every turn of a tab without one), which a narrow window's border cannot show (it shortens the `as ghostex-coordinator` segment to a glyph or drops it), so the role is read there, not off the border. An idle coordinator without it gets the line again, a few times at most, typed straight into its terminal: never through the chat queue, which piled duplicates behind a busy coordinator and drew a chat row for every one (seen live 2026-10-07).
+fn repair_empryo_coordinator_roles(
+    state: &AppState,
+    db: &rusqlite::Connection,
+    repository: &DomainRepository<'_>,
+    memory: &mut SupervisorMemory,
+) {
+    let Ok(coordinators) = coordinators::list_coordinators(db) else {
+        return;
+    };
+    let now = now_ms();
+    let keys: HashSet<SessionKey> = coordinators
+        .into_iter()
+        .map(|coordinator| (coordinator.project_id, coordinator.session_id))
+        .collect();
+    memory.empryo_roles.retain(|key, _| keys.contains(key));
+    let Some(command) = coordinators::coordinator_role_queued_command("empryo") else {
+        return;
+    };
+    for key in keys {
+        let check = memory.empryo_roles.entry(key.clone()).or_default();
+        if now - check.checked_at < EMPRYO_ROLE_CHECK_EVERY_MS {
+            continue;
+        }
+        check.checked_at = now;
+        let Some(session) = repository.get_session(&key.0, &key.1).ok().flatten() else {
+            continue;
+        };
+        if !is_running_empryo(&session) {
+            continue;
+        }
+        let Some(agent) = crate::session_chat_pi_models::empryo_session_log(repository, &session)
+            .and_then(|log| crate::session_chat_empryo_tabs::empryo_tab_agent(&log))
+        else {
+            continue;
+        };
+        if agent.as_deref() == Some(coordinators::EMPRYO_COORDINATOR_AGENT_NAME) {
+            check.retyped = 0;
+            continue;
+        }
+        if check.retyped >= EMPRYO_ROLE_RETYPES
+            || crate::session_chat_queue::session_has_pending_session_chat_queue(db, &key.0, &key.1)
+            || memory
+                .transcript_gates
+                .entry(key.clone())
+                .or_default()
+                .is_working(&session)
+        {
+            continue;
+        }
+        // The send clears the input box first, so a box holding the user's unsent text is left
+        // alone until it is empty; one holding only the role command (a send that typed it but
+        // was never submitted) is retyped. A capture without a cursor (wmx) cannot tell a tip
+        // from typed text, so there only that leftover command counts.
+        let idle = crate::zmx::read_zmx_session_history_capture_vt(repository, &key.0, &key.1)
+            .is_ok_and(|screen| {
+                crate::session_chat_composer::empryo_composer_busy(&screen.text) == Some(false)
+                    && crate::session_chat_composer::session_chat_composer_input(
+                        "empryo",
+                        &screen.text,
+                    )
+                    .is_some_and(|input| {
+                        (input.text_is_empty() && !input.text_unreadable())
+                            || input.text.trim() == command.trim()
+                    })
+            });
+        if !idle || coordinators::ensure_empryo_coordinator_agent_file(&state.paths).is_err() {
+            continue;
+        }
+        let steps = crate::session_chat_send::build_session_chat_message_steps(
+            Some("empryo"),
+            &command,
+            &[],
+            false,
+        );
+        if crate::session_chat_send::enqueue_session_write_sequence(
+            &session,
+            &key.0,
+            &key.1,
+            "coordinator-role",
+            steps,
+        )
+        .is_ok()
+        {
+            check.retyped += 1;
+        }
+    }
+}
+
+/// CDXC:Coordinators 2026-10-07 WHY:
+/// The coordinator supervisor counts an Empryo thread's turns (working, finished, final message) from its own tab's transcript instead of hooks, scoped to Empryo.
+/// Empryo 3.9.1-beta runs every window of a repository on one engine, which runs the hooks of all of them in the first window's process with that window's session id and no tab, so a thread whose window joined another's engine never reported a turn, and the first window's hooks spoke for its neighbours' turns too (seen live 2026-10-07).
+/// Its own tab's transcript (session_chat_empryo_mirror.rs) is exact: an open turn is work, and a turn that ended after the thread's last report is a finished turn to report; an older one was reported already.
+/// A question or approval panel on its screen reads as waiting even while its turn is open, since the turn that asked stays open until it is answered.
+fn empryo_thread_state(
+    db: &rusqlite::Connection,
+    memory: &mut SupervisorMemory,
+    thread: &mut ThreadRecord,
+    session: &Value,
+    hook_state: ThreadState,
+) -> ThreadState {
+    if hook_state == ThreadState::Waiting && coordinators::waits_on_screen(session) {
+        return ThreadState::Waiting;
+    }
+    let lifecycle = memory
+        .transcript_gates
+        .entry(thread.key())
+        .or_default()
+        .lifecycle(session);
+    let Some(lifecycle) = lifecycle else {
+        // No turn yet: its brief is still on its way in.
+        return ThreadState::Working;
+    };
+    if lifecycle.state == crate::session_chat::SessionChatTurnLifecycleState::Working {
+        return ThreadState::Working;
+    }
+    if hook_state == ThreadState::Waiting {
+        return ThreadState::Waiting;
+    }
+    let reported = thread.reported_at.as_deref().and_then(parse_iso_ms_opt);
+    let new_turn = match (lifecycle.timestamp, reported) {
+        (Some(ended), Some(reported)) => ended > reported,
+        (_, None) => true,
+        (None, Some(_)) => false,
+    };
+    if new_turn && !thread.observed_working {
+        let _ = set_thread_observed_working(db, &thread.project_id, &thread.session_id);
+        thread.observed_working = true;
+    }
+    ThreadState::Finished
 }
 
 async fn deliver(state: Arc<AppState>, memory: Arc<Mutex<SupervisorMemory>>, delivery: Delivery) {
@@ -819,6 +953,59 @@ fn republish_coordinator_chat(state: &AppState, project_id: &str, session_id: &s
     );
 }
 
+/// Records what the chat's cached screen reading of every running open thread waits on, for
+/// every surface that classifies threads (see `ThreadScreenWait`).
+///
+/// CDXC:Coordinators 2026-10-06 WHY:
+/// The screen reading is refreshed only while something follows the session (a viewer, a send, a chat read), so an Empryo thread nobody watched showed its approval panel for over a minute while its coordinator still saw it working (live check, card agent-bo-95422941). For a working thread whose agent asks only on its screen (Empryo, Cursor, Freebuff), the tick refreshes that reading through the detector's own cache lifetime, at most one capture per thread every few seconds; every other thread is read from the cache alone, as before.
+fn refresh_thread_screen_waits(
+    state: &AppState,
+    repository: &DomainRepository<'_>,
+    threads: &[ThreadRecord],
+) {
+    let generated_at = crate::presentation::now_iso();
+    let detector = crate::session_chat_options::SessionChatOptionDetector::new(state);
+    let waits = threads
+        .iter()
+        .filter(|thread| !thread.is_resolved())
+        .filter(|thread| {
+            let Some(session) = repository
+                .get_session(&thread.project_id, &thread.session_id)
+                .ok()
+                .flatten()
+                .filter(|session| effective_lifecycle_state(session) == "running")
+            else {
+                return false;
+            };
+            let agent = crate::session_chat_composer::session_chat_composer_agent_id(&session);
+            if crate::session_chat_options::session_chat_questions_only_on_screen(agent.as_deref())
+                && crate::presentation::presentation_activity(&session, &generated_at) == "working"
+            {
+                detector.detect_blocking(
+                    &thread.project_id,
+                    &thread.session_id,
+                    agent.as_deref(),
+                    false,
+                );
+            }
+            true
+        })
+        .filter_map(|thread| {
+            let screen = crate::session_chat_options::cached_session_chat_screen_state(
+                state,
+                &thread.project_id,
+                &thread.session_id,
+            );
+            coordinators::ThreadScreenWait::from_screen(
+                screen.notice.as_ref(),
+                screen.prompt.as_ref(),
+            )
+            .map(|wait| (thread.key(), wait))
+        })
+        .collect();
+    coordinators::replace_thread_screen_waits(waits);
+}
+
 /// `/api/createAgentSession` with a `coordinator` object: points the launch at the role file.
 pub(crate) fn prepare_coordinator_create_params(
     state: &AppState,
@@ -839,6 +1026,53 @@ pub(crate) fn prepare_coordinator_create_params(
         Value::String(role_file.to_string_lossy().to_string()),
     );
     Ok(params)
+}
+
+/// Queues a message in a session's chat queue and tells its viewers.
+fn queue_session_chat_prompt(
+    state: &AppState,
+    project_id: &str,
+    session_id: &str,
+    text: &str,
+    startup_send: bool,
+) -> std::result::Result<(), DomainStateError> {
+    let mut queue_params = Map::new();
+    queue_params.insert("projectId".to_string(), json!(project_id));
+    queue_params.insert("sessionId".to_string(), json!(session_id));
+    queue_params.insert("text".to_string(), json!(text));
+    queue_params.insert("startupSend".to_string(), json!(startup_send));
+    let result = crate::session_chat_queue::handle_session_chat_queue_endpoint(
+        &state.paths,
+        state.metadata.server_id.as_str(),
+        "/api/queueSessionChatPrompt",
+        &queue_params,
+    )?;
+    if result.broadcast {
+        crate::session_chat_queue_runtime::broadcast_session_chat_queue_state(
+            state, project_id, session_id,
+        );
+    }
+    Ok(())
+}
+
+/// Hands a coordinator whose role arrives as a queued line (Empryo's `/agent`, see
+/// `coordinator_role_queued_command`) its role: writes the profile the line names, then queues
+/// it. A new coordinator's line waits for the input box like a first message; a promoted one's
+/// waits for the running turn to end.
+pub(crate) fn queue_coordinator_role_command(
+    state: &AppState,
+    project_id: &str,
+    session_id: &str,
+    command: &str,
+    startup_send: bool,
+) -> std::result::Result<(), DomainStateError> {
+    coordinators::ensure_empryo_coordinator_agent_file(&state.paths).map_err(|error| {
+        DomainStateError {
+            code: "internalError",
+            message: format!("Could not write the Empryo coordinator profile: {error}"),
+        }
+    })?;
+    queue_session_chat_prompt(state, project_id, session_id, command, startup_send)
 }
 
 /// `/api/promoteCoordinator`: makes an existing session a coordinator, then queues its playbook
@@ -864,26 +1098,24 @@ pub(crate) fn promote_coordinator(
     )?;
     let (project_id, session_id) = &promotion.key;
     schedule_presentation_session_delta(state, db, repository, project_id, session_id)?;
-    let mut queue_params = Map::new();
-    queue_params.insert("projectId".to_string(), json!(project_id));
-    queue_params.insert("sessionId".to_string(), json!(session_id));
-    queue_params.insert("text".to_string(), json!(promotion.playbook_message));
-    let playbook_error = match crate::session_chat_queue::handle_session_chat_queue_endpoint(
-        &state.paths,
-        state.metadata.server_id.as_str(),
-        "/api/queueSessionChatPrompt",
-        &queue_params,
-    ) {
-        Ok(result) => {
-            if result.broadcast {
-                crate::session_chat_queue_runtime::broadcast_session_chat_queue_state(
-                    state, project_id, session_id,
-                );
-            }
-            None
-        }
-        Err(error) => Some(error.message),
-    };
+    // The coordinator record is committed, so a failure from here on is reported, not raised.
+    let playbook_error = promotion
+        .role_command
+        .as_deref()
+        .map_or(Ok(()), |command| {
+            queue_coordinator_role_command(state, project_id, session_id, command, false)
+        })
+        .and_then(|()| {
+            queue_session_chat_prompt(
+                state,
+                project_id,
+                session_id,
+                &promotion.playbook_message,
+                false,
+            )
+        })
+        .err()
+        .map(|error| error.message);
     Ok(json!({
         "ok": true,
         "globalRef": crate::ids::create_global_session_ref(state.metadata.server_id.as_str(), project_id, session_id),

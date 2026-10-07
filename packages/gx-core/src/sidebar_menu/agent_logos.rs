@@ -63,6 +63,11 @@ const LOGOS: &[(&str, &str, &str)] = &[
         include_str!("../../../core-ui/assets/devin.svg"),
     ),
     (
+        "empryo",
+        "#1fa31d",
+        include_str!("../../../core-ui/assets/empryo.svg"),
+    ),
+    (
         "factory-droid",
         "#ff7a1a",
         include_str!("../../../core-ui/assets/factory-droid.svg"),
@@ -147,7 +152,7 @@ pub fn agent_logo_icons() -> Vec<&'static str> {
 /// `COLORED_AGENT_LOGOS[icon]`: the brand-coloured artwork as a data URL, or `None` for an icon
 /// key with no artwork.
 ///
-/// The twenty-four URLs are built once. A host draws them for every row of every project on every
+/// The URLs are built once. A host draws them for every row of every project on every
 /// install, and percent-encoding a kilobyte of SVG that many times is work with one answer.
 pub fn colored_agent_logo(icon: &str) -> Option<&'static str> {
     static BUILT: std::sync::OnceLock<Vec<(&'static str, String)>> = std::sync::OnceLock::new();

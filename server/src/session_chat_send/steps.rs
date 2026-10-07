@@ -64,10 +64,22 @@ pub enum SessionChatSendStep {
     AlignQuestionRow(crate::session_chat_question_row_align::QuestionRowTarget),
     /// See CDXC:SessionChat in session_chat_claude_question_prep.rs.
     PrepareClaudeQuestion(crate::session_chat_claude_question_prep::ClaudeQuestionPrep),
-    /// Read Codex's or Claude Code's input box after the Return; see session_chat_send_submit.rs.
+    /// Make Empryo's window show this session's own tab, or stop the job (session_chat_empryo_tabs.rs).
+    SelectEmpryoTab {
+        wait_ms: u64,
+    },
+    /// Read the text in Empryo's input box, without touching it, into the job's draft sink.
+    ReadEmpryoDraft,
+    /// Stop the job when Empryo's input box holds text other than `replacement`.
+    GuardEmpryoDraft {
+        replacement: String,
+    },
+    /// Read the agent's input box after the submit key; see session_chat_send_submit.rs.
     VerifySubmitted {
         agent: String,
         text: String,
+        /// The submit key the send wrote, pressed again when the box still holds the message.
+        submit: String,
     },
     /// Close a positively identified Claude Code panel whose Escape is safe (Settings, or
     /// an offer listed in session_chat_claude_popups.rs), or Codex's side conversation with
@@ -241,6 +253,7 @@ pub fn build_session_chat_message_steps(
     image_paths: &[String],
     dismiss_claude_panel: bool,
 ) -> Vec<SessionChatSendStep> {
+    let empryo = crate::agents::identity::normalize_agent_id(agent).as_deref() == Some("empryo");
     let mut steps = Vec::new();
     if dismiss_claude_panel {
         steps.push(SessionChatSendStep::DismissClaudePanel {
@@ -253,6 +266,11 @@ pub fn build_session_chat_message_steps(
         settle_ms: SESSION_CHAT_COMPOSER_WAIT_SETTLE_MS,
         timeout_ms: SESSION_CHAT_COMPOSER_WAIT_TIMEOUT_MS,
     });
+    if empryo {
+        steps.push(SessionChatSendStep::SelectEmpryoTab {
+            wait_ms: crate::session_chat_empryo_tabs::EMPRYO_SEND_TAB_WAIT_MS,
+        });
+    }
     steps.extend(build_session_chat_clear_input_steps(agent, text));
     for path in image_paths {
         steps.push(SessionChatSendStep::Write(
@@ -265,9 +283,11 @@ pub fn build_session_chat_message_steps(
                 SESSION_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
             ));
         }
-        steps.push(SessionChatSendStep::Write(build_session_chat_paste_bytes(
-            text,
-        )));
+        steps.push(SessionChatSendStep::Write(if empryo {
+            build_empryo_input_bytes(text)
+        } else {
+            build_session_chat_paste_bytes(text)
+        }));
     }
     let mut verify = session_chat_verify_step(text);
     if crate::session_chat_options::is_session_chat_option_command_text(agent, text) {
@@ -284,7 +304,17 @@ pub fn build_session_chat_message_steps(
             // message.
             .unwrap_or(SessionChatSendStep::SleepMs(SESSION_CHAT_SUBMIT_DELAY_MS)),
     );
-    steps.push(SessionChatSendStep::Write(SESSION_CHAT_SUBMIT.to_string()));
+    /*
+    CDXC:SessionChat 2026-10-07 WHY:
+    Every Empryo message is submitted with Alt+Q and every slash command with Enter (the Empryo build coordinator's call; Sven delegated it to the cleanest Empryo experience). This supersedes 2026-10-06's "Enter when idle, Alt+Q when busy": Empryo 3.9.1-beta no longer marks a running turn on its prompt glyph, and its own submit sends an Alt+Q message at once while idle, queues it as its own turn while one runs (Enter would steer that turn), and skips the "Enter again" gate of a repo map still building; slash commands run directly either way, and Enter keeps them clear of the queue. Multi-line text is typed with Shift+Enter between lines rather than pasted (CDXC:SessionChat 2026-10-06 in input_bytes.rs).
+    */
+    // Empryo's own slash check: a trimmed `/` start runs as a command with either key.
+    let submit = if empryo && !text.trim().starts_with('/') {
+        SESSION_CHAT_EMPRYO_SUBMIT
+    } else {
+        SESSION_CHAT_SUBMIT
+    };
+    steps.push(SessionChatSendStep::Write(submit.to_string()));
     if let Some(agent) = crate::agents::identity::normalize_agent_id(agent)
         .filter(|agent| crate::session_chat_send_submit::verifies_submission(agent))
         .filter(|_| !text.trim().is_empty())
@@ -292,6 +322,7 @@ pub fn build_session_chat_message_steps(
         steps.push(SessionChatSendStep::VerifySubmitted {
             agent,
             text: text.to_string(),
+            submit: submit.to_string(),
         });
     }
     steps

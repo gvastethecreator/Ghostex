@@ -575,6 +575,8 @@ fn read_session_chat_transcript_selection(
             SessionChatOptionAgent::Hermes => return None,
             SessionChatOptionAgent::Omp => return None,
             SessionChatOptionAgent::Pi => return None,
+            // Empryo's model rides its tab state, which the stored reading takes from meta.json.
+            SessionChatOptionAgent::Empryo => return None,
             // ZCode's statusline names no catalog values chat needs.
             SessionChatOptionAgent::Zcode => return None,
         })?;
@@ -679,7 +681,7 @@ pub(super) fn merge_session_chat_option_selections(
         if let Some(long) = claude_long_context_twin(&model.value, statusline_model.as_deref()) {
             model.value = long;
         }
-        // Pi and OMP footers name a model by id or name; the picker keys it `provider/id`.
+        // Pi, OMP and Empryo footers name a model by id or name; the picker keys it `provider/id`.
         if let Some(value) = merged.model_catalog.as_ref().and_then(|catalog| {
             crate::session_chat_pi_models::pi_family_catalog_value(
                 catalog,
@@ -764,7 +766,11 @@ pub(super) fn read_session_chat_stored_selections(
                 repository, project_id, session_id,
             )
         }
-        Some(agent @ (SessionChatOptionAgent::Pi | SessionChatOptionAgent::Omp)) => {
+        Some(
+            agent @ (SessionChatOptionAgent::Pi
+            | SessionChatOptionAgent::Omp
+            | SessionChatOptionAgent::Empryo),
+        ) => {
             crate::session_chat_pi_models::read_pi_family_selection(
                 repository, project_id, session_id, agent,
             )

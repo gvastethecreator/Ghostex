@@ -210,34 +210,7 @@ pub(super) fn accept_all_mode_options() -> Vec<SettingOption> {
 
 /// `resolveSessionChatTranscriptAgent(agentId, icon) !== null` (`agentSupportsChatView`).
 pub(super) fn supports_chat_view(agent_id: &str, icon: Option<&str>) -> bool {
-    [Some(agent_id), icon]
-        .into_iter()
-        .flatten()
-        .any(|candidate| {
-            matches!(
-                candidate.trim().to_lowercase().as_str(),
-                "antigravity"
-                    | "antigravity-cli"
-                    | "antigravity cli"
-                    | "agy"
-                    | "claude"
-                    | "openclaude"
-                    | "codex"
-                    | "cursor"
-                    | "cursor-agent"
-                    | "cursor cli"
-                    | "grok"
-                    | "grok-build"
-                    | "hermes"
-                    | "hermes-agent"
-                    | "hermes agent"
-                    | "pi"
-                    | "omp"
-                    | "zcode"
-                    | "zcode-cli"
-                    | "freebuff"
-            )
-        })
+    ghostex_gx_chat_core::extras::agents::transcript_agent([Some(agent_id), icon]).is_some()
 }
 
 /// `getPreferredAgentInterfaceOverrideOptions(global)`: Inherit (the global choice's label), then
@@ -301,6 +274,7 @@ fn preview_command(agent: &str, command: Option<&str>) -> String {
         "grok" => "grok",
         "pi" => "pi",
         "antigravity" => "agy",
+        "empryo" => "empryo",
         _ => "<custom command>",
     }
     .to_string()
@@ -397,6 +371,12 @@ pub(super) fn title_generation_preview(agent: &str, command: Option<&str>) -> St
         ),
         "antigravity" => format!(
             "{command} -p '{prompt}' --output-format text --effort low --disable-slash-commands"
+        ),
+        "empryo" => here_doc(
+            &format!(
+                "{command} --headless --quiet --no-genome --marionette-mode none --max-steps 1"
+            ),
+            &prompt,
         ),
         _ => here_doc(&command, &prompt),
     }

@@ -21,6 +21,7 @@ pub(crate) fn transcript_agent(
             "claude" | "openclaude" => Some("claude"),
             "codex" => Some("codex"),
             "cursor" | "cursor-agent" | "cursor cli" => Some("cursor"),
+            "empryo" => Some("empryo"),
             "grok" | "grok-build" => Some("grok"),
             "hermes" | "hermes-agent" | "hermes agent" => Some("hermes"),
             "pi" | "omp" => Some("pi"),

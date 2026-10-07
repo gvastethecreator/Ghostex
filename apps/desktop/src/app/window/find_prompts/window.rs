@@ -14,9 +14,9 @@
 //! the React surface took every key on its scope first (`^k`, `^u`, `^Backspace`, Tab, Enter,
 //! the arrows) and a text field binding would otherwise consume several of them.
 use super::model::{
-    FIND_PROMPT_AGENTS, FIND_PROMPTS_PAGE_SIZE, FindAction, FindMode, FindRow, ProjectFacet,
-    SearchPage, ViewRow, build_view_rows, delete_word_backward, delete_word_forward,
-    parse_search_page, resolve_find_action,
+    FIND_PROMPT_AGENTS, FIND_PROMPT_FORK_AGENT_COUNT, FIND_PROMPTS_PAGE_SIZE, FindAction, FindMode,
+    FindRow, ProjectFacet, SearchPage, ViewRow, build_view_rows, delete_word_backward,
+    delete_word_forward, parse_search_page, resolve_find_action,
 };
 use super::palette::FindPalette;
 use crate::app::gx_store::gx_rpc;
@@ -94,7 +94,7 @@ pub(crate) struct GpuiFindPromptsModalWindow {
     query: String,
     debounced_query: String,
     query_generation: u64,
-    pub(super) agents: [bool; 6],
+    pub(super) agents: [bool; FIND_PROMPT_AGENTS.len()],
     pub(super) project: Option<String>,
     pub(super) group_by_day: bool,
     pub(super) rows: Vec<FindRow>,
@@ -102,7 +102,7 @@ pub(crate) struct GpuiFindPromptsModalWindow {
     pub(super) matched: usize,
     pub(super) total: usize,
     pub(super) project_facets: Vec<ProjectFacet>,
-    pub(super) agent_colors: [Option<Rgba>; 6],
+    pub(super) agent_colors: [Option<Rgba>; FIND_PROMPT_AGENTS.len()],
     /// Absolute position of the selected row inside the matched list.
     pub(super) selection: usize,
     /// Full text of the selected prompt once fetched; the row text until then.
@@ -253,7 +253,7 @@ impl GpuiFindPromptsModalWindow {
             query: String::new(),
             debounced_query: String::new(),
             query_generation: 0,
-            agents: [false; 6],
+            agents: [false; FIND_PROMPT_AGENTS.len()],
             project: None,
             group_by_day: true,
             rows: Vec::new(),
@@ -261,7 +261,7 @@ impl GpuiFindPromptsModalWindow {
             matched: 0,
             total: 0,
             project_facets: Vec::new(),
-            agent_colors: [None; 6],
+            agent_colors: [None; FIND_PROMPT_AGENTS.len()],
             selection: 0,
             selected_text: None,
             selected_text_key: None,
@@ -403,9 +403,18 @@ impl GpuiFindPromptsModalWindow {
                 if let Some(colors) = page.agent_colors {
                     self.agent_colors = colors;
                 }
-                self.notice = page.opencode_error.map(|detail| FindNotice {
+                self.notice = match (page.opencode_error, page.empryo_error) {
+                    (None, None) => None,
+                    (Some(detail), None) => Some(("opencode history could not be read.", detail)),
+                    (None, Some(detail)) => Some(("Empryo history could not be read.", detail)),
+                    (Some(opencode), Some(empryo)) => Some((
+                        "opencode and Empryo history could not be read.",
+                        format!("{opencode}\n{empryo}"),
+                    )),
+                }
+                .map(|(message, detail)| FindNotice {
                     kind: FindNoticeKind::Info,
-                    message: SharedString::new_static("opencode history could not be read."),
+                    message: SharedString::new_static(message),
                     detail: Some(detail.into()),
                 });
                 self.rebuild_view_rows();
@@ -640,7 +649,7 @@ impl GpuiFindPromptsModalWindow {
         };
         self.fork_open = false;
         cx.notify();
-        if let Some(agent) = FIND_PROMPT_AGENTS.get(agent) {
+        if let Some(agent) = FIND_PROMPT_AGENTS[..FIND_PROMPT_FORK_AGENT_COUNT].get(agent) {
             self.launch(key, Some(agent), cx);
         }
     }
@@ -742,7 +751,7 @@ impl GpuiFindPromptsModalWindow {
 
     pub(super) fn clear_agents(&mut self, cx: &mut Context<Self>) {
         if self.agents.iter().any(|on| *on) {
-            self.agents = [false; 6];
+            self.agents = [false; FIND_PROMPT_AGENTS.len()];
             self.filter_changed(cx);
         }
     }

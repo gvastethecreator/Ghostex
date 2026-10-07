@@ -56,17 +56,45 @@ pub(crate) fn fork_session(
             .is_none()
     {
         return Err(DomainStateError::bad_request(
-            "Fork is only available for Codex, Claude, and Pi sessions with a restorable identity.",
+            "Fork is only available for Codex, Claude, Pi, and Empryo sessions with a restorable identity.",
         )
         .into());
     }
-    let fork_params = create_agent_fork_session_params(&project, &source_session, &plan);
-    let created_session = repository.create_session(
+    let mut fork_params = create_agent_fork_session_params(&project, &source_session, &plan);
+    let empryo_fork = plan
+        .get("empryoForkSessionId")
+        .and_then(Value::as_str)
+        .map(|fork_id| {
+            super::fork_empryo::fork_empryo_session_folder(&project, &source_session, fork_id)
+                .map(|folder| (fork_id.to_string(), folder))
+        })
+        .transpose()?;
+    // CDXC:SessionFork 2026-10-07 WHY: the chat finds an Empryo log by the row's `agentSessionPath`, which otherwise arrives only with Empryo's first hook, and an Empryo hook reports nothing on native Windows (seen live 2026-10-07: a fork's chat stayed empty while its terminal showed the copied conversation). The fork wrote that folder itself, so its row records the id and log at once, as a create's seeded session does.
+    if let (Some((fork_id, folder)), Some(runtime)) = (
+        empryo_fork.as_ref(),
         fork_params
-            .as_object()
-            .ok_or_else(|| DomainStateError::corrupt_state("Fork params must be an object."))?,
-        false,
-    )?;
+            .get_mut("runtimeSettings")
+            .and_then(Value::as_object_mut),
+    ) {
+        runtime.insert("agentSessionId".to_string(), json!(fork_id));
+        runtime.insert(
+            "agentSessionPath".to_string(),
+            json!(folder.session_log().to_string_lossy()),
+        );
+    }
+    let fork_params = fork_params
+        .as_object()
+        .ok_or_else(|| DomainStateError::corrupt_state("Fork params must be an object."))?;
+    let empryo_fork = empryo_fork.map(|(_, folder)| folder);
+    let created_session = match repository.create_session(fork_params, false) {
+        Ok(session) => session,
+        Err(error) => {
+            if let Some(folder) = empryo_fork {
+                folder.discard();
+            }
+            return Err(error.into());
+        }
+    };
     let project_id = read_text_value(&created_session, "projectId")
         .ok_or_else(|| DomainStateError::corrupt_state("Forked session is missing projectId."))?;
     let session_id = read_text_value(&created_session, "sessionId")
@@ -112,6 +140,7 @@ pub(crate) fn build_agent_fork_plan(
         .and_then(Value::as_str)
         .map(str::to_string);
     let trusted_title = trusted_resume_title(session);
+    let mut empryo_fork_id = None;
     let primary_command = match (agent_id, runtime_command) {
         (Some("codex"), Some(command)) => exact_reference
             .as_deref()
@@ -128,6 +157,14 @@ pub(crate) fn build_agent_fork_plan(
         (Some("pi"), Some(command)) => exact_reference
             .or(trusted_title)
             .map(|reference| format!("{command} --fork {}", quote_shell_double_arg(&reference))),
+        // Empryo has no fork flag: `fork_session` copies the conversation to this id first
+        // (`fork_empryo.rs`), and the fork resumes the copy.
+        (Some("empryo"), Some(command)) => exact_reference.map(|_| {
+            let fork_id = uuid::Uuid::new_v4().to_string();
+            let invocation = format!("{command} --session {}", quote_shell_double_arg(&fork_id));
+            empryo_fork_id = Some(fork_id);
+            invocation
+        }),
         _ => None,
     };
     let mut plan = Map::new();
@@ -141,6 +178,7 @@ pub(crate) fn build_agent_fork_plan(
             .map(str::to_string),
     );
     insert_optional_string(&mut plan, "displayCommand", primary_command.clone());
+    insert_optional_string(&mut plan, "empryoForkSessionId", empryo_fork_id);
     insert_optional_string(&mut plan, "primaryCommand", primary_command.clone());
     insert_optional_string(
         &mut plan,
@@ -181,6 +219,11 @@ pub(crate) fn provisional_fork_title(session: &Value) -> Option<String> {
     read_text_value(session, "title").filter(|title| title.starts_with("Fork: "))
 }
 
+/// `Fork: <name>`, the name a fork starts with (CDXC:SessionFork 2026-09-11 above).
+pub(crate) fn fork_title(name: &str) -> String {
+    format!("Fork: {name}")
+}
+
 pub(crate) fn create_agent_fork_session_params(
     project: &Value,
     source_session: &Value,
@@ -206,7 +249,7 @@ pub(crate) fn create_agent_fork_session_params(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .unwrap_or("Terminal Session");
-    let title = format!("Fork: {source_title}");
+    let title = fork_title(source_title);
     let cwd = read_text_value(source_session, "cwd").or_else(|| read_text_value(project, "path"));
     let mut launch_plan = Map::new();
     insert_optional_string(
@@ -270,7 +313,8 @@ pub(crate) fn create_agent_fork_session_params(
             "autoTitleFromFirstPrompt": false,
             "forkFirstPromptAutoTitlePending": true,
             "forkedFromSessionId": source_session_id,
-            "gxserverForkInitialRenameStatus": "pending",
+            // Empryo's copy already carries the fork's name (`fork_empryo.rs`).
+            "gxserverForkInitialRenameStatus": if agent_id == "empryo" { "applied" } else { "pending" },
             "startupText": startup_text,
             "titleSource": "placeholder",
         }),

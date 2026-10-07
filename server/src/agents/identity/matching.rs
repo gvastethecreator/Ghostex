@@ -106,6 +106,7 @@ pub(crate) fn parse_agent_resume_identity(text: Option<&str>) -> ResolvedIdentit
         ("pi", "pi"),
         ("kiro", "kiro-cli"),
         ("omp", "omp"),
+        ("empryo", "empryo"),
     ] {
         let lower = text.to_ascii_lowercase();
         if !lower.contains(needle) {

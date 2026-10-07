@@ -98,16 +98,8 @@ pub(crate) fn session_identity_environment_keys() -> Vec<&'static str> {
 
 /*
 CDXC:SessionIdentity 2026-09-20 WHY:
-gxserver is usually started from inside an agent CLI session (`ghostex start`
-run by Claude Code, for example), so its environment carries that CLI's
-per-session markers. Every zmx/wmx provider we spawned inherited them, and the
-agent launched in the new session then believed it was a nested child of the
-session that had started the daemon: Claude Code reads CLAUDE_CODE_CHILD_SESSION
-and turns transcript persistence off for the whole session. Strip the agent side
-of the session identity exactly like we strip our own, so a Ghostex session
-always starts as a top-level agent run. Only per-session markers belong here;
-durable configuration such as CLAUDE_CODE_OAUTH_TOKEN or CLAUDE_CODE_USE_BEDROCK
-must keep flowing through.
+gxserver is usually started from inside an agent CLI session (`ghostex start` run by Claude Code, for example), so its environment carries that CLI's per-session markers. Every zmx/wmx provider we spawned inherited them, and the agent launched in the new session then believed it was a nested child of the session that had started the daemon: Claude Code reads CLAUDE_CODE_CHILD_SESSION and turns transcript persistence off for the whole session. Strip the agent side of the session identity exactly like we strip our own, so a Ghostex session always starts as a top-level agent run. Only per-session markers belong here; durable configuration such as CLAUDE_CODE_OAUTH_TOKEN or CLAUDE_CODE_USE_BEDROCK must keep flowing through.
+Empryo's EMPRYO_PROJECT_DIR is one of those markers (2026-10-07): the notify hook drops every Claude and Codex event that sees it, so a gxserver started with it set would have silenced the hooks of every Claude and Codex session. EMPRYO_HOME is configuration and stays.
 */
 pub(crate) fn agent_cli_session_identity_environment_keys() -> Vec<&'static str> {
     vec![
@@ -123,6 +115,7 @@ pub(crate) fn agent_cli_session_identity_environment_keys() -> Vec<&'static str>
         "CLAUDE_CODE_SSE_PORT",
         "CLAUDE_EFFORT",
         "CLAUDE_PID",
+        "EMPRYO_PROJECT_DIR",
     ]
 }
 

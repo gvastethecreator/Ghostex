@@ -565,7 +565,7 @@ fn full_menu(
             row.agent_icon
                 .as_deref()
                 .or(row.menu_facts.agent_name.as_deref()),
-            Some("claude" | "codex" | "zcode")
+            Some("claude" | "codex" | "zcode" | "empryo")
         )
     {
         advanced.push(MenuItem::row(

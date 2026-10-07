@@ -36,6 +36,10 @@ pub fn picker_agent(provider: ModelPickerProvider) -> PickerAgent {
             name: "OMP",
             icon: "omp",
         },
+        ModelPickerProvider::Empryo => PickerAgent {
+            name: "Empryo",
+            icon: "empryo",
+        },
         ModelPickerProvider::Codex => PickerAgent {
             name: "Codex",
             icon: "codex",

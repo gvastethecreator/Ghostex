@@ -88,7 +88,7 @@ impl<'a> Tui<'a> {
                     }
                     match c {
                         13 | b' ' => self.toggle_filter_selection(),
-                        b'1'..=b'6' => {
+                        b'1'..=b'7' => {
                             self.filter_sel = (c - b'1') as usize;
                             self.toggle_filter_selection();
                         }

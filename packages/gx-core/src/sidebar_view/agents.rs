@@ -31,6 +31,7 @@ const AGENTS: &[(&str, &str, &str)] = &[
     ("mastra", "mastra", "Mastra Code"),
     ("zcode", "zcode", "ZCode"),
     ("freebuff", "freebuff", "Freebuff"),
+    ("empryo", "empryo", "Empryo"),
 ];
 
 /// `getDefaultSidebarAgentById(agentId)?.agentId`: the built-in agent with this id, trimmed and
@@ -61,6 +62,7 @@ fn secondary_labels(icon: &str) -> &'static [&'static str] {
         "copilot" => &["copilot", "github copilot"],
         "mastra" => &["mastra", "mastra code", "mastracode"],
         "devin" => &["devin"],
+        "empryo" => &["empryo", "em"],
         "factory-droid" => &["droid", "factory droid"],
         "freebuff" => &["freebuff"],
         "gemini" => &["gemini"],

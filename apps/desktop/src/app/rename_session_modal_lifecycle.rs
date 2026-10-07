@@ -15,7 +15,7 @@ pub(crate) fn gpui_rename_session_modal_prefs_path() -> PathBuf {
 fn gpui_session_agent_icon_supports_history_title_generation(icon: Option<&str>) -> bool {
     matches!(
         icon,
-        Some("claude" | "codex" | "cursor-cli" | "antigravity-cli")
+        Some("claude" | "codex" | "cursor-cli" | "antigravity-cli" | "empryo")
     )
 }
 

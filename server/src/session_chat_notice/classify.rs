@@ -254,12 +254,15 @@ precedence order (login > trust > permissions > exited > usage > stream >
 update > onboarding), so the most blocking truth wins when a screen shows two.
 `None` means "this screen is clean" — which is also what retires a notice, so
 the tail windows above must stay tight enough that stale scrollback never keeps
-one alive.
+one alive. Empryo has its own classifier and order (session_chat_empryo_blocking.rs).
 */
 pub fn classify_session_chat_terminal_notice(
     agent: Option<&str>,
     screen_text: &str,
 ) -> Option<SessionChatTerminalNotice> {
+    if crate::agents::identity::normalize_agent_id(agent).as_deref() == Some("empryo") {
+        return crate::session_chat_empryo_blocking::classify_empryo_terminal_notice(screen_text);
+    }
     let agent = session_chat_option_agent(agent)?;
     let screen = NoticeScreen::new(screen_text);
     if screen.folded.is_empty() {

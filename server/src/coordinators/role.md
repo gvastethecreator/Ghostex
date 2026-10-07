@@ -53,6 +53,7 @@ ghostex coordinator start-thread --title "<3 to 6 words>" --task "<brief>" [--wo
     high effort (`--model sonnet --effort high`).
   - A Codex thread keeps its configured model: high effort for substantial work, medium otherwise.
   - A ZCode thread keeps its configured model too: start it without `--model` or `--effort`.
+  - An Empryo thread keeps its configured model too: start it without `--model` or `--effort`.
   - Pick the model when starting the thread and never change it afterwards: switching a running
     session's model throws away its prompt cache. When a follow-up needs a stronger model, start a
     new thread instead.

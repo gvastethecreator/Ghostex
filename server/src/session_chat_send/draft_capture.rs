@@ -129,6 +129,37 @@ pub async fn capture_session_chat_terminal_draft(
         .map_err(|_| "The terminal draft capture reported no result.".to_string())
 }
 
+/// The text in Empryo's input box, read inside the session's send queue so no send is typing
+/// into it at the time. `None` for an empty box.
+pub(crate) async fn read_empryo_terminal_draft(
+    project_id: &str,
+    session_id: &str,
+    zmx_name: &str,
+) -> Result<Option<String>, String> {
+    let (completion_tx, completion_rx) = oneshot::channel();
+    let (draft_tx, draft_rx) = oneshot::channel();
+    queue_session_chat_send(
+        project_id,
+        session_id,
+        zmx_name,
+        "session-chat-draft-handoff",
+        vec![
+            SessionChatSendStep::SelectEmpryoTab {
+                wait_ms: crate::session_chat_empryo_tabs::EMPRYO_SEND_TAB_WAIT_MS,
+            },
+            SessionChatSendStep::ReadEmpryoDraft,
+        ],
+        Some(completion_tx),
+        Some(draft_tx),
+        None,
+    )?;
+    completion_rx
+        .await
+        .map_err(|_| "The session chat send worker stopped before reading the draft.".to_string())?
+        .map_err(|error| error.message)?;
+    Ok(draft_rx.await.ok().and_then(|draft| draft.content))
+}
+
 /// Close Codex's side conversation when one is on screen; the step itself checks the screen
 /// before every Ctrl+C, so this is a no-op anywhere else.
 pub fn queue_codex_side_conversation_close(project_id: &str, session_id: &str, zmx_name: &str) {

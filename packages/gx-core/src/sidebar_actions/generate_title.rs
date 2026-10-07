@@ -13,13 +13,14 @@ use crate::session_create::{default_agent_id_for_icon, resolve_sidebar_agent};
 use crate::sidebar_view::agents::default_agent_id;
 
 /// `SESSION_TITLE_GENERATION_AGENT_OPTIONS`.
-const TITLE_GENERATION_AGENTS: [&str; 7] = [
+const TITLE_GENERATION_AGENTS: [&str; 8] = [
     "codex",
     "cursor",
     "claude",
     "grok",
     "pi",
     "antigravity",
+    "empryo",
     "custom",
 ];
 

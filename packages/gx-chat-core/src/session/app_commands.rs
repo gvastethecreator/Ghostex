@@ -123,7 +123,8 @@ fn row(id: String, role: ChatRole, blocks: Vec<&str>, timestamp: Option<i64>) ->
     }
 }
 
-/// `/^\/(?:rename|name|title)(?:\s+(.+))?$/is`: the title the command carries, if it is one.
+/// `/^\/(?:tab rename|rename|name|title)(?:\s+(.+))?$/is`: the title the command carries, if it is
+/// one. `/tab rename` is Empryo's rename.
 ///
 /// `Some(None)` is a bare `/rename`, which is only meaningful once the agent publishes the name it
 /// selected; `None` is any other command.
@@ -131,7 +132,7 @@ fn rename_argument(command: &str) -> Option<Option<String>> {
     let trimmed = command.trim_matches(is_js_space);
     let rest = trimmed.strip_prefix('/')?;
     let lower = rest.to_lowercase();
-    let name = ["rename", "name", "title"]
+    let name = ["tab rename", "rename", "name", "title"]
         .into_iter()
         .find(|name| lower.starts_with(name))?;
     let tail = &rest[name.len()..];

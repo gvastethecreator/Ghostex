@@ -148,6 +148,12 @@ pub const AGENT_HOOK_SUPPORTED_DEFAULT_AGENTS: J = J::Arr(&[
         ("icon", J::Str("zcode")),
         ("name", J::Str("ZCode")),
     ]),
+    J::Obj(&[
+        ("agentId", J::Str("empryo")),
+        ("command", J::Str("empryo")),
+        ("icon", J::Str("empryo")),
+        ("name", J::Str("Empryo")),
+    ]),
 ]);
 
 pub const DEFAULT_SIDEBAR_AGENTS: J = J::Arr(&[
@@ -303,5 +309,11 @@ pub const DEFAULT_SIDEBAR_AGENTS: J = J::Arr(&[
         ("command", J::Str("freebuff")),
         ("icon", J::Str("freebuff")),
         ("name", J::Str("Freebuff")),
+    ]),
+    J::Obj(&[
+        ("agentId", J::Str("empryo")),
+        ("command", J::Str("empryo")),
+        ("icon", J::Str("empryo")),
+        ("name", J::Str("Empryo")),
     ]),
 ]);

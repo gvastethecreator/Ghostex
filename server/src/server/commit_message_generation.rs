@@ -459,6 +459,7 @@ pub(crate) fn default_agent_name(agent_id: &str) -> Option<&'static str> {
         "cursor" => Some("Cursor CLI"),
         "devin" => Some("Devin"),
         "droid" => Some("Factory Droid"),
+        "empryo" => Some("Empryo"),
         "gemini" => Some("Gemini"),
         "grok" => Some("Grok Build"),
         "hermes-agent" => Some("Hermes Agent"),

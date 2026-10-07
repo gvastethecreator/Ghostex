@@ -784,6 +784,61 @@ pub(super) fn match_omp_statusline(line: &str) -> Option<SessionChatDetectedSele
 }
 
 // ---------------------------------------------------------------------------
+// Empryo grammar
+//   󰧑 Subscriptions/gpt-6-luna [medium] ⌁ ⎇ master ⌁ mcp 4        … ⌁ ctrl+k 󰩟
+//   󰉋 repo          󰧑 OpenCode Go/glm-5.2 [high] ⌁ ⎇ master   (header, while a side panel is open)
+// ---------------------------------------------------------------------------
+
+/// CDXC:AgentScreenDetection 2026-10-06 WHY:
+/// Empryo 3.9.0-beta prints the model as `<provider name>/<model id>` (the name `--list-models` heads each provider with, which may hold spaces) after its provider icon, then the tab's effort in brackets, as the first `⌁`-separated segment of its statusline; a side panel cuts that segment off the footer and Empryo repeats it in its header row instead. The provider name maps back to the picker's `provider/id` through the lineup's `terminalLabels`.
+pub(super) fn match_empryo_statusline(line: &str) -> Option<SessionChatDetectedSelection> {
+    let (head, _) = line.split_once('\u{2301}')?;
+    // The text after the last icon glyph (Nerd Font private-use characters).
+    let segment = head
+        .rsplit(is_nerd_font_icon)
+        .next()?
+        .trim();
+    let (name, effort) = match segment.rsplit_once(" [") {
+        Some((name, level)) => {
+            let level = level.strip_suffix(']')?;
+            if !PI_FAMILY_EFFORTS.contains(&level) && !matches!(level, "none" | "auto") {
+                return None;
+            }
+            (name.trim(), (level != "auto").then(|| level.to_string()))
+        }
+        None => (segment, None),
+    };
+    let (provider, model) = name.rsplit_once('/')?;
+    if provider.trim().is_empty() || provider.contains(['[', ']']) || !is_pi_family_model_id(model)
+    {
+        return None;
+    }
+    Some(pi_family_selection(name.to_string(), name.to_string(), effort))
+}
+
+/// CDXC:AgentScreenDetection 2026-10-07 WHY:
+/// Empryo 3.9.1-beta moved the model off its statusline onto the input box's top border (`╭─ OpenAI-sub/GPT-6 Luna · ● medium · YOLO ──── 󰑮 Cache idle ─╮`): `<vendor>/<display name>` (only the name when the box is narrow), then ` · `-separated segments for the effort (a level glyph and its name, the glyph alone while the tab keeps the model's default effort), the mode, `as <agent>` and `YOLO`. The caller passes only the input box's own top border, since Empryo's panels are rounded boxes too. The display name maps back to the picker's `provider/id` in `pi_family_catalog_value`.
+pub(super) fn match_empryo_input_head(line: &str) -> Option<SessionChatDetectedSelection> {
+    let head = line
+        .trim()
+        .strip_prefix('\u{256d}')?
+        .trim_start_matches('\u{2500}')
+        .trim_start();
+    let head = head.split(" \u{2500}").next()?.trim();
+    let mut segments = head.split(" \u{b7} ").map(str::trim);
+    let name = segments.next().filter(|name| !name.is_empty())?;
+    let effort = segments.find_map(|segment| {
+        let (glyph, level) = segment.split_once(' ')?;
+        (glyph.chars().count() == 1 && (PI_FAMILY_EFFORTS.contains(&level) || level == "none"))
+            .then(|| level.to_string())
+    });
+    Some(SessionChatDetectedSelection {
+        terminal_status_line: Some(head.to_string()),
+        ..pi_family_selection(name.to_string(), name.to_string(), effort)
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Hermes grammar
 //   ⚕ grok-4.6 │ ctx -- │ [░░░░░░░░░░] -- │ 34s │ ⏲ 0s
 //   ☤ gpt-6-sol │ ~26.2K/900K pinned │ [█░░░░░░░░░] ~3% │ ◎ 99.3% │ 42m │ ⏱ 12s

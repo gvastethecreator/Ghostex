@@ -18,6 +18,58 @@ pub(super) fn parse_freebuff_record(builder: &mut TranscriptBuilder, line: &str)
     }
 }
 
+/// Empryo mirror rows (`session_chat_decode_empryo.rs`), whose calls and results name their
+/// own call ids because one row can carry a whole group of parallel calls.
+pub(super) fn parse_empryo_record(builder: &mut TranscriptBuilder, line: &str) {
+    use crate::session_chat::SessionChatBlock;
+    let Some(mut rest) = crate::session_chat::decode_empryo_transcript_line(line, "empryo") else {
+        return;
+    };
+    for block in std::mem::take(&mut rest.blocks) {
+        match block {
+            SessionChatBlock::ToolCall {
+                name,
+                input,
+                call_id,
+            } => {
+                // `ast_edit` is Empryo's preferred TS/JS edit: a patch on `path` that adds `newCode`.
+                let is_ast_edit = name == "ast_edit";
+                let section = if is_ast_edit {
+                    TranscriptExportSection::Patch
+                } else {
+                    classify_tool(&name)
+                };
+                let entry = match section {
+                    TranscriptExportSection::TerminalCmd => ExportEntry::new(
+                        section,
+                        argument_text(&input, &["command"])
+                            .unwrap_or_else(|| pretty_arguments(&input)),
+                    ),
+                    // The mirror hands edits over in Claude's `Edit` shape.
+                    TranscriptExportSection::Patch => {
+                        let mut changes = claude_patch_changes(&name, &input, None);
+                        if is_ast_edit {
+                            for change in &mut changes {
+                                change.added = line_count(&flatten_text(input.get("newCode")));
+                            }
+                        }
+                        ExportEntry::new(section, String::new()).with_patch(changes)
+                    }
+                    _ => ExportEntry::new(section, pretty_arguments(&input)),
+                };
+                builder.push_call(entry.with_tool(name, call_id));
+            }
+            SessionChatBlock::ToolResult {
+                output,
+                is_error,
+                call_id,
+            } => builder.push_output(call_id, output, is_error.unwrap_or(false)),
+            other => rest.blocks.push(other),
+        }
+    }
+    parse_normalized_record(builder, rest);
+}
+
 pub(super) fn parse_opencode_record(builder: &mut TranscriptBuilder, line: &str) {
     if let Some(message) = crate::session_chat_opencode::decode_line(line, "opencode") {
         parse_normalized_record(builder, message);
