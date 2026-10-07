@@ -59,6 +59,9 @@ fn title_command_for_agent(agent_id: &str) -> &'static str {
     match agent_id.trim().to_lowercase().as_str() {
         "pi" | "π" => "name",
         "hermes" | "hermes agent" | "hermes-agent" => "title",
+        // Empryo has no `/rename`; its tab title is `/tab rename`, as gxserver's
+        // `agent_session_title_command` types it.
+        "empryo" => "tab rename",
         _ => "rename",
     }
 }
