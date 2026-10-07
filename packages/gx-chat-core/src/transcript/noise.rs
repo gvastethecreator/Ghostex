@@ -713,6 +713,44 @@ pub fn is_compaction_record(message: &ChatMessage) -> bool {
     )
 }
 
+/// CDXC:SessionChat 2026-10-07 DECISION:
+/// Sven: an Empryo model or effort change shows as a status row like Claude's model and effort rows. Empryo prints no command output for one, so gxserver records it as a transcript system row in the words Claude's pill uses ("Set model to gpt-6.1-sol", "Set effort level to high"), placed where the change happened.
+/// SEE-ALSO: server/src/session_chat_empryo_notes.rs
+fn setting_status_label(message: &ChatMessage, text: &str) -> Option<String> {
+    if message.role != ChatRole::System || message.source != ChatSource::Transcript {
+        return None;
+    }
+    if let Some(effort) = effort_set_by_command_output(text) {
+        return Some(format!("Set effort level to {}", effort_label(&effort)));
+    }
+    let text = collapse_whitespace(text);
+    if !ascii_lower(&text).starts_with("set model to ") {
+        return None;
+    }
+    // "… with high effort" reads with the effort's display label, as every effort in chat does.
+    Some(
+        match text
+            .rsplit_once(" with ")
+            .and_then(|(head, tail)| Some((head, tail.strip_suffix(" effort")?)))
+        {
+            Some((head, level)) => format!("{head} with {} effort", effort_label(level)),
+            None => text,
+        },
+    )
+}
+
+/// A model or effort change the agent's transcript recorded as its own row, which stays in view
+/// where it happened instead of folding into the turn's work.
+pub fn is_setting_status(message: &ChatMessage) -> bool {
+    setting_status_label(message, js_trim(&joined_text(&message.blocks))).is_some()
+}
+
+/// A row after a turn's reply that belongs between turns rather than in the turn's work: a
+/// compaction, or a model or effort change.
+pub fn is_turn_seam(message: &ChatMessage) -> bool {
+    is_compaction_record(message) || is_setting_status(message)
+}
+
 /// Which marker, status row, or nothing a turn renders as.
 pub fn classify_suppressed_turn(message: &ChatMessage) -> Option<SuppressedTurn> {
     let text = js_trim(&joined_text(&message.blocks)).to_string();
@@ -754,6 +792,9 @@ pub fn classify_suppressed_turn(message: &ChatMessage) -> Option<SuppressedTurn>
         return Some(SuppressedTurn::Collapsed {
             label: "Interrupted".to_string(),
         });
+    }
+    if let Some(label) = setting_status_label(message, &text) {
+        return Some(SuppressedTurn::Status { label, tone: None });
     }
     if is_context_compaction_record(message, &text) {
         // Same completed-action pill Claude's compaction gets, so the seam reads identically

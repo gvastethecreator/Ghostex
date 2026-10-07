@@ -24,6 +24,8 @@ use serde_json::{json, Map, Value};
 
 use crate::resume_lookup::home_dir;
 use crate::session_chat::{extract_string, parse_json_object, tool_result_output};
+use crate::session_chat_empryo_events::{read_empryo_screen_events, EmpryoScreenEvents};
+use crate::session_chat_empryo_notes::{anchor_at, insert_notices, notice_row, EmpryoTabNotes};
 
 const EMPRYO_SESSION_ID_MAX_LENGTH: usize = 128;
 
@@ -160,6 +162,12 @@ fn is_hidden_empryo_tool(name: &str) -> bool {
     name == "final_response"
 }
 
+/// CDXC:SessionChat 2026-10-07 WHY:
+/// A `code_script` call runs Empryo's tools from its script and logs each as its own `tool-start` with a `hidden-<tool>-<uuid>` id; the TUI draws only the script's row ("Synthesized") and the final record holds only the script, so the chat showing the inner calls while the turn ran made rows appear and then vanish.
+fn is_hidden_empryo_call(id: &str) -> bool {
+    id.starts_with("hidden-")
+}
+
 fn empryo_tool_result(result: &Value) -> (String, bool) {
     let Some(record) = result.as_object() else {
         return (
@@ -207,6 +215,16 @@ struct EmpryoTurn {
     end_status: Option<String>,
     /// The tools `tool-start`/`tool-end` records reported while the turn runs, in start order.
     live_calls: Vec<EmpryoLiveCall>,
+    /// When Empryo accepted the prompt, which is before it briefs the model and logs the record.
+    started_at: Option<i64>,
+}
+
+impl EmpryoTurn {
+    /// When the turn began: its acceptance, else its prompt's record.
+    fn start(&self) -> Option<i64> {
+        self.started_at
+            .or_else(|| self.user.get("timestamp").and_then(Value::as_i64))
+    }
 }
 
 struct EmpryoLiveCall {
@@ -236,9 +254,13 @@ struct EmpryoLog {
     /// CDXC:SessionChat 2026-10-07 WHY:
     /// Empryo 3.9.1-beta logs every window that joins a repository's shared engine in the engine's session, so one `session.jsonl` holds other Ghostex sessions' tabs too (their first tab, session_chat_empryo_tabs.rs). Those are never this session's to follow.
     foreign_tabs: HashSet<String>,
+    /// `pendingPrompts[].acceptedAt` by `turnId`, the newest acceptance winning (old logs reuse ids).
+    accepted_at: HashMap<String, i64>,
+    /// Each tab's model and effort changes and Empryo's own `system` rows.
+    notes_by_tab: HashMap<String, EmpryoTabNotes>,
 }
 
-const OBSERVED_KINDS: [&str; 8] = [
+const OBSERVED_KINDS: [&str; 9] = [
     "\"k\":\"tab\"",
     "\"k\":\"user\"",
     "\"k\":\"turn-checkpoint\"",
@@ -247,6 +269,7 @@ const OBSERVED_KINDS: [&str; 8] = [
     "\"k\":\"tool-end\"",
     "\"k\":\"ui-truncate\"",
     "\"k\":\"ui-clear\"",
+    "\"k\":\"system\"",
 ];
 
 pub(crate) fn pending_prompts(patch: &Value) -> Option<Vec<(String, String)>> {
@@ -284,7 +307,26 @@ impl EmpryoLog {
         let kind = extract_string(record.get("k")).unwrap_or_default();
         match kind.as_str() {
             "tab" => {
-                let Some(pending) = record.get("patch").and_then(pending_prompts) else {
+                let Some(patch) = record.get("patch") else {
+                    return;
+                };
+                let at = record.get("ts").and_then(Value::as_i64).unwrap_or_default();
+                self.notes_by_tab
+                    .entry(tab.clone())
+                    .or_default()
+                    .observe_patch(&tab, patch, at);
+                for (key, entry) in patch
+                    .get("pendingPrompts")
+                    .and_then(Value::as_object)
+                    .into_iter()
+                    .flatten()
+                {
+                    if let Some(accepted) = entry.get("acceptedAt").and_then(Value::as_i64) {
+                        let turn_id = extract_string(entry.get("turnId")).unwrap_or(key.clone());
+                        self.accepted_at.insert(turn_id, accepted);
+                    }
+                }
+                let Some(pending) = pending_prompts(patch) else {
                     return;
                 };
                 if !pending.is_empty() && !self.foreign_tabs.contains(&tab) {
@@ -302,13 +344,21 @@ impl EmpryoLog {
                 if !self.foreign_tabs.contains(&tab) {
                     self.followed_tab = Some(tab.clone());
                 }
+                let turn_id = extract_string(record.get("turnId"));
+                let recorded_at = ui.get("timestamp").and_then(Value::as_i64);
+                let started_at = turn_id
+                    .as_ref()
+                    .and_then(|turn_id| self.accepted_at.get(turn_id))
+                    .copied()
+                    .filter(|accepted| recorded_at.is_none_or(|at| *accepted <= at));
                 self.turns_by_tab.entry(tab).or_default().push(EmpryoTurn {
                     key,
-                    turn_id: extract_string(record.get("turnId")),
+                    turn_id,
                     user: ui,
                     reply: None,
                     end_status: None,
                     live_calls: Vec::new(),
+                    started_at,
                 });
             }
             // CDXC:SessionChat 2026-10-07 WHY:
@@ -380,8 +430,10 @@ impl EmpryoLog {
                 let Some(turns) = self.turns_by_tab.get_mut(&tab) else {
                     return;
                 };
+                let mut cut = None;
                 if let Some(message_id) = extract_string(record.get("fromMessageId")) {
                     if let Some(index) = turns.iter().position(|turn| turn.key == message_id) {
+                        cut = turns[index].start();
                         turns.truncate(index);
                     } else if let Some(index) = turns.iter().position(|turn| {
                         turn.reply
@@ -401,12 +453,31 @@ impl EmpryoLog {
                         .iter()
                         .position(|turn| turn.turn_id.as_deref() == Some(turn_id.as_str()))
                     {
+                        cut = turns[index].start();
                         turns.truncate(index);
                     }
+                }
+                if let (Some(cut), Some(notes)) = (cut, self.notes_by_tab.get_mut(&tab)) {
+                    notes.cut(cut);
                 }
             }
             "ui-clear" => {
                 self.turns_by_tab.remove(&tab);
+                self.notes_by_tab.remove(&tab);
+            }
+            "system" => {
+                let Some(Value::Object(ui)) = record.remove("ui") else {
+                    return;
+                };
+                let at = ui
+                    .get("timestamp")
+                    .or_else(|| record.get("ts"))
+                    .and_then(Value::as_i64)
+                    .unwrap_or_default();
+                self.notes_by_tab
+                    .entry(tab.clone())
+                    .or_default()
+                    .observe_system(&tab, &ui, at);
             }
             _ => {}
         }
@@ -459,7 +530,7 @@ fn push_live_call_rows(rows: &mut Vec<Value>, turn: &EmpryoTurn) {
         .collect();
     let key = &turn.key;
     for call in &turn.live_calls {
-        if snapshot_calls.contains(call.id.as_str()) {
+        if snapshot_calls.contains(call.id.as_str()) || is_hidden_empryo_call(&call.id) {
             continue;
         }
         let Some(entry) = tool_call_entry(&call.id, &call.name, call.args.clone()) else {
@@ -582,9 +653,80 @@ fn turn_row(key: &str, state: &str, timestamp: Value) -> Value {
     json!({ "row": "turn", "turn": key, "state": state, "ts": timestamp })
 }
 
-/// The mirror's rows for a raw log. Only complete lines are read: a torn tail would otherwise
-/// be mirrored as a parse failure and never revisited.
-fn mirror_rows(raw: &[u8], foreign_tabs: HashSet<String>) -> Vec<Value> {
+/// The turn the followed tab is running, which the screen's events are read for
+/// (session_chat_empryo_events.rs).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EmpryoInFlight {
+    pub(crate) key: String,
+    /// The prompt as typed, which the screen's newest prompt must match.
+    pub(crate) prompt: String,
+    /// The calls that have started, in start order, without the ones Empryo draws no row for.
+    pub(crate) calls: Vec<String>,
+}
+
+/// One turn's rows, before its notes are placed.
+struct TurnBlock {
+    key: String,
+    prompt: String,
+    start: Option<i64>,
+    /// When the final record landed; `None` while the turn runs.
+    end: Option<i64>,
+    rows: Vec<Value>,
+    /// Where the turn's own rows start, after its prompt and working rows.
+    body_start: usize,
+    /// The calls Empryo draws a row for, (id, start), in start order.
+    calls: Vec<(String, i64)>,
+    /// The completed or interrupted row that closes it.
+    closing: Option<Value>,
+    /// Notes made while it ran: (time, anchor call, row).
+    notes: Vec<(i64, Option<String>, Value)>,
+    /// Notes made after it ended and before the next turn began.
+    seam: Vec<Value>,
+}
+
+fn turn_calls(turn: &EmpryoTurn) -> Vec<(String, i64)> {
+    let mut calls: Vec<(String, i64)> = Vec::new();
+    let recorded = turn
+        .reply
+        .as_ref()
+        .and_then(|reply| reply.get("toolCalls"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|call| {
+            let name = call.get("name").and_then(Value::as_str).unwrap_or_default();
+            Some((
+                call.get("id")?.as_str()?,
+                name,
+                call.get("startedAt").and_then(Value::as_i64)?,
+            ))
+        });
+    let live = turn.live_calls.iter().filter_map(|call| {
+        Some((
+            call.id.as_str(),
+            call.name.as_str(),
+            call.started_at.as_i64()?,
+        ))
+    });
+    for (id, name, started) in recorded.chain(live) {
+        if !is_hidden_empryo_tool(name)
+            && !is_hidden_empryo_call(id)
+            && calls.iter().all(|(known, _)| known != id)
+        {
+            calls.push((id.to_string(), started));
+        }
+    }
+    calls.sort_by_key(|(_, started)| *started);
+    calls
+}
+
+/// The mirror's rows for a raw log, and the turn the followed tab is running. Only complete lines
+/// are read: a torn tail would otherwise be mirrored as a parse failure and never revisited.
+fn mirror_rows(
+    raw: &[u8],
+    foreign_tabs: HashSet<String>,
+    screen_events: &EmpryoScreenEvents,
+) -> (Vec<Value>, Option<EmpryoInFlight>) {
     let complete = match raw.iter().rposition(|byte| *byte == b'\n') {
         Some(end) => &raw[..=end],
         None => &[][..],
@@ -597,17 +739,19 @@ fn mirror_rows(raw: &[u8], foreign_tabs: HashSet<String>) -> Vec<Value> {
     for line in text.lines() {
         log.observe(line);
     }
-    let mut rows: Vec<Value> = Vec::new();
     let Some(tab) = log.followed_tab.clone() else {
-        return rows;
+        return (Vec::new(), None);
     };
     let turns = log.turns_by_tab.remove(&tab).unwrap_or_default();
+    let mut blocks: Vec<TurnBlock> = Vec::new();
     for turn in &turns {
+        let mut rows: Vec<Value> = Vec::new();
         let user = &turn.user;
         let timestamp = user.get("timestamp").cloned().unwrap_or(Value::Null);
+        let prompt = extract_string(user.get("content"));
         // Background-agent reports Empryo injects as hidden prompts still start a turn.
         let hidden = user.get("hidden") == Some(&Value::Bool(true));
-        if let Some(text) = extract_string(user.get("content")).filter(|_| !hidden) {
+        if let Some(text) = prompt.clone().filter(|_| !hidden) {
             let images: Vec<Value> = user
                 .get("images")
                 .and_then(Value::as_array)
@@ -625,9 +769,12 @@ fn mirror_rows(raw: &[u8], foreign_tabs: HashSet<String>) -> Vec<Value> {
             }));
         }
         rows.push(turn_row(&turn.key, "working", timestamp.clone()));
+        let body_start = rows.len();
         if let Some(reply) = turn.reply.as_ref() {
             push_reply_rows(&mut rows, turn, reply);
         }
+        let mut closing = None;
+        let mut end = None;
         if let Some(status) = turn.end_status.as_deref() {
             let state = if status == "partial" {
                 "interrupted"
@@ -638,11 +785,24 @@ fn mirror_rows(raw: &[u8], foreign_tabs: HashSet<String>) -> Vec<Value> {
                 .reply
                 .as_ref()
                 .and_then(|reply| reply.get("timestamp").cloned())
-                .unwrap_or(timestamp);
-            rows.push(turn_row(&turn.key, state, ended_at));
+                .unwrap_or_else(|| timestamp.clone());
+            end = Some(ended_at.as_i64().unwrap_or(i64::MAX));
+            closing = Some(turn_row(&turn.key, state, ended_at));
         } else {
             push_live_call_rows(&mut rows, turn);
         }
+        blocks.push(TurnBlock {
+            key: turn.key.clone(),
+            prompt: prompt.unwrap_or_default(),
+            start: turn.start(),
+            end,
+            rows,
+            body_start,
+            calls: turn_calls(turn),
+            closing,
+            notes: Vec::new(),
+            seam: Vec::new(),
+        });
     }
     // A prompt Empryo accepted but has not recorded yet (it briefs the model first, which can
     // take most of a minute) shows at once; its user record later takes the same id.
@@ -651,25 +811,108 @@ fn mirror_rows(raw: &[u8], foreign_tabs: HashSet<String>) -> Vec<Value> {
         if turns.iter().any(|turn| turn.key == key) {
             continue;
         }
-        rows.push(json!({
-            "row": "user", "id": format!("empryo:{key}"), "turn": key, "ts": Value::Null,
-            "text": text, "images": [],
-        }));
-        rows.push(turn_row(&key, "working", Value::Null));
+        let rows = vec![
+            json!({
+                "row": "user", "id": format!("empryo:{key}"), "turn": key, "ts": Value::Null,
+                "text": text, "images": [],
+            }),
+            turn_row(&key, "working", Value::Null),
+        ];
+        blocks.push(TurnBlock {
+            key,
+            prompt: text,
+            start: log.accepted_at.get(&turn_id).copied(),
+            end: None,
+            rows,
+            body_start: 2,
+            calls: Vec::new(),
+            closing: None,
+            notes: Vec::new(),
+            seam: Vec::new(),
+        });
     }
-    rows
+    // A note made while a turn ran sits inside it, after the call that had started last; one made
+    // between turns follows the turn before it, and one made before the first leads the chat.
+    let mut leading: Vec<Value> = Vec::new();
+    let notes = log
+        .notes_by_tab
+        .remove(&tab)
+        .map(|notes| notes.notes)
+        .unwrap_or_default();
+    for note in notes {
+        let owner = blocks
+            .iter()
+            .rposition(|block| block.start.is_some_and(|start| start <= note.at));
+        let Some(owner) = owner else {
+            leading.push(notice_row(&note.id, None, note.at, &note.text));
+            continue;
+        };
+        let block = &mut blocks[owner];
+        let row = notice_row(&note.id, Some(&block.key), note.at, &note.text);
+        if block.end.is_some_and(|end| note.at > end) {
+            block.seam.push(row);
+        } else {
+            let anchor = anchor_at(&block.calls, note.at);
+            block.notes.push((note.at, anchor, row));
+        }
+    }
+    for block in &mut blocks {
+        for (index, event) in screen_events
+            .get(&block.key)
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            let id = format!("empryo:{}:event:{index}", block.key);
+            block.notes.push((
+                event.seen_at,
+                event.after.clone(),
+                notice_row(&id, Some(&block.key), event.seen_at, &event.notice_text()),
+            ));
+        }
+    }
+    let in_flight = blocks
+        .last()
+        .filter(|block| block.closing.is_none())
+        .map(|block| EmpryoInFlight {
+            key: block.key.clone(),
+            prompt: block.prompt.clone(),
+            calls: block.calls.iter().map(|(id, _)| id.clone()).collect(),
+        });
+    let mut rows = leading;
+    for mut block in blocks {
+        block.notes.sort_by_key(|(at, _, _)| *at);
+        insert_notices(
+            &mut block.rows,
+            block.body_start,
+            block
+                .notes
+                .into_iter()
+                .map(|(_, call, row)| (call, row))
+                .collect(),
+        );
+        rows.extend(block.rows);
+        rows.extend(block.closing);
+        rows.extend(block.seam);
+    }
+    (rows, in_flight)
 }
 
-/// The whole mirror for a raw log, one row per line.
-fn build_mirror(raw: &[u8], foreign_tabs: HashSet<String>) -> Vec<u8> {
+/// The whole mirror for a raw log, one row per line, and the turn the followed tab is running.
+fn build_mirror(
+    raw: &[u8],
+    foreign_tabs: HashSet<String>,
+    screen_events: &EmpryoScreenEvents,
+) -> (Vec<u8>, Option<EmpryoInFlight>) {
+    let (rows, in_flight) = mirror_rows(raw, foreign_tabs, screen_events);
     let mut out = Vec::new();
-    for row in mirror_rows(raw, foreign_tabs) {
+    for row in rows {
         if let Ok(serialized) = serde_json::to_vec(&row) {
             out.extend_from_slice(&serialized);
             out.push(b'\n');
         }
     }
-    out
+    (out, in_flight)
 }
 
 /// The visible prompts of the followed tab, oldest first: Generate Name's history source
@@ -682,7 +925,8 @@ pub(crate) fn empryo_user_prompts(session_log: &Path) -> Vec<String> {
     let Ok(raw) = fs::read(&log) else {
         return Vec::new();
     };
-    mirror_rows(&raw, foreign_tabs)
+    mirror_rows(&raw, foreign_tabs, &EmpryoScreenEvents::new())
+        .0
         .iter()
         .filter(|row| row.get("row").and_then(Value::as_str) == Some("user"))
         .filter_map(|row| extract_string(row.get("text")))
@@ -702,8 +946,11 @@ struct EmpryoMirrorState {
     scanned_at: Option<(Option<std::time::SystemTime>, Option<std::time::SystemTime>)>,
     raw_len: u64,
     raw_modified: Option<std::time::SystemTime>,
+    /// The size and time of the events kept from the screen (session_chat_empryo_events.rs).
+    events_stamp: Option<(u64, Option<std::time::SystemTime>)>,
     output_len: usize,
     output_hash: u64,
+    in_flight: Option<EmpryoInFlight>,
 }
 
 /// Keyed by mirror path, which the follower holds once resolution handed it out.
@@ -765,6 +1012,10 @@ fn sync_mirror(mirror_path: &Path, state: &mut EmpryoMirrorState) -> Option<()> 
     let raw_meta = fs::metadata(&state.raw_path).ok()?;
     let raw_len = raw_meta.len();
     let raw_modified = raw_meta.modified().ok();
+    let events_stamp =
+        fs::metadata(crate::session_chat_empryo_events::empryo_screen_events_path(mirror_path))
+            .ok()
+            .map(|meta| (meta.len(), meta.modified().ok()));
     let mirror_exists = mirror_path.is_file();
     if !mirror_exists {
         state.output_len = 0;
@@ -774,17 +1025,24 @@ fn sync_mirror(mirror_path: &Path, state: &mut EmpryoMirrorState) -> Option<()> 
         && mirror_exists
         && state.output_len > 0
         && state.raw_len == raw_len
-        && state.raw_modified == raw_modified;
+        && state.raw_modified == raw_modified
+        && state.events_stamp == events_stamp;
     if up_to_date {
         return Some(());
     }
     let raw = fs::read(&state.raw_path).ok()?;
-    let output = build_mirror(&raw, state.foreign_tabs.clone());
+    let (output, in_flight) = build_mirror(
+        &raw,
+        state.foreign_tabs.clone(),
+        &read_empryo_screen_events(mirror_path),
+    );
     write_mirror(mirror_path, &output, state, mirror_exists)?;
     state.raw_len = raw_len;
     state.raw_modified = raw_modified;
+    state.events_stamp = events_stamp;
     state.output_len = output.len();
     state.output_hash = content_hash(&output);
+    state.in_flight = in_flight;
     Some(())
 }
 
@@ -849,4 +1107,15 @@ pub(crate) fn sync_empryo_transcript_mirror_for_path(mirror_path: &Path) {
     {
         sync_mirror(mirror_path, state);
     }
+}
+
+/// The turn the mirror's followed tab is running, as of its last sync.
+pub(crate) fn empryo_turn_in_flight(mirror_path: &Path) -> Option<EmpryoInFlight> {
+    MIRROR_STATES
+        .lock()
+        .ok()?
+        .as_ref()?
+        .get(mirror_path)?
+        .in_flight
+        .clone()
 }

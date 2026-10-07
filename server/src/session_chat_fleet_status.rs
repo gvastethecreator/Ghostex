@@ -158,6 +158,10 @@ fn refresh_fleet_status(state: &AppState, shutdown: &tokio::sync::broadcast::Rec
             return;
         }
         let agent = session_chat_agent_for_session(&session);
+        if agent.as_deref() == Some("empryo") {
+            crate::session_chat_empryo_events::observe_empryo_screen_events(&repository, &session);
+            continue;
+        }
         if !has_fleet_reader(session_chat_option_agent(agent.as_deref())) {
             continue;
         }

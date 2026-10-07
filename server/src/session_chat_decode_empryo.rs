@@ -11,6 +11,8 @@ derives from Empryo's `session.jsonl`. One mirror row per rendered message, plus
     {"row": "tool", "id": "empryo:<key>:result:<callId>", "turn": "<key>", "ts": …,
      "callId": "…", "output": "…", "isError": false}
     {"row": "turn", "turn": "<key>", "state": "working" | "completed" | "interrupted", "ts": …}
+    {"row": "notice", "id": "empryo:note:<tab>:3", "turn": "<key>" | null, "ts": …,
+     "text": "Set effort level to high"}
 
 `<key>` is the Empryo user record's own id, so row ids are stable across the mirror rewrites a
 checkpoint causes.
@@ -96,6 +98,14 @@ pub fn decode_empryo_transcript_line(line: &str, fallback_id: &str) -> Option<Se
             (!blocks.is_empty())
                 .then(|| empryo_message(&record, fallback_id, SessionChatRole::Assistant, blocks))
         }
+        // An event, a model or effort change, or one of Empryo's own system rows
+        // (session_chat_empryo_notes.rs); the chat core draws the changes as status rows.
+        "notice" => Some(empryo_message(
+            &record,
+            fallback_id,
+            SessionChatRole::System,
+            vec![text_block(text?)],
+        )),
         "tool" => Some(empryo_message(
             &record,
             fallback_id,
