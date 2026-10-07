@@ -596,3 +596,34 @@ fn resume_plan_rejects_gxserver_session_id_titles() {
     assert_eq!(resume.get("primaryCommand"), None);
     assert_eq!(resume.get("startupTextDisposition"), Some(&json!("none")));
 }
+
+#[test]
+fn remembered_pins_respect_a_model_the_command_already_chooses() {
+    assert!(command_names_model("claude --model 'opus[1m]'", "claude"));
+    assert!(command_names_model("codex -m gpt-6-astra", "codex"));
+    assert!(command_names_model("codex --profile fast", "codex"));
+    assert!(!command_names_model(
+        "claude --append-system-prompt '--model' --effort high",
+        "claude"
+    ));
+    assert!(!command_names_model(
+        "cursor-agent --workspace --model",
+        "cursor"
+    ));
+    assert!(command_names_model(
+        "cursor-agent --yolo --model grok-4.7",
+        "cursor"
+    ));
+}
+
+#[test]
+fn cursor_pins_replace_its_model_and_take_no_effort_flag() {
+    let pinned = with_agent_model_options(
+        "cursor-agent --model gpt-6 --workspace /tmp",
+        "cursor",
+        Some("grok-4.7"),
+        Some("high"),
+    )
+    .expect("cursor pin");
+    assert_eq!(pinned, "cursor-agent --workspace /tmp --model grok-4.7");
+}

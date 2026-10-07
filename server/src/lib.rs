@@ -2,6 +2,7 @@ pub(crate) mod accounts;
 pub(crate) mod agent_cli;
 pub mod agent_hooks;
 pub mod agent_model_catalog;
+pub mod agent_model_pins;
 pub mod agent_prompt_search;
 pub mod agent_skills;
 pub mod agent_skills_remote;

@@ -84,6 +84,18 @@ pub(crate) fn create_agent_session_params_for_project(
         }
         None => None,
     };
+    let configured_command = if agentbox_provider.is_none() {
+        pin_remembered_agent_model(
+            &agent_id,
+            &agent_config,
+            &launch_settings,
+            params,
+            configured_command,
+            &mut runtime_settings,
+        )?
+    } else {
+        configured_command
+    };
     let configured_command = apply_coordinator_role(
         &agent_id,
         &agent_config,
@@ -421,6 +433,73 @@ fn apply_requested_agent_model(
         .or_else(|| default_agent_command(&family).map(str::to_string))
         .unwrap_or_else(|| family.clone());
     with_agent_model_options(&base, &family, model.as_deref(), effort.as_deref()).map(Some)
+}
+
+/// A new Claude, Codex or Cursor session starts on the model the user last chose as the agent's
+/// default (CDXC:AgentProviders 2026-10-07 in agent_model_pins.rs). A model the create names, or
+/// one the configured command already pins, is this session's own choice and is never taught to
+/// the default; with no default known, or after the agent's settings changed outside Ghostex, the
+/// session runs the agent's own default and its first report becomes the remembered one.
+fn pin_remembered_agent_model(
+    agent_id: &str,
+    agent_config: &Map<String, Value>,
+    launch_settings: &Map<String, Value>,
+    params: &Map<String, Value>,
+    command: Option<String>,
+    runtime_settings: &mut Map<String, Value>,
+) -> Result<Option<String>, DomainStateError> {
+    use crate::agent_model_pins::{
+        launch_default, pin_family, session_marker, ModelPin, ORIGIN_DEFAULT, ORIGIN_LEARN,
+        ORIGIN_SESSION, SESSION_PIN_KEY,
+    };
+    let Some(family) =
+        resume_agent_family_id(Some(agent_id.to_string()), agent_config, launch_settings)
+            .as_deref()
+            .and_then(pin_family)
+    else {
+        return Ok(command);
+    };
+    let requested_model = requested_agent_model_option(params, "agentModel")?;
+    let requested_effort = requested_agent_model_option(params, "agentEffort")?;
+    let base = command
+        .clone()
+        .or_else(|| default_agent_command(family).map(str::to_string))
+        .unwrap_or_else(|| family.to_string());
+    if requested_model.is_some() || requested_effort.is_some() || command_names_model(&base, family)
+    {
+        let requested = requested_model.map(|model| ModelPin {
+            model,
+            effort: requested_effort,
+            ..ModelPin::default()
+        });
+        runtime_settings.insert(
+            SESSION_PIN_KEY.to_string(),
+            session_marker(ORIGIN_SESSION, requested.as_ref()),
+        );
+        return Ok(command);
+    }
+    let pinned = launch_default(family).and_then(|pin| {
+        let effort = pin.effort.as_deref().filter(|_| family != "cursor");
+        with_agent_model_options(&base, family, Some(&pin.model), effort)
+            .ok()
+            .map(|command| (command, pin))
+    });
+    Ok(match pinned {
+        Some((pinned_command, pin)) => {
+            runtime_settings.insert(
+                SESSION_PIN_KEY.to_string(),
+                session_marker(ORIGIN_DEFAULT, Some(&pin)),
+            );
+            Some(pinned_command)
+        }
+        None => {
+            runtime_settings.insert(
+                SESSION_PIN_KEY.to_string(),
+                session_marker(ORIGIN_LEARN, None),
+            );
+            command
+        }
+    })
 }
 
 /// CDXC:Coordinators 2026-09-30 WHY:

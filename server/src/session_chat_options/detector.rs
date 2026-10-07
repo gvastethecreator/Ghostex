@@ -451,6 +451,14 @@ impl SessionChatOptionDetector {
             self.recovery
                 .observe(project_id, session_id, detected.notice.as_ref());
         }
+        crate::agent_model_pins::observe_detection(
+            &self.paths,
+            self.server_id.as_str(),
+            project_id,
+            session_id,
+            agent,
+            &detected,
+        );
         detected
     }
 

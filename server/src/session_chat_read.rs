@@ -568,17 +568,48 @@ pub(crate) async fn handle_read_session_chat_http(
         not settle and "still pending" is the honest answer. The watchdog
         notice merge below still runs on its own cached inputs.
         */
-        let detection = tokio::time::timeout(
+        // CDXC:AgentProviders 2026-10-07 WHY: a missed deadline answers with the last settled
+        // reading, however old, instead of none. Leaving it out drew the loading skeleton over a
+        // chat whose model gxserver knew seconds earlier (a reopened Cursor chat sat 3.6s on it).
+        let detector = SessionChatOptionDetector::new(state);
+        let detection = match tokio::time::timeout(
             crate::session_chat::SEED_OPTION_DETECTION_DEADLINE,
-            SessionChatOptionDetector::new(state).detect(
-                &project_id,
-                &session_id,
-                terminal_agent.as_deref(),
-                false,
-            ),
+            detector.detect(&project_id, &session_id, terminal_agent.as_deref(), false),
         )
         .await
-        .unwrap_or_default();
+        {
+            Ok(detection) => detection,
+            Err(_) => {
+                let mut cached = detector.cached(&project_id, &session_id);
+                if cached.options.is_none() {
+                    // Nothing cached yet (the first read after a gxserver start): the launch
+                    // flags and the session's last reading are on disk.
+                    let paths = state.paths.clone();
+                    let server_id = state.metadata.server_id.clone();
+                    let hook_state_directory =
+                        crate::session_chat_options::session_chat_hook_state_directory(
+                            &state.paths,
+                        );
+                    let (stored_project, stored_session) = (project_id.clone(), session_id.clone());
+                    let stored_agent = terminal_agent.clone();
+                    cached.options = tokio::task::spawn_blocking(move || {
+                        let db = open_gxserver_database(&paths).ok()?;
+                        let repository = DomainRepository::new(&db, server_id.as_str());
+                        crate::session_chat_options::detect_session_chat_stored_options(
+                            &repository,
+                            &hook_state_directory,
+                            &stored_project,
+                            &stored_session,
+                            stored_agent.as_deref(),
+                        )
+                    })
+                    .await
+                    .ok()
+                    .flatten();
+                }
+                cached
+            }
+        };
         let current_working = open_gxserver_database(&state.paths).ok().and_then(|db| {
             DomainRepository::new(&db, state.metadata.server_id.as_str())
                 .get_session(&project_id, &session_id)

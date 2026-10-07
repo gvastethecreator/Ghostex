@@ -555,3 +555,33 @@ fn same_selection_ignores_the_timestamp() {
     assert!(first.same_selection(Some(&second)));
     assert!(!first.same_selection(None));
 }
+
+#[test]
+fn cursor_launch_model_survives_its_context_only_statusline() {
+    let launch = launch_command_selection(
+        SessionChatOptionAgent::Cursor,
+        "cursor-agent --workspace '--model x' --model grok-4.7",
+    )
+    .expect("cursor launch selection");
+    assert_eq!(
+        launch.model.as_ref().map(|model| model.value.as_str()),
+        Some("grok-4.7")
+    );
+    let statusline = SessionChatDetectedSelection {
+        context_usage: Some(SessionChatContextUsage {
+            used_percentage: Some(3),
+            used_tokens: None,
+            window_size: None,
+        }),
+        ..SessionChatDetectedSelection::default()
+    };
+    let merged = merge_session_chat_option_selections(Some(launch), None, Some(statusline), None)
+        .expect("merged options");
+    assert_eq!(
+        merged
+            .model
+            .as_ref()
+            .map(|model| (model.value.as_str(), model.source)),
+        Some(("grok-4.7", SessionChatOptionEvidence::Launch))
+    );
+}

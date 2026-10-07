@@ -158,6 +158,7 @@ pub async fn run_gxserver_foreground(
         metadata.server_id.clone(),
         logger.clone(),
     );
+    crate::agent_model_pins::init(&paths);
     let presentation_event_sequence = Arc::new(Mutex::new(()));
     let (shutdown_tx, _) = broadcast::channel(8);
     crate::zmx::set_zmx_process_identity_shutdown(shutdown_tx.subscribe());
