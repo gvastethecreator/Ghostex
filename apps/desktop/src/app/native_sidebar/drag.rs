@@ -1,4 +1,5 @@
 use crate::GhostexGpuiApp;
+use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyElement, Bounds, Context, DragMoveEvent, InteractiveElement, IntoElement, ParentElement,
     Pixels, Point, Render, Styled, Window, div, px,
@@ -12,7 +13,13 @@ pub(crate) struct SidebarDrag {
     pub(crate) title: String,
     pub(crate) scale: f32,
     pub(crate) preview: SidebarDragPreview,
+    /// Set while the pointer is over a pane that refuses this drag
+    /// (`session_pane_placement.rs`); shared by the drag's value and its preview, which fades.
+    pub(crate) refused: std::rc::Rc<std::cell::Cell<bool>>,
 }
+
+/// How strongly the dragged row shows while it is over a pane that cannot take it.
+const REFUSED_PREVIEW_OPACITY: f32 = 0.45;
 
 #[derive(Clone)]
 pub(crate) enum SidebarDragPreview {
@@ -22,10 +29,14 @@ pub(crate) enum SidebarDragPreview {
 
 impl Render for SidebarDrag {
     fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        match &self.preview {
+        let preview = match &self.preview {
             SidebarDragPreview::Space(space) => space.render(self.scale, window),
             SidebarDragPreview::Row(row) => row.render(&self.title, window),
-        }
+        };
+        let refused = self.refused.get();
+        div()
+            .when(refused, |wrapper| wrapper.opacity(REFUSED_PREVIEW_OPACITY))
+            .child(preview)
     }
 }
 

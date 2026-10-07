@@ -375,8 +375,8 @@ impl GhostexGpuiApp {
                 },
             ))
             .on_drag_move::<SidebarDrag>(cx.listener(
-                move |this, event: &gpui::DragMoveEvent<SidebarDrag>, _window, cx| {
-                    this.update_sidebar_session_pane_drag_feedback(event, pane_id, cx);
+                move |this, event: &gpui::DragMoveEvent<SidebarDrag>, window, cx| {
+                    this.update_sidebar_session_pane_drag_feedback(event, pane_id, window, cx);
                 },
             ))
             .can_drop(|value, _window, _cx| {
@@ -553,6 +553,9 @@ impl GhostexGpuiApp {
             })
             .when_some(self.workspace_pane_drop_zone(pane_id), |this, zone| {
                 this.child(self.render_workspace_pane_drop_feedback(pane_id, zone))
+            })
+            .when_some(self.workspace_pane_drop_refusal(pane_id), |this, reason| {
+                this.child(self.render_workspace_pane_drop_refusal(pane_id, reason))
             })
             .into_any_element()
     }

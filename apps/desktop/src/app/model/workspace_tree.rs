@@ -46,6 +46,8 @@ pub(crate) enum WorkspaceDropZone {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WorkspaceDropTarget {
     PaneBody(WorkspaceDropZone),
+    /// The pane cannot take what is dragged over it; the text says why.
+    Refused(&'static str),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

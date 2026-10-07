@@ -1,7 +1,7 @@
 //! Where a sidebar session lands in the Agents panes: the selection rule that puts it in the
 //! focused pane, and the drag from a sidebar row onto a pane body.
 
-use gpui::{DragMoveEvent, Window};
+use gpui::{CursorStyle, DragMoveEvent, Window};
 
 use crate::GhostexGpuiApp;
 use crate::app::model::{
@@ -50,14 +50,15 @@ impl GhostexGpuiApp {
         }
     }
 
-    /// The local session a sidebar row drag can land on a pane: a terminal row of the project the
-    /// Agents tree belongs to that already has a tab. Anything else shows no drop zone.
-    /// `None` when the dragged row cannot land on a pane at all; `Some(None)` for a session of the
-    /// active project that has no tab in any pane yet, which only the middle of a pane takes.
+    /// What a sidebar row drag can do on an Agents pane; the hover feedback and the drop both ask
+    /// this, so a pane never shows a zone the release then ignores. `None` for a row that is not a
+    /// session (no feedback at all); `Some(Err(reason))` for a session no pane here can take, which
+    /// the pane says while the pointer is over it; `Some(Ok(None))` for a session of the active
+    /// project that has no tab in any pane yet, which only the middle of a pane takes.
     fn sidebar_drag_pane_session(
         &self,
         drag: &SidebarDrag,
-    ) -> Option<Option<(TerminalSessionId, WorkspacePaneId)>> {
+    ) -> Option<Result<Option<(TerminalSessionId, WorkspacePaneId)>, &'static str>> {
         if drag.kind != "session" {
             return None;
         }
@@ -71,24 +72,24 @@ impl GhostexGpuiApp {
             return None;
         }
         let key = ghostex_gx_core::SessionKey::parse_sidebar_session_id(&drag.id)?;
-        if !key.machine.is_local()
-            || self.agents_workspace_project_id.as_deref() != Some(&key.project_id)
-        {
-            return None;
+        if !key.machine.is_local() {
+            return Some(Err("Can't split here: this session is on another computer"));
         }
-        Some(
-            self.local_workspace_session_mappings
-                .get(&GpuiLocalWorkspaceSessionKey {
-                    project_id: key.project_id,
-                    session_id: key.session_id,
-                })
-                .copied()
-                .and_then(|shell_session_id| {
-                    self.agents_workspace
-                        .pane_id_for_session(shell_session_id)
-                        .map(|pane_id| (shell_session_id, pane_id))
-                }),
-        )
+        if self.agents_workspace_project_id.as_deref() != Some(&key.project_id) {
+            return Some(Err("Can't split here: this session is in another project"));
+        }
+        Some(Ok(self
+            .local_workspace_session_mappings
+            .get(&GpuiLocalWorkspaceSessionKey {
+                project_id: key.project_id,
+                session_id: key.session_id,
+            })
+            .copied()
+            .and_then(|shell_session_id| {
+                self.agents_workspace
+                    .pane_id_for_session(shell_session_id)
+                    .map(|pane_id| (shell_session_id, pane_id))
+            })))
     }
 
     /// CDXC:Workarea 2026-09-23 DECISION:
@@ -102,26 +103,47 @@ impl GhostexGpuiApp {
     /// nothing. The pane hides its surfaces for the zones the moment the drag enters a
     /// pane rather than when it starts, so reordering rows in the sidebar leaves the terminals
     /// alone.
+    ///
+    /// CDXC:Workarea 2026-10-08 DECISION:
+    /// User: "if i drag a session from the sidebar and try to drop it on another project session to split you need to indicate it's not possible somehow". A pane that cannot take the dragged session (another project's session, or one on another computer) shows no split zones: it dims with a short label saying why, the pointer shows the not-allowed cursor and the dragged card fades, and releasing there does nothing, with no toast since the label already said so.
     pub(crate) fn update_sidebar_session_pane_drag_feedback(
         &mut self,
         event: &DragMoveEvent<SidebarDrag>,
         pane_id: WorkspacePaneId,
+        window: &mut Window,
         cx: &mut gpui::Context<Self>,
     ) {
         let over_pane = event.bounds.contains(&event.event.position);
-        let Some(tab) = self.sidebar_drag_pane_session(event.drag(cx)) else {
+        let drag = event.drag(cx).clone();
+        let Some(tab) = self.sidebar_drag_pane_session(&drag) else {
             return;
         };
         if !over_pane {
-            if self.workspace_drop_feedback.is_some_and(|feedback| {
-                feedback.pane_id == pane_id
-                    && matches!(feedback.target, WorkspaceDropTarget::PaneBody(_))
-            }) {
+            if self
+                .workspace_drop_feedback
+                .is_some_and(|feedback| feedback.pane_id == pane_id)
+            {
                 self.clear_workspace_drop_feedback(cx);
+                show_sidebar_drag_refused(&drag, false, window, cx);
             }
             return;
         }
         self.begin_workspace_tab_drag(cx);
+        let tab = match tab {
+            Ok(tab) => tab,
+            Err(reason) => {
+                self.set_workspace_drop_feedback(
+                    Some(WorkspaceDropFeedback {
+                        pane_id,
+                        target: WorkspaceDropTarget::Refused(reason),
+                    }),
+                    cx,
+                );
+                show_sidebar_drag_refused(&drag, true, window, cx);
+                return;
+            }
+        };
+        show_sidebar_drag_refused(&drag, false, window, cx);
         let zone = workspace_pane_body_drop_zone(event.bounds, event.event.position);
         let center = matches!(zone, WorkspaceDropZone::Center);
         // A session with no tab yet can only be shown, not split off; the middle of the pane
@@ -170,7 +192,8 @@ impl GhostexGpuiApp {
             _ => None,
         };
         self.finish_workspace_tab_drag_state(cx);
-        let (Some(tab), Some(zone)) = (session, zone) else {
+        // A refused session never gets a zone; the pane's label already said why.
+        let (Some(Ok(tab)), Some(zone)) = (session, zone) else {
             cx.notify();
             return;
         };
@@ -230,4 +253,24 @@ impl GhostexGpuiApp {
             self.agents_workspace.set_focused_pane(focused);
         }
     }
+}
+
+/// Fades the dragged row and shows the not-allowed cursor while it is over a pane that refuses it,
+/// and puts both back when it leaves. The cursor a sidebar row drag starts with is the arrow its
+/// row shows (`cursor_default`).
+fn show_sidebar_drag_refused(
+    drag: &SidebarDrag,
+    refused: bool,
+    window: &mut Window,
+    cx: &mut gpui::Context<GhostexGpuiApp>,
+) {
+    if drag.refused.replace(refused) == refused {
+        return;
+    }
+    let cursor = if refused {
+        CursorStyle::OperationNotAllowed
+    } else {
+        CursorStyle::Arrow
+    };
+    cx.set_active_drag_cursor_style(cursor, window);
 }

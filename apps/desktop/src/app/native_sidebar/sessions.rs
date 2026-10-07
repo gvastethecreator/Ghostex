@@ -47,11 +47,11 @@ impl GhostexGpuiApp {
                 appearance: appearance.clone(),
                 width: px(0.0),
                 pointer_x: px(0.0),
-                grab: gpui::Point::default(),
             }),
             id: session_id.clone(),
             title: session.title().to_owned(),
             scale: appearance.scale,
+            refused: Default::default(),
         };
         // Every local row drags: a drop on an Agents pane splits it (session_pane_placement.rs),
         // and the reorder drop line still shows only when the sort mode allows a reorder.

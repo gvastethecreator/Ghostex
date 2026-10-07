@@ -265,8 +265,8 @@ impl GhostexGpuiApp {
                 },
             ))
             .on_drag_move::<SidebarDrag>(cx.listener(
-                move |this, event: &gpui::DragMoveEvent<SidebarDrag>, _window, cx| {
-                    this.update_sidebar_session_pane_drag_feedback(event, pane_id, cx);
+                move |this, event: &gpui::DragMoveEvent<SidebarDrag>, window, cx| {
+                    this.update_sidebar_session_pane_drag_feedback(event, pane_id, window, cx);
                 },
             ))
             .can_drop(|value, _window, _cx| {
@@ -291,6 +291,9 @@ impl GhostexGpuiApp {
             .when_some(self.workspace_pane_drop_zone(pane_id), |this, zone| {
                 this.child(self.render_workspace_pane_drop_feedback(pane_id, zone))
             })
+            .when_some(self.workspace_pane_drop_refusal(pane_id), |this, reason| {
+                this.child(self.render_workspace_pane_drop_refusal(pane_id, reason))
+            })
             .into_any_element()
     }
 
@@ -305,6 +308,58 @@ impl GhostexGpuiApp {
             }) if feedback_pane_id == pane_id => Some(zone),
             _ => None,
         }
+    }
+
+    /// Why the pane under a refused drag cannot take it (`session_pane_placement.rs`).
+    pub(crate) fn workspace_pane_drop_refusal(
+        &self,
+        pane_id: WorkspacePaneId,
+    ) -> Option<&'static str> {
+        match self.workspace_drop_feedback {
+            Some(WorkspaceDropFeedback {
+                pane_id: feedback_pane_id,
+                target: WorkspaceDropTarget::Refused(reason),
+            }) if feedback_pane_id == pane_id => Some(reason),
+            _ => None,
+        }
+    }
+
+    /// A refused pane dims and says why in the middle, drawn as a non-interactive child like the
+    /// split zones it stands in for.
+    pub(crate) fn render_workspace_pane_drop_refusal(
+        &self,
+        pane_id: WorkspacePaneId,
+        reason: &'static str,
+    ) -> AnyElement {
+        div()
+            .id(format!(
+                "ghostex-gpui-workspace-pane-drop-refusal-{}",
+                pane_id.0
+            ))
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(gpui::black().opacity(0.45))
+            .child(
+                div()
+                    .flex()
+                    .h(px(28.0))
+                    .items_center()
+                    .rounded(px(5.0))
+                    .border_1()
+                    .border_color(gpui::white().opacity(0.14))
+                    .bg(gpui::rgb(0x1d1d1d).opacity(0.94))
+                    .px(px(12.0))
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(gpui::rgb(0xe5e5e5))
+                    .child(reason),
+            )
+            .into_any_element()
     }
 
     pub(crate) fn render_workspace_pane_drop_feedback(

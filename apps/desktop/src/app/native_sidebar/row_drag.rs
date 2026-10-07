@@ -30,19 +30,11 @@ pub(crate) struct RowDragPreview {
     pub(crate) appearance: SidebarAppearance,
     pub(crate) width: Pixels,
     pub(crate) pointer_x: Pixels,
-    /// Where in the row the pointer grabbed it.
-    pub(crate) grab: gpui::Point<Pixels>,
 }
 
-/// How far below the pointer a dragged session hangs, and how far right of it it starts.
-///
-/// CDXC:Sidebar 2026-10-01 WHY:
-/// GPUI paints the dragged row after everything else, and a drop line is never more than about half a row (plus the gap between projects) from the pointer, so a dragged row drawn under the pointer covered the line every time; that is how a drop into Pinned looked like it showed no line. The dragged session hangs just below the pointer instead, clear of the line next to the pointer. A session's line can also land farther away (Sessions and Parked keep their Last Activity order), so a dragged session also starts right of the pointer and the line's left end stays visible wherever it is drawn.
-///
-/// CDXC:Sidebar 2026-10-06 DECISION:
-/// User: "when i drag a project header it's showing below my cursor which is wrong". A dragged project or collection row sits under the pointer where it was grabbed, which supersedes the rule above for those rows; its fill is see-through, so the line beside the pointer still shows.
-const HANG_BELOW_POINTER: f32 = 26.0;
-const SESSION_RIGHT_OF_POINTER: f32 = 14.0;
+/// CDXC:Sidebar 2026-10-08 DECISION:
+/// User: "when i drag a project header it's showing below my cursor which is wrong" (2026-10-06) and "when i drag a session card in the sidebar it's not aligned with my cursor pls fix". Every dragged row sits under the pointer exactly where it was grabbed; a project or collection row keeps its column, a session follows the pointer both ways so it can be carried onto a pane. This supersedes the 2026-10-01 rule that hung a dragged session 26px below and 14px right of the pointer to keep the drop line clear: the session's fill is see-through instead, so the line beside the pointer still shows through it.
+const SESSION_DRAG_OPACITY: f32 = 0.78;
 
 impl RowDragPreview {
     pub(crate) fn render(&self, title: &str, window: &Window) -> AnyElement {
@@ -91,13 +83,17 @@ impl RowDragPreview {
                 .border_color(*color)
                 .bg(*background),
             RowDragIdentity::Session { session } => row
-                .h(px(34.0 * scale))
-                .pl(px(5.0 * scale))
+                .h(px(super::session_list::SESSION_HEIGHT * scale))
+                // The card's own insets, so the icon and title stay where they were grabbed.
+                .pl(px((5.0
+                    + super::threads::thread_depth(session)
+                        * super::threads::THREAD_INDENT)
+                    * scale))
                 .pr(px(6.0 * scale))
                 .gap(px(6.0 * scale))
                 .rounded(px(5.0 * scale))
                 .bg(session_backing)
-                .opacity(0.95)
+                .opacity(SESSION_DRAG_OPACITY)
                 .when(session.is_focused, |row| {
                     row.bg(session_backing.blend(appearance.session_selected))
                 })
@@ -118,15 +114,10 @@ impl RowDragPreview {
                 ),
         };
         // GPUI draws the preview with its origin at the pointer minus the grab offset, so a row with
-        // no padding above it sits exactly where it was grabbed.
+        // no padding around it sits exactly where it was grabbed.
         let lock_x = !matches!(self.identity, RowDragIdentity::Session { .. });
         div()
             .relative()
-            .when(!lock_x, |wrapper| {
-                wrapper
-                    .pt(self.grab.y + px(HANG_BELOW_POINTER * scale))
-                    .pl(self.grab.x + px(SESSION_RIGHT_OF_POINTER * scale))
-            })
             .when(lock_x, |wrapper| {
                 wrapper.left(self.pointer_x - window.mouse_position().x)
             })

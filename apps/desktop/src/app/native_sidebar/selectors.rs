@@ -135,6 +135,7 @@ impl GhostexGpuiApp {
             id: id.clone(),
             title: space.name.clone(),
             scale,
+            refused: Default::default(),
             preview: super::drag::SidebarDragPreview::Space(super::space_drag::SpaceDragPreview {
                 visible_ids: visible_ids.to_vec(),
                 icon: space.icon.clone(),

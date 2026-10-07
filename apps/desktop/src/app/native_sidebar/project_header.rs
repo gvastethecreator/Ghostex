@@ -69,11 +69,11 @@ impl GhostexGpuiApp {
                 appearance: appearance.clone(),
                 width: px(0.0),
                 pointer_x: px(0.0),
-                grab: gpui::Point::default(),
             }),
             id: id.clone(),
             title: group.title.clone(),
             scale,
+            refused: Default::default(),
         };
         let tooltip = group.title_tooltip.clone();
         let title = if let Some(editor) = self

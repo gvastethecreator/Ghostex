@@ -21,7 +21,7 @@ pub(super) trait SidebarDragSource:
                 .absolute()
                 .inset_0(),
             )
-            .on_drag(drag, move |drag, grab, window, cx| {
+            .on_drag(drag, move |drag, _, window, cx| {
                 let _ = view.update(cx, |app, cx| {
                     app.native_sidebar.dragging = Some((drag.kind, drag.id.clone()));
                     cx.notify();
@@ -32,7 +32,6 @@ pub(super) trait SidebarDragSource:
                     SidebarDragPreview::Row(row) => {
                         row.width = bounds.get().size.width;
                         row.pointer_x = window.mouse_position().x;
-                        row.grab = grab;
                     }
                 }
                 cx.new(|_| preview)
