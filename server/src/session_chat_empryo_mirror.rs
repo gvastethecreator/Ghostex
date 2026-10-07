@@ -23,7 +23,7 @@ use std::sync::Mutex;
 use serde_json::{json, Map, Value};
 
 use crate::resume_lookup::home_dir;
-use crate::session_chat::{extract_string, parse_json_object};
+use crate::session_chat::{extract_string, parse_json_object, tool_result_output};
 
 const EMPRYO_SESSION_ID_MAX_LENGTH: usize = 128;
 
@@ -85,7 +85,7 @@ fn empryo_canonical_tool_call(name: &str, args: Value) -> (String, Value) {
             ]),
         )),
         "read" => {
-            // One file reads like Claude's Read; a multi-file call keeps Empryo's own shape.
+            // One file reads like Claude's Read; several files make one Read row naming them.
             let files = record.get("files").and_then(Value::as_array);
             match files.map(Vec::as_slice) {
                 Some([file]) => {
@@ -116,8 +116,30 @@ fn empryo_canonical_tool_call(name: &str, args: Value) -> (String, Value) {
                         ]),
                     ))
                 }
+                // Several files read as one Read row naming them, as Empryo's own row does.
+                Some(files) if !files.is_empty() => {
+                    let paths: Vec<String> = files
+                        .iter()
+                        .filter_map(|file| extract_string(file.get("path")))
+                        .collect();
+                    Some((
+                        "Read",
+                        object(vec![
+                            ("description", Some(Value::from(paths.join(", ")))),
+                            ("files", field("files")),
+                        ]),
+                    ))
+                }
                 _ => None,
             }
+        }
+        // `run_tool` runs one of Empryo's deferred tools by name; its row names that tool.
+        "run_tool" => {
+            let mut input = record.clone();
+            if let Some(tool) = extract_string(record.get("name")) {
+                input.insert("description".into(), Value::from(tool));
+            }
+            Some(("run_tool", Value::Object(input)))
         }
         "grep" => Some((
             "Grep",
@@ -157,6 +179,20 @@ fn empryo_tool_result(result: &Value) -> (String, bool) {
     (text, failed)
 }
 
+/// A `tool-end` record's `output`: `{"type": "text" | "error-text", "value": …}`.
+fn empryo_tool_end(output: Option<&Value>, at: Value) -> EmpryoToolEnd {
+    let is_error = output
+        .and_then(|output| output.get("type"))
+        .and_then(Value::as_str)
+        .is_some_and(|kind| kind.starts_with("error"));
+    let output = tool_result_output(output.map(|output| output.get("value").unwrap_or(output)));
+    EmpryoToolEnd {
+        output,
+        is_error,
+        at,
+    }
+}
+
 /* ------------------------------------------------------------ turns */
 
 struct EmpryoTurn {
@@ -169,6 +205,23 @@ struct EmpryoTurn {
     reply: Option<Map<String, Value>>,
     /// `complete` or `partial` once the final `assistant` record landed.
     end_status: Option<String>,
+    /// The tools `tool-start`/`tool-end` records reported while the turn runs, in start order.
+    live_calls: Vec<EmpryoLiveCall>,
+}
+
+struct EmpryoLiveCall {
+    id: String,
+    name: String,
+    args: Value,
+    started_at: Value,
+    /// Set once `tool-end` landed.
+    ended: Option<EmpryoToolEnd>,
+}
+
+struct EmpryoToolEnd {
+    output: String,
+    is_error: bool,
+    at: Value,
 }
 
 #[derive(Default)]
@@ -185,11 +238,13 @@ struct EmpryoLog {
     foreign_tabs: HashSet<String>,
 }
 
-const OBSERVED_KINDS: [&str; 6] = [
+const OBSERVED_KINDS: [&str; 8] = [
     "\"k\":\"tab\"",
     "\"k\":\"user\"",
     "\"k\":\"turn-checkpoint\"",
     "\"k\":\"assistant\"",
+    "\"k\":\"tool-start\"",
+    "\"k\":\"tool-end\"",
     "\"k\":\"ui-truncate\"",
     "\"k\":\"ui-clear\"",
 ];
@@ -253,7 +308,47 @@ impl EmpryoLog {
                     user: ui,
                     reply: None,
                     end_status: None,
+                    live_calls: Vec::new(),
                 });
+            }
+            // CDXC:SessionChat 2026-10-07 WHY:
+            // Empryo 3.9.1-beta writes no `turn-checkpoint` while a turn runs; it logs each tool as a `tool-start` record and its output as a `tool-end` record, then the whole reply only when the turn ends. Those records are what lets the chat show a long turn's tools as they run instead of nothing until its answer.
+            "tool-start" | "tool-end" => {
+                let (Some(turn_id), Some(call_id)) = (
+                    extract_string(record.get("turnId")),
+                    extract_string(record.get("toolCallId")),
+                ) else {
+                    return;
+                };
+                // Older logs reuse one `turnId` for a tab's prompts, so the newest such turn owns it.
+                let Some(turn) = self.turns_by_tab.get_mut(&tab).and_then(|turns| {
+                    turns
+                        .iter_mut()
+                        .rev()
+                        .find(|turn| turn.turn_id.as_deref() == Some(turn_id.as_str()))
+                }) else {
+                    return;
+                };
+                if turn.end_status.is_some() {
+                    return;
+                }
+                let timestamp = record.get("ts").cloned().unwrap_or(Value::Null);
+                if kind == "tool-start" {
+                    if turn.live_calls.iter().all(|call| call.id != call_id) {
+                        turn.live_calls.push(EmpryoLiveCall {
+                            id: call_id,
+                            name: extract_string(record.get("name"))
+                                .unwrap_or_else(|| "tool".into()),
+                            args: record.remove("args").unwrap_or(Value::Null),
+                            started_at: timestamp,
+                            ended: None,
+                        });
+                    }
+                } else if let Some(call) =
+                    turn.live_calls.iter_mut().find(|call| call.id == call_id)
+                {
+                    call.ended = Some(empryo_tool_end(record.get("output"), timestamp));
+                }
             }
             "turn-checkpoint" | "assistant" => {
                 let Some(Value::Object(ui)) = record.remove("ui") else {
@@ -271,6 +366,8 @@ impl EmpryoLog {
                 }
                 turn.reply = Some(ui);
                 if kind == "assistant" {
+                    // The final record holds every call with its result.
+                    turn.live_calls.clear();
                     turn.end_status = Some(
                         extract_string(record.get("status")).unwrap_or_else(|| "complete".into()),
                     );
@@ -297,6 +394,7 @@ impl EmpryoLog {
                         // The reply is gone, so the turn waits for the one Empryo writes next.
                         turns[index].reply = None;
                         turns[index].end_status = None;
+                        turns[index].live_calls.clear();
                     }
                 } else if let Some(turn_id) = extract_string(record.get("fromTurnId")) {
                     if let Some(index) = turns
@@ -316,6 +414,69 @@ impl EmpryoLog {
 }
 
 /* ------------------------------------------------------------ rows */
+
+/// One call in an `assistant` row's `toolCalls`, or `None` for a tool Empryo draws no row for.
+fn tool_call_entry(id: &str, name: &str, args: Value) -> Option<Value> {
+    if is_hidden_empryo_tool(name) {
+        return None;
+    }
+    let (name, input) = empryo_canonical_tool_call(name, args);
+    Some(json!({ "callId": id, "name": name, "input": input }))
+}
+
+/// Named after its first call, so a call keeps its row id from `tool-start` to the final record.
+fn tool_calls_row(key: &str, first_id: &str, timestamp: &Value, calls: Vec<Value>) -> Value {
+    json!({
+        "row": "assistant", "id": format!("empryo:{key}:calls:{first_id}"), "turn": key,
+        "ts": timestamp, "toolCalls": calls,
+    })
+}
+
+fn tool_result_row(
+    key: &str,
+    id: &str,
+    timestamp: &Value,
+    output: String,
+    is_error: bool,
+) -> Value {
+    json!({
+        "row": "tool", "id": format!("empryo:{key}:result:{id}"), "turn": key,
+        "ts": timestamp, "callId": id, "output": output, "isError": is_error,
+    })
+}
+
+/// The tools a running turn has started that its newest snapshot does not hold yet, one row per
+/// call with its result once it ended.
+fn push_live_call_rows(rows: &mut Vec<Value>, turn: &EmpryoTurn) {
+    let snapshot_calls: HashSet<&str> = turn
+        .reply
+        .as_ref()
+        .and_then(|reply| reply.get("toolCalls"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|call| call.get("id")?.as_str())
+        .collect();
+    let key = &turn.key;
+    for call in &turn.live_calls {
+        if snapshot_calls.contains(call.id.as_str()) {
+            continue;
+        }
+        let Some(entry) = tool_call_entry(&call.id, &call.name, call.args.clone()) else {
+            continue;
+        };
+        rows.push(tool_calls_row(key, &call.id, &call.started_at, vec![entry]));
+        if let Some(end) = &call.ended {
+            rows.push(tool_result_row(
+                key,
+                &call.id,
+                &end.at,
+                end.output.clone(),
+                end.is_error,
+            ));
+        }
+    }
+}
 
 fn push_reply_rows(rows: &mut Vec<Value>, turn: &EmpryoTurn, reply: &Map<String, Value>) {
     let key = &turn.key;
@@ -345,26 +506,19 @@ fn push_reply_rows(rows: &mut Vec<Value>, turn: &EmpryoTurn, reply: &Map<String,
                 continue;
             }
             let name = extract_string(call.get("name")).unwrap_or_else(|| "tool".into());
-            if is_hidden_empryo_tool(&name) {
-                continue;
-            }
             let args = call.get("args").cloned().unwrap_or(Value::Null);
-            let (name, input) = empryo_canonical_tool_call(&name, args);
+            let Some(entry) = tool_call_entry(id, &name, args) else {
+                continue;
+            };
             first_id.get_or_insert(id);
-            calls.push(json!({ "callId": id, "name": name, "input": input }));
+            calls.push(entry);
             if let Some(result) = call.get("result").filter(|result| !result.is_null()) {
                 let (output, is_error) = empryo_tool_result(result);
-                results.push(json!({
-                    "row": "tool", "id": format!("empryo:{key}:result:{id}"), "turn": key,
-                    "ts": timestamp, "callId": id, "output": output, "isError": is_error,
-                }));
+                results.push(tool_result_row(key, id, &timestamp, output, is_error));
             }
         }
         if let Some(first_id) = first_id {
-            rows.push(json!({
-                "row": "assistant", "id": format!("empryo:{key}:calls:{first_id}"), "turn": key,
-                "ts": timestamp, "toolCalls": calls,
-            }));
+            rows.push(tool_calls_row(key, first_id, &timestamp, calls));
         }
         rows.extend(results);
     };
@@ -486,6 +640,8 @@ fn mirror_rows(raw: &[u8], foreign_tabs: HashSet<String>) -> Vec<Value> {
                 .and_then(|reply| reply.get("timestamp").cloned())
                 .unwrap_or(timestamp);
             rows.push(turn_row(&turn.key, state, ended_at));
+        } else {
+            push_live_call_rows(&mut rows, turn);
         }
     }
     // A prompt Empryo accepted but has not recorded yet (it briefs the model first, which can
