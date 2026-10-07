@@ -270,8 +270,11 @@ Related settings: `terminalViewWidthMode`, `webLinkOpenTarget`,
 ## Sidebar
 
 The sidebar lists projects and their sessions. Project headers carry the git
-branch and diff stats, an agent launcher, Add Worktree, and project actions.
-Right-click a project for Open Folder in the file manager or Add to Group.
+branch and diff stats and, on hover, the agent launcher (New agent and the
+agent picker) and a ⋯ button. The ⋯ button, or a right-click on the project,
+opens the project menu: Compact/Full list, Add Worktree (or Create PR), History,
+New Browser Tab, Create Terminal, pinned Actions, Open Folder in the file
+manager and Add to Group.
 A project's Sleep, Wake, Sleep Inactive and Close Inactive act on that
 project's sessions only; its browser tabs are slept and closed from the tab
 strip above the view, where they live.

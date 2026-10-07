@@ -17,6 +17,7 @@ use crate::sidebar_view::{
     LOCAL_MACHINE_ID,
 };
 
+use super::commands::MenuCommand;
 use super::group::MenuGroup;
 use super::host::MenuHost;
 use super::hover::HoverAction;
@@ -234,10 +235,14 @@ impl<'a> SidebarMenus<'a> {
         })
     }
 
-    /// A project header's context menu.
+    /// A project header's context menu: the buttons the header no longer draws, then the menu proper.
     pub fn project_menu(&self, group: &GroupView) -> Vec<MenuItem> {
         let menu_group = self.menu_group(group);
-        project::project_menu(&project::ProjectMenuInput {
+        let mut menu = self.project_header_menu_rows(group, &menu_group);
+        if !menu.is_empty() {
+            menu.push(MenuItem::separator());
+        }
+        menu.extend(project::project_menu(&project::ProjectMenuInput {
             group: &menu_group,
             sessions: &group.core.sessions,
             collection_id: group.collection_id.as_deref(),
@@ -251,13 +256,57 @@ impl<'a> SidebarMenus<'a> {
                 .iter()
                 .any(|group_id| *group_id == group.core.group_id),
             open_targets: &self.host.open_targets,
-        })
+        }));
+        menu
     }
 
-    /// A project header's buttons.
+    /// A project header's buttons: the ⋯ menu, the last-used agent and the agent picker.
+    ///
+    /// CDXC:Sidebar 2026-10-08 DECISION:
+    /// User (for the phone, applied to the desktop header too): keep only the agent picker and New agent on the project row and move the other buttons into the 3-dots menu. The ⋯ button opens the same menu as a right click.
     pub fn header_actions(&self, group: &GroupView) -> Vec<MenuItem> {
         let menu_group = self.menu_group(group);
-        header::project_header_actions(&menu_group, &self.inputs.settings, self.host)
+        let mut actions =
+            header::project_header_actions(&menu_group, &self.inputs.settings, self.host);
+        if !self.project_header_menu_rows(group, &menu_group).is_empty() {
+            actions.insert(
+                0,
+                MenuItem {
+                    label: Some("More".to_string()),
+                    icon: Some("dots".to_string()),
+                    children: Some(self.project_menu(group)),
+                    ..MenuItem::default()
+                },
+            );
+        }
+        actions
+    }
+
+    /// The rows that moved off the project header into its menu: the Compact/Full list toggle, then
+    /// worktree or PR, History, browser, terminal and the pinned Actions. Empty for a bot or a
+    /// user-made group, whose few header buttons stay.
+    fn project_header_menu_rows(
+        &self,
+        group: &GroupView,
+        menu_group: &MenuGroup<'_>,
+    ) -> Vec<MenuItem> {
+        let mut rows = header::project_header_menu_rows(menu_group, &self.inputs.settings, self.host);
+        if !rows.is_empty() && group.core.show_list_toggle {
+            let (label, icon) = if group.core.expanded {
+                ("Compact", "chevron-up")
+            } else {
+                ("Full", "chevron-down")
+            };
+            rows.insert(
+                0,
+                MenuItem::row(
+                    label,
+                    icon,
+                    MenuCommand::toggle_list(menu_group.storage_id),
+                ),
+            );
+        }
+        rows
     }
 
     /// A collection's context menu.

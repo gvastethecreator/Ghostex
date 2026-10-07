@@ -127,10 +127,7 @@ impl GhostexGpuiApp {
                 })
                 .into_any_element()
         };
-        let mut actions = (*group.header_actions).clone();
-        if group.show_list_toggle {
-            actions.insert(0, json!({ "label": if group.expanded { "Compact" } else { "Full" }, "icon": if group.expanded { "chevron-up" } else { "chevron-down" }, "command": { "type": "toggleList", "groupId": group.storage_id } }));
-        }
+        let actions = (*group.header_actions).clone();
         // CDXC:Projects 2026-09-18 DECISION:
         // User: the project header row has the same insets, side padding, rounding, and hover fill as a session card.
         h_flex()

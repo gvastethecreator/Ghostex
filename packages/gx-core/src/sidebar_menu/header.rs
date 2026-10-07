@@ -14,30 +14,13 @@ use super::host::MenuHost;
 use super::item::{MenuItem, MenuSplit};
 use super::text::transcript_agent;
 
-/// `createNativeProjectHeaderActions`.
-///
-/// CDXC:AgentLauncher 2026-09-18 DECISION:
-/// User: remove the gap between the last-used agent button and the Select agent button in the
-/// project header. Both halves render as the one split button the React header shows.
-///
-/// CDXC:Bots 2026-09-27 DECISION:
-/// User: a bot row shows its pinned Actions, Edit SOUL, Edit config and one "+", because a bot is not a repo: no worktree, PR, history, browser or terminal button, and no agent split with its picker.
-/// Edit SOUL and Edit config always open that bot's own `SOUL.md` and `config.yaml`, in Ghostex's built-in Code view under the bot.
-/// They are fixed buttons on every bot row on this computer, not editable or deletable Actions; a remote computer's bot has none, because its file would open on this computer.
-/// Supersedes the 2026-09-26 decision (pinned Actions and "+" only, with seeded `code <file>` Actions).
-pub fn project_header_actions(
-    group: &MenuGroup<'_>,
+/// The project's pinned Actions (the ones shown on the project row), as header rows.
+fn pinned_actions(
+    group_id: &str,
+    project: &crate::sidebar_view::view::ProjectContextView,
     settings: &SidebarSettings,
     host: &MenuHost,
 ) -> Vec<MenuItem> {
-    let group_id = group.group_id;
-    let Some(project) = group.project else {
-        return vec![MenuItem::row(
-            "Create a Terminal",
-            "plus",
-            MenuCommand::command(message::create_session_in_group(group_id)),
-        )];
-    };
     let mut pinned = Vec::new();
     let project_commands = host
         .project_commands
@@ -71,6 +54,34 @@ pub fn project_header_actions(
             ));
         }
     }
+    pinned
+}
+
+/// `createNativeProjectHeaderActions`.
+///
+/// CDXC:AgentLauncher 2026-09-18 DECISION:
+/// User: remove the gap between the last-used agent button and the Select agent button in the
+/// project header. Both halves render as the one split button the React header shows.
+///
+/// CDXC:Bots 2026-09-27 DECISION:
+/// User: a bot row shows its pinned Actions, Edit SOUL, Edit config and one "+", because a bot is not a repo: no worktree, PR, history, browser or terminal button, and no agent split with its picker.
+/// Edit SOUL and Edit config always open that bot's own `SOUL.md` and `config.yaml`, in Ghostex's built-in Code view under the bot.
+/// They are fixed buttons on every bot row on this computer, not editable or deletable Actions; a remote computer's bot has none, because its file would open on this computer.
+/// Supersedes the 2026-09-26 decision (pinned Actions and "+" only, with seeded `code <file>` Actions).
+pub fn project_header_actions(
+    group: &MenuGroup<'_>,
+    settings: &SidebarSettings,
+    host: &MenuHost,
+) -> Vec<MenuItem> {
+    let group_id = group.group_id;
+    let Some(project) = group.project else {
+        return vec![MenuItem::row(
+            "Create a Terminal",
+            "plus",
+            MenuCommand::command(message::create_session_in_group(group_id)),
+        )];
+    };
+    let mut pinned = pinned_actions(group_id, project, settings, host);
     if project.bot_profile.is_some() {
         let edit_files: &[_] = if group.is_remote {
             &[]
@@ -98,6 +109,55 @@ pub fn project_header_actions(
             MenuCommand::project_action(group_id, "bot", None),
         ));
         return pinned;
+    }
+    let mut actions = Vec::new();
+    let primary = host.primary_agent();
+    let primary_icon = primary.and_then(|agent| agent.icon.as_deref());
+    actions.push(MenuItem {
+        label: Some(format!(
+            "Create {}",
+            primary.map_or("Agent", |agent| agent.name.as_str())
+        )),
+        icon: Some("sparkles".to_string()),
+        agent_icon: primary_icon.map(str::to_string),
+        image_data_url: primary_icon
+            .and_then(colored_agent_logo)
+            .map(str::to_string),
+        command: Some(MenuCommand::project_action(
+            group_id,
+            "agent",
+            primary.map(|agent| agent.agent_id.as_str()),
+        )),
+        split: Some(MenuSplit::Start),
+        hotkey: Some("createAgentSession".to_string()),
+        ..MenuItem::default()
+    });
+    actions.push(MenuItem {
+        label: Some("Select Agent".to_string()),
+        icon: Some("chevron-down".to_string()),
+        children: Some(agent_launcher_items(group_id, host)),
+        split: Some(MenuSplit::End),
+        ..MenuItem::default()
+    });
+    actions
+}
+
+/// The project header buttons that live in the project's ⋯ menu: Add Worktree or Create PR, History, New Browser Tab, Create Terminal and the pinned Actions.
+///
+/// CDXC:Sidebar 2026-10-08 DECISION:
+/// User (for the phone, applied to the desktop header too): move most per-project buttons into the 3-dots menu, keeping only the agent picker and New agent. A header that shows six buttons on hover pushed the project name out of a 200px sidebar. A bot row keeps its own few buttons.
+/// SEE-ALSO: `SidebarMenus::header_actions` puts the ⋯ button in front of the agent split; `project_menu` starts with these rows.
+pub fn project_header_menu_rows(
+    group: &MenuGroup<'_>,
+    settings: &SidebarSettings,
+    host: &MenuHost,
+) -> Vec<MenuItem> {
+    let group_id = group.group_id;
+    let Some(project) = group.project else {
+        return Vec::new();
+    };
+    if project.bot_profile.is_some() {
+        return Vec::new();
     }
     let mut actions = vec![
         if project.worktree.is_some() {
@@ -137,35 +197,7 @@ pub fn project_header_actions(
         )
         .with_hotkey("createSession"),
     );
-    actions.append(&mut pinned);
-    let primary = host.primary_agent();
-    let primary_icon = primary.and_then(|agent| agent.icon.as_deref());
-    actions.push(MenuItem {
-        label: Some(format!(
-            "Create {}",
-            primary.map_or("Agent", |agent| agent.name.as_str())
-        )),
-        icon: Some("sparkles".to_string()),
-        agent_icon: primary_icon.map(str::to_string),
-        image_data_url: primary_icon
-            .and_then(colored_agent_logo)
-            .map(str::to_string),
-        command: Some(MenuCommand::project_action(
-            group_id,
-            "agent",
-            primary.map(|agent| agent.agent_id.as_str()),
-        )),
-        split: Some(MenuSplit::Start),
-        hotkey: Some("createAgentSession".to_string()),
-        ..MenuItem::default()
-    });
-    actions.push(MenuItem {
-        label: Some("Select Agent".to_string()),
-        icon: Some("chevron-down".to_string()),
-        children: Some(agent_launcher_items(group_id, host)),
-        split: Some(MenuSplit::End),
-        ..MenuItem::default()
-    });
+    actions.append(&mut pinned_actions(group_id, project, settings, host));
     actions
 }
 
