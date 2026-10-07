@@ -148,7 +148,7 @@ pub fn queue(state: &ChatState) -> Queue {
         state.session.queue_prompts.is_some(),
         &state.composer.transport,
     );
-    let prompts = state
+    let mut prompts: Vec<QueuedPrompt> = state
         .session
         .queue_prompts
         .as_deref()
@@ -166,10 +166,61 @@ pub fn queue(state: &ChatState) -> Queue {
         })
         .map(queued_prompt)
         .collect();
+    prompts.extend(queueing_prompts(state, &prompts));
     Queue {
         capabilities,
         prompts,
     }
+}
+
+/// The id prefix of a queued row drawn before gxserver has answered the queue call.
+pub const QUEUEING_PROMPT_ID_PREFIX: &str = "queueing:";
+
+/// Rows for the queues Enter or Tab made that gxserver has not answered yet, so the text leaves
+/// the composer and shows in the strip at once (the `CDXC:SessionChat` decision on
+/// `crate::composer::send::draw_at_enter`).
+///
+/// A row is held (`busy`) because it has no gxserver id to edit, move or delete by. It goes when
+/// the queue call answers with the authoritative strip, or as soon as a frame already carries a
+/// row with its text.
+fn queueing_prompts(state: &ChatState, queued: &[QueuedPrompt]) -> Vec<QueuedPrompt> {
+    let composer = &state.composer;
+    composer
+        .submitting
+        .iter()
+        .chain(composer.waiting.iter())
+        .enumerate()
+        .filter(|(_, submission)| {
+            !submission.handoff
+                && submission
+                    .phases
+                    .contains(&crate::composer::send::SendPhase::QueueText)
+        })
+        .filter_map(|(index, submission)| {
+            let text = submission.text.trim().to_string();
+            if text.is_empty() || queued.iter().any(|row| row.text.trim() == text) {
+                return None;
+            }
+            let key = submission
+                .send_request_id
+                .clone()
+                .or_else(|| {
+                    submission
+                        .version
+                        .as_ref()
+                        .map(|version| version.draft_id.clone())
+                })
+                .unwrap_or_else(|| index.to_string());
+            Some(QueuedPrompt {
+                id: format!("{QUEUEING_PROMPT_ID_PREFIX}{key}"),
+                preview: queue_row_preview(&text),
+                text,
+                state: "queued".to_string(),
+                busy: true,
+                ..Default::default()
+            })
+        })
+        .collect()
 }
 
 fn queued_prompt(prompt: &Value) -> QueuedPrompt {

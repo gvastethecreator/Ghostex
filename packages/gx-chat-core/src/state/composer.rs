@@ -70,6 +70,10 @@ pub struct ComposerState {
     pub actions: ComposerActionAvailability,
     /// A send is in flight and the composer is holding its text.
     pub submitting: Option<Submission>,
+    /// Sends, queues and handoffs the user made while `submitting` was still in flight, oldest
+    /// first. Each has already drawn its echo; it starts when the one ahead of it ends
+    /// (`crate::composer::send::begin`).
+    pub waiting: Vec<Submission>,
     /// The keystroke `sendKey` is waiting on: the request id, the key, and the marker to record
     /// only once the write is accepted.
     pub key_send: Option<(u64, String, String)>,
@@ -177,9 +181,11 @@ pub struct Submission {
     pub refresh_after_send: bool,
     /// This is a `handoff`: the draft is parked for the terminal rather than delivered.
     pub handoff: bool,
-    /// The head delivery phase is waiting for the send gate to clear. A send has already drawn its
-    /// echo or marker, so the phase resumes without drawing it again.
+    /// The head delivery phase is waiting for the send gate to clear.
     pub awaiting_gate: bool,
+    /// The echo, the marker or the queued row was drawn when Enter was pressed, so the delivery
+    /// phase does not draw it again.
+    pub drawn: bool,
     /// The `sendRequestId` gxserver delivers this submission under at most once; `None` when the
     /// host supplied no random ids, which leaves naming the send to gxserver.
     pub send_request_id: Option<String>,

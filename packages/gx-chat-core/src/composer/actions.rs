@@ -29,6 +29,21 @@ use crate::wire::ChatRpcMethod;
 
 /// Handles one action family d owns.
 pub fn handle(state: &mut ChatState, action: &UserAction, context: &ChatContext) -> Vec<Effect> {
+    // A row still waiting for gxserver's answer has no id gxserver knows.
+    if matches!(
+        action.kind,
+        ActionKind::RetryQueue
+            | ActionKind::RemoveQueue
+            | ActionKind::SendQueue
+            | ActionKind::MoveQueue
+    ) && [action.param("promptId"), action.param("targetId")]
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .any(|id| id.starts_with(crate::composer::document::QUEUEING_PROMPT_ID_PREFIX))
+    {
+        return Vec::new();
+    }
     match action.kind {
         ActionKind::ComposerScroll | ActionKind::ComposerExpand => scroll(state, action, context),
         ActionKind::CompleteComposerCommand => complete_command(state),

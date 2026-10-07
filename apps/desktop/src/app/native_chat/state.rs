@@ -156,6 +156,8 @@ pub(crate) struct NativeChatView {
     pub(crate) draft: String,
     pub(crate) draft_revision: u64,
     pub(crate) draft_id: String,
+    /// A send left this composer and has not settled; Enter does not wait for it (the core holds
+    /// later sends behind it), so only summaries read it.
     pub(crate) pending_send: bool,
     pub(crate) composer_ready: bool,
     pub(crate) expanded: HashSet<String>,

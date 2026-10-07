@@ -59,7 +59,7 @@ impl NativeChatView {
                 "hasRuntime": self.runtime.is_some(),
             }),
         );
-        if !self.composer_ready || self.draft.trim().is_empty() || self.pending_send {
+        if !self.composer_ready || self.draft.trim().is_empty() {
             return;
         }
         if mode != "send" && self.snapshot["queue"]["capabilities"]["canQueue"] != true {
