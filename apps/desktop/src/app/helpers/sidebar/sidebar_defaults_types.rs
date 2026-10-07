@@ -358,7 +358,8 @@ pub(crate) const GPUI_DEFAULT_SIDEBAR_AGENTS: &[GpuiDefaultSidebarAgent] = &[
     GpuiDefaultSidebarAgent {
         agent_id: "empryo",
         command: "empryo",
-        hidden_by_default: false,
+        // CDXC:AgentProviders 2026-10-08 WHY: starts off like the server's list, so Empryo shows under More agents until turned on. SEE-ALSO: server/src/sidebar_hud/model.rs.
+        hidden_by_default: true,
         icon: "empryo",
         name: "Empryo",
     },

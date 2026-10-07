@@ -308,9 +308,12 @@
     "binary": "empryo",
     "docsUrl": "https://empryo.com/docs/installation",
     "native": {
-      "install": "curl -fsSL https://empryo.com/install.sh | bash"
+      "install": "curl -fsSL https://empryo.com/install.sh | bash",
+      "windowsInstall": "irm https://empryo.com/install.ps1 | iex",
+      "pathMarkers": ["/.empryo/", "/appdata/local/empryo/"]
     },
     "installDirs": {
+      "windows": ["%LOCALAPPDATA%/Empryo/bin"],
       "unix": ["~/.empryo/bin"]
     },
     "latestVersion": {

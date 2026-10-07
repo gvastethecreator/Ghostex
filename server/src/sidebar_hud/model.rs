@@ -277,7 +277,8 @@ pub(super) const DEFAULT_SIDEBAR_AGENTS: &[DefaultSidebarAgent] = &[
     DefaultSidebarAgent {
         agent_id: "empryo",
         command: "empryo",
-        hidden_by_default: false,
+        // CDXC:AgentProviders 2026-10-08 WHY: Empryo arrived after most users' agent lists were saved, so an agent with no stored row reads as on and showed an enabled switch for a CLI nobody installed. It starts off and shows under More agents until turned on; a stored `hidden: false` row (someone who already turned it on) stays on. SEE-ALSO: apps/desktop/src/app/helpers/sidebar/sidebar_defaults_types.rs, packages/settings-catalog/src/data/sidebar_agents.rs.
+        hidden_by_default: true,
         icon: "empryo",
         name: "Empryo",
     },

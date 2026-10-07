@@ -151,6 +151,7 @@ pub const AGENT_HOOK_SUPPORTED_DEFAULT_AGENTS: J = J::Arr(&[
     J::Obj(&[
         ("agentId", J::Str("empryo")),
         ("command", J::Str("empryo")),
+        ("hiddenByDefault", J::Bool(true)),
         ("icon", J::Str("empryo")),
         ("name", J::Str("Empryo")),
     ]),
@@ -313,6 +314,7 @@ pub const DEFAULT_SIDEBAR_AGENTS: J = J::Arr(&[
     J::Obj(&[
         ("agentId", J::Str("empryo")),
         ("command", J::Str("empryo")),
+        ("hiddenByDefault", J::Bool(true)),
         ("icon", J::Str("empryo")),
         ("name", J::Str("Empryo")),
     ]),
