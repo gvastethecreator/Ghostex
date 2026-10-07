@@ -99,11 +99,7 @@ fn freebuff_composer_input(lines: &[String]) -> Option<SessionChatComposerInput>
     let region = freebuff_input_region(lines)?;
     let rows: Vec<String> = lines[region.clone()]
         .iter()
-        .map(|line| {
-            let line = line.trim();
-            let line = line.strip_prefix('│').unwrap_or(line);
-            line.strip_suffix('│').unwrap_or(line).trim().to_string()
-        })
+        .map(|line| box_interior(line).to_string())
         .collect();
     let first = rows.iter().position(|row| !row.is_empty());
     let last = rows.iter().rposition(|row| !row.is_empty());
@@ -145,6 +141,16 @@ const EMPRYO_FOOTER_MAX_LINES: usize = 3;
 /// CDXC:AgentScreenDetection 2026-10-06 WHY:
 /// Empryo 3.9.0-beta draws its input as the lowest rounded box on screen with only its statusline below, the first row opening with its prompt glyph (`◈`/`◇`, or a `◍◉◎` spinner frame while a turn runs; `$_n` and the input-box marker in its TUI bundle). Its question, approval, slash-command and queued-message panels are rounded boxes too, but they sit above the input box, and a question squeezes the input box to its top border, so the input exists only while that box is whole and last. Attached images are small boxes drawn inside it above the glyph row, so the input starts at that row.
 pub(super) fn empryo_input_region(lines: &[String]) -> Option<Range<usize>> {
+    empryo_input_box(lines).map(|(_, region)| region)
+}
+
+/// The row of Empryo's input box top border, which Empryo 3.9.1-beta draws its model on.
+pub(crate) fn empryo_input_head(lines: &[String]) -> Option<usize> {
+    empryo_input_box(lines).map(|(head, _)| head)
+}
+
+/// [`empryo_input_region`] with the row of the box's top border.
+fn empryo_input_box(lines: &[String]) -> Option<(usize, Range<usize>)> {
     let foot = lines.iter().rposition(|line| {
         let line = line.trim();
         line.starts_with('╰') && line.ends_with('╯')
@@ -173,11 +179,35 @@ pub(super) fn empryo_input_region(lines: &[String]) -> Option<Range<usize>> {
     {
         return None;
     }
-    let start = (head + 1..foot).find(|&row| empryo_marker(&lines[row]).is_some())?;
-    lines[head + 1..start]
+    let body = head + 1 + empryo_tray_rows(&lines[head + 1..foot])?;
+    let start = (body..foot).find(|&row| empryo_marker(&lines[row]).is_some())?;
+    lines[body..start]
         .iter()
         .all(|line| empryo_attachment_row(line).is_some())
-        .then_some(start..foot)
+        .then_some((head, start..foot))
+}
+
+/// CDXC:AgentScreenDetection 2026-10-07 WHY:
+/// After a turn Empryo 3.9.1-beta opens its input box with a tray (`│ ▸ Events 1 · ▸ Queue 2`, `▾` with its list drawn below while open) closed off by a rule row, all above the prompt glyph. The rows the tray takes at the top of `rows` (the box's interior), `Some(0)` without one, `None` for a tray with no rule under it.
+fn empryo_tray_rows(rows: &[String]) -> Option<usize> {
+    if !rows
+        .first()
+        .is_some_and(|row| box_interior(row).starts_with(['\u{25b8}', '\u{25be}']))
+    {
+        return Some(0);
+    }
+    let rule = rows.iter().position(|row| {
+        let row = box_interior(row);
+        !row.is_empty() && row.chars().all(|ch| ch == '\u{2500}')
+    })?;
+    Some(rule + 1)
+}
+
+/// A box row's text between its `│` borders, trimmed.
+fn box_interior(line: &str) -> &str {
+    let line = line.trim();
+    let line = line.strip_prefix('\u{2502}').unwrap_or(line);
+    line.strip_suffix('\u{2502}').unwrap_or(line).trim()
 }
 
 /// The attachment boxes a row inside Empryo's input box draws (`│ ╭──╮ ╭──╮   │`), or `None`
@@ -189,13 +219,26 @@ fn empryo_attachment_row(line: &str) -> Option<usize> {
         .then(|| inner.matches('╭').count())
 }
 
+/// Empryo's voice button: a Nerd Font microphone, `♩` without a Nerd Font.
+fn is_empryo_voice_button(ch: char) -> bool {
+    ch == '\u{2669}' || crate::session_chat_options::is_nerd_font_icon(ch)
+}
+
 fn is_empryo_marker(ch: &char) -> bool {
     EMPRYO_IDLE_MARKERS.contains(ch) || EMPRYO_BUSY_MARKERS.contains(ch)
 }
 
 /// The prompt glyph opening `row`, the text right after an input-box border `│`.
+///
+/// CDXC:AgentScreenDetection 2026-10-07 WHY:
+/// Empryo 3.9.1-beta draws its voice button before the glyph while voice input is on (`│  \u{f130}  ◈`, `♩` without a Nerd Font). Requiring the glyph right after the border read every 3.9.1 input box as missing, so chat sends waited forever and the draft handoff failed (Sven's try-it, 2026-10-07).
 fn empryo_marker_after_border(row: &str) -> Option<char> {
-    let mut chars = row.strip_prefix(' ')?.chars();
+    let row = row.strip_prefix(' ')?;
+    let row = match row.trim_start().strip_prefix(is_empryo_voice_button) {
+        Some(rest) if rest.starts_with(' ') => rest.trim_start(),
+        _ => row,
+    };
+    let mut chars = row.chars();
     let marker = chars.next().filter(is_empryo_marker)?;
     matches!(chars.next(), None | Some(' ')).then_some(marker)
 }

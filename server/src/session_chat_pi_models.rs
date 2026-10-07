@@ -813,22 +813,70 @@ fn transcript_model(path: &Path) -> Option<String> {
     })
 }
 
+/// Lowercase alphanumeric words joined by `-`, so `Claude Opus 5.5` and `claude-opus-5-5` compare.
+fn spelled(text: &str) -> String {
+    text.to_lowercase()
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+/// Whether an Empryo display name (a model panel row, `Subscriptions · Claude Pro/Max Claude Opus
+/// 5`, or the input box border's `Anthropic-sub/Claude Opus 5.5`) ends with the model `id`, or with
+/// the id less a trailing `-YYYYMMDD` date.
+pub(crate) fn empryo_name_spells_id(name: &str, id: &str) -> bool {
+    let name = format!("-{}", spelled(name));
+    let id = spelled(id);
+    let undated = match id.rsplit_once('-') {
+        Some((head, date)) if date.len() == 8 && date.bytes().all(|byte| byte.is_ascii_digit()) => {
+            Some(head.to_string())
+        }
+        _ => None,
+    };
+    std::iter::once(id)
+        .chain(undated)
+        .any(|id| name.ends_with(&format!("-{id}")))
+}
+
+/// Whether the model Empryo 3.9.1-beta shows on its input box border, `<vendor>/<display name>`
+/// (only the name in a narrow box), is `value` (`provider/id`): the name spells the id, and the
+/// vendor, when shown, names the provider. Empryo prints `<Vendor>-sub` for its `proxy` and
+/// `subscriptions` providers, `<Vendor>-<provider name without spaces>` for any other, and the bare
+/// vendor for the vendor's own provider, which is what tells `subscriptions/gpt-6-luna` from
+/// `opencode-go/gpt-6-luna`.
+pub(crate) fn empryo_shown_names_value(shown: &str, value: &str) -> bool {
+    let Some((provider, id)) = value.split_once('/') else {
+        return false;
+    };
+    if !empryo_name_spells_id(shown, id) {
+        return false;
+    }
+    let Some((vendor, _)) = shown.split_once('/') else {
+        return true;
+    };
+    let compact = |text: &str| spelled(text).replace('-', "");
+    match vendor.rsplit_once('-') {
+        Some((_, "sub")) => matches!(provider, "proxy" | "subscriptions"),
+        Some((_, suffix)) => compact(suffix) == compact(provider),
+        None => compact(vendor) == compact(provider),
+    }
+}
+
 /// The catalog row a statusline reading names, when the reading is not a row's value already:
-/// the one row whose `terminalLabels` holds it, or, when several do, the one the transcript
-/// recorded. `None` leaves the reading as it is.
+/// the one row whose `terminalLabels` holds it (for Empryo, else the one its display name names),
+/// or, when several do, the one the transcript recorded. `None` leaves the reading as it is.
 pub(crate) fn pi_family_catalog_value(
     catalog: &Value,
     shown: &str,
     recorded: Option<&str>,
 ) -> Option<String> {
-    let rows = catalog
+    let (agent, rows) = catalog
         .get("agents")?
         .as_object()?
         .iter()
-        .find(|(agent, _)| PiFamilyAgent::from_id(agent).is_some())?
-        .1
-        .get("models")?
-        .as_array()?;
+        .find_map(|(agent, entry)| PiFamilyAgent::from_id(agent).map(|agent| (agent, entry)))?;
+    let rows = rows.get("models")?.as_array()?;
     fn value_of(row: &Value) -> Option<&str> {
         row.get("value").and_then(Value::as_str)
     }
@@ -844,6 +892,15 @@ pub(crate) fn pi_family_catalog_value(
         })
         .filter_map(value_of)
         .collect();
+    // Empryo 3.9.1-beta names the model by display name (`OpenAI-sub/GPT-6 Luna`), never its id.
+    let candidates = if candidates.is_empty() && agent == PiFamilyAgent::Empryo {
+        rows.iter()
+            .filter_map(value_of)
+            .filter(|value| empryo_shown_names_value(shown, value))
+            .collect()
+    } else {
+        candidates
+    };
     if let Some(recorded) = recorded.filter(|recorded| candidates.contains(recorded)) {
         return Some(recorded.to_string());
     }

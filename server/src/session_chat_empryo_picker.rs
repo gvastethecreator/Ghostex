@@ -6,7 +6,9 @@
 //! SEE-ALSO: server/src/session_chat_pi_models.rs (the lineup), server/src/session_chat_options/agent_matchers.rs `match_empryo_statusline`.
 
 use super::*;
-use crate::session_chat_pi_models::{pi_family_terminal_labels, PiFamilyAgent};
+use crate::session_chat_pi_models::{
+    empryo_name_spells_id, empryo_shown_names_value, pi_family_terminal_labels, PiFamilyAgent,
+};
 
 const EMPRYO_MODELS_COMMAND: &str = "/models\r";
 const EMPRYO_EFFORT_PANEL_COMMAND: &str = "/effort\r";
@@ -16,31 +18,6 @@ const EMPRYO_PANEL_TIMEOUT_MS: u64 = 10_000;
 const EMPRYO_ROW_STEP_LIMIT: usize = 12;
 /// The first Escape clears the panel's search, the second closes it.
 const EMPRYO_PANEL_CANCEL_ESCAPES: usize = 2;
-
-/// Lowercase alphanumeric words joined by `-`, so `Claude Opus 5.5` and `claude-opus-5-5` compare.
-fn spelled(text: &str) -> String {
-    text.to_lowercase()
-        .split(|ch: char| !ch.is_ascii_alphanumeric())
-        .filter(|word| !word.is_empty())
-        .collect::<Vec<_>>()
-        .join("-")
-}
-
-/// Whether a result row's name (`Subscriptions · Claude Pro/Max Claude Opus 5`) ends with the
-/// model `id`, or with the id less a trailing `-YYYYMMDD` date.
-fn row_names_model(name: &str, id: &str) -> bool {
-    let name = format!("-{}", spelled(name));
-    let id = spelled(id);
-    let undated = match id.rsplit_once('-') {
-        Some((head, date)) if date.len() == 8 && date.bytes().all(|byte| byte.is_ascii_digit()) => {
-            Some(head.to_string())
-        }
-        _ => None,
-    };
-    std::iter::once(id)
-        .chain(undated)
-        .any(|id| name.ends_with(&format!("-{id}")))
-}
 
 struct EmpryoResultRow {
     name: String,
@@ -144,9 +121,11 @@ fn empryo_footer(screen: &str) -> Option<(String, Option<String>)> {
     ))
 }
 
-/// Whether the statusline's `<provider name>/<id>` is `model` (`provider/id`).
+/// Whether the screen's model, `<provider name>/<id>` (3.9.0-beta) or `<vendor>/<display name>`
+/// (3.9.1-beta), is `model` (`provider/id`).
 fn empryo_shows_model(shown: &str, model: &str, labels: &[String]) -> bool {
-    labels.iter().any(|label| label.eq_ignore_ascii_case(shown)) || spelled(shown) == spelled(model)
+    labels.iter().any(|label| label.eq_ignore_ascii_case(shown))
+        || empryo_shown_names_value(shown, model)
 }
 
 impl PickerDriver<'_> {
@@ -240,7 +219,7 @@ impl PickerDriver<'_> {
             let matching: Vec<usize> = rows
                 .iter()
                 .enumerate()
-                .filter(|(_, row)| row_names_model(&row.name, id))
+                .filter(|(_, row)| empryo_name_spells_id(&row.name, id))
                 .map(|(index, _)| index)
                 .collect();
             let target = match matching.as_slice() {

@@ -809,6 +809,28 @@ pub(super) fn match_empryo_statusline(line: &str) -> Option<SessionChatDetectedS
     Some(pi_family_selection(name.to_string(), name.to_string(), effort))
 }
 
+/// CDXC:AgentScreenDetection 2026-10-07 WHY:
+/// Empryo 3.9.1-beta moved the model off its statusline onto the input box's top border (`╭─ OpenAI-sub/GPT-6 Luna · ● medium · YOLO ──── 󰑮 Cache idle ─╮`): `<vendor>/<display name>` (only the name when the box is narrow), then ` · `-separated segments for the effort (a level glyph and its name, the glyph alone while the tab keeps the model's default effort), the mode, `as <agent>` and `YOLO`. The caller passes only the input box's own top border, since Empryo's panels are rounded boxes too. The display name maps back to the picker's `provider/id` in `pi_family_catalog_value`.
+pub(super) fn match_empryo_input_head(line: &str) -> Option<SessionChatDetectedSelection> {
+    let head = line
+        .trim()
+        .strip_prefix('\u{256d}')?
+        .trim_start_matches('\u{2500}')
+        .trim_start();
+    let head = head.split(" \u{2500}").next()?.trim();
+    let mut segments = head.split(" \u{b7} ").map(str::trim);
+    let name = segments.next().filter(|name| !name.is_empty())?;
+    let effort = segments.find_map(|segment| {
+        let (glyph, level) = segment.split_once(' ')?;
+        (glyph.chars().count() == 1 && (PI_FAMILY_EFFORTS.contains(&level) || level == "none"))
+            .then(|| level.to_string())
+    });
+    Some(SessionChatDetectedSelection {
+        terminal_status_line: Some(head.to_string()),
+        ..pi_family_selection(name.to_string(), name.to_string(), effort)
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Hermes grammar
 //   ⚕ grok-4.6 │ ctx -- │ [░░░░░░░░░░] -- │ 34s │ ⏲ 0s

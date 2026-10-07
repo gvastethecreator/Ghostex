@@ -17,17 +17,17 @@ const SUBMIT_CHECK_TAIL_LINES: usize = 30;
 /// Claude Code's collapsed large-paste placeholder, normalized and lowercased.
 const CLAUDE_PASTED_PLACEHOLDER: &str = "[pastedtext";
 
-const CODEX_KEPT_MESSAGE: &str = "Codex kept the message in its input box instead of sending it. Press Enter in the terminal to send it.";
 const CLAUDE_KEPT_MESSAGE: &str = "Claude Code kept the message in its input box instead of sending it, so nothing was sent and Ghostex cleared that input box.";
 
 /// The agents whose input box a send reads back after its Return.
 pub(crate) fn verifies_submission(agent: &str) -> bool {
-    matches!(agent, "codex" | "claude" | "openclaude")
+    matches!(agent, "codex" | "claude" | "openclaude" | "empryo")
 }
 
 /// CDXC:SessionChat 2026-09-26 DECISION:
 /// User: a Codex message must never again show as sent in the chat while it sits unsent in the CLI's input box ("my message was in the input box of the cli just needed to hit enter"). After the Return, the send reads Codex's input box; if the message is still there, it presses Return once more, as the user had to, logs the screen so the cause can be fixed at its source, and reports a failure if Codex still keeps it.
 /// WHY: the input box is read from its own region (Codex's styled cells, Claude Code's rule-bounded box), so a history row that repeats the message is never mistaken for it. A screen that cannot be read, or an input box that is gone (a working Codex, a dialog), counts as taken, so this never blocks a message it cannot see.
+/// CDXC:SessionChat 2026-10-07 WHY: Empryo takes the same check. While Empryo 3.9.1-beta's repo map is still building (the first minutes in a large repo), the first Return on a message only arms it ("Enter again sends before the map is ready"), so a chat send right after launch sat in Empryo's input box; the second Return is Empryo's own way to send it.
 /// CDXC:SessionChat 2026-10-04 WHY: Claude Code takes the same check. A `ghostex agents send` whose paste Claude would not submit (a form feed in it; see `picture_terminal_control_characters`) answered "accepted" while the message sat in Claude's input box, until the delivery watchdog handed it back to the chat composer as a draft. Claude's input box is cleared when it still holds the message after the second Return, because pressing Enter there would not send it either and the failure already says nothing was sent.
 pub(crate) async fn confirm_submitted(
     agent: &str,
@@ -67,8 +67,11 @@ pub(crate) async fn confirm_submitted(
     let Some(screen) = message_still_held(agent, zmx_name, &needles, cancelled).await else {
         return Ok(());
     };
-    let kept = if agent == "codex" {
-        CODEX_KEPT_MESSAGE
+    let kept = if matches!(agent, "codex" | "empryo") {
+        format!(
+            "{} kept the message in its input box instead of sending it. Press Enter in the terminal to send it.",
+            agent_name(agent)
+        )
     } else {
         // The returned-prompt detector would otherwise find this text in the box later and hand it
         // to the chat composer as a draft the sender never sees.
@@ -80,26 +83,26 @@ pub(crate) async fn confirm_submitted(
             &build_agent_tui_clear_input_for_text(text),
         )
         .await;
-        CLAUDE_KEPT_MESSAGE
+        CLAUDE_KEPT_MESSAGE.to_string()
     };
     crate::session_chat_send_diagnostics::record_send_recovery_from_worker(
         "sessionChatSendNotSubmitted",
         project_id,
         session_id,
-        kept,
+        &kept,
         &screen_tail(&screen),
     );
     Err(SessionChatSendError::new(
         SessionChatSendFailure::Write,
-        kept.to_string(),
+        kept,
     ))
 }
 
 fn agent_name(agent: &str) -> &'static str {
-    if agent == "codex" {
-        "Codex"
-    } else {
-        "Claude Code"
+    match agent {
+        "codex" => "Codex",
+        "empryo" => "Empryo",
+        _ => "Claude Code",
     }
 }
 

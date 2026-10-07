@@ -58,7 +58,7 @@ use crate::storage::open_gxserver_database;
 #[path = "session_chat_composer_input.rs"]
 mod input;
 pub use input::{claude_composer_draft, session_chat_composer_input, SessionChatComposerInput};
-pub(crate) use input::{empryo_composer_busy, empryo_input_unfocused};
+pub(crate) use input::{empryo_composer_busy, empryo_input_head, empryo_input_unfocused};
 
 /// The row Hermes's live composer starts on, the one readiness reads, or `None` when it is not on screen.
 pub(crate) fn hermes_composer_row(screen_text: &str) -> Option<usize> {

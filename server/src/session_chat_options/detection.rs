@@ -13,6 +13,11 @@ pub fn detect_session_chat_selection(
     text: &str,
 ) -> Option<SessionChatDetectedSelection> {
     let scanned_lines = scan_window(text);
+    let empryo_head = if agent == SessionChatOptionAgent::Empryo {
+        crate::session_chat_composer::empryo_input_head(&scanned_lines)
+    } else {
+        None
+    };
     let mut found = SessionChatDetectedSelection::default();
     // Index of the topmost line that supplied any value; the footer capture
     // starts there.
@@ -56,6 +61,13 @@ pub fn detect_session_chat_selection(
                     found = selection;
                     topmost_match = Some(index);
                     break;
+                }
+                // The border line is the whole reading; the rows below it are the input box.
+                if empryo_head == Some(index) {
+                    if let Some(selection) = match_empryo_input_head(scanned) {
+                        found = selection;
+                        break;
+                    }
                 }
                 continue;
             }
