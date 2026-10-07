@@ -504,7 +504,7 @@ pub(crate) fn resolve_config_directory(
     }
 }
 
-/// CDXC:AgentProviders 2026-10-07 WHY: Empryo's own folder, where it reads `hooks.json`, `agents/` and its global `config.json` and keeps `threads.db`. Empryo 3.9.1 resolves it as `%LOCALAPPDATA%\Empryo` (else `<home>\AppData\Local\Empryo`) on Windows and `$HOME/.empryo` elsewhere, and its main home ignores `EMPRYO_HOME` (only its computer-use and browser helpers read that), so honouring `EMPRYO_HOME` or using `~/.empryo` on Windows wrote hooks and the coordinator profile where Empryo never looks. `packages/find` (`scan/empryo.rs`) resolves the same folder for `threads.db`.
+/// CDXC:AgentProviders 2026-10-07 WHY: Empryo's own folder, where it reads `hooks.json` and its global `config.json` and keeps `threads.db`. Empryo 3.9.1 resolves it as `%LOCALAPPDATA%\Empryo` (else `<home>\AppData\Local\Empryo`) on Windows and `$HOME/.empryo` elsewhere, and its main home ignores `EMPRYO_HOME` (only its computer-use and browser helpers read that), so honouring `EMPRYO_HOME` or using `~/.empryo` on Windows wrote hooks where Empryo never looks (measured live 2026-10-07). Its global agent profiles are the exception: `<home>/.empryo/agents` on every platform (coordinators/role.rs). `packages/find` (`scan/empryo.rs`) resolves this folder for `threads.db`.
 pub(crate) fn empryo_home(hook_paths: &HookPaths) -> PathBuf {
     if cfg!(windows) {
         let local_app_data = hook_paths

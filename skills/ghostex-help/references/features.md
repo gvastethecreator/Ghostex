@@ -1431,10 +1431,13 @@ Freebuff launches with `freebuff` and installs with `npm install -g freebuff`;
 sign in once in its terminal the first time it starts.
 Empryo launches with `empryo` (`em` works too) and installs with
 `curl -fsSL https://empryo.com/install.sh | bash`, which puts it in
-`~/.empryo/bin`. Ghostex installs its hooks into `~/.empryo/hooks.json` and
-never touches Empryo's `config.json`, so an Empryo session shows working and
-idle and comes back after a restart with `empryo --session <id>`. Empryo has no
-launch option to accept every approval, so Agent approvals does not apply to it;
+`~/.empryo/bin` (on Windows, `irm https://empryo.com/install.ps1 | iex` in
+PowerShell). Ghostex installs its hooks into Empryo's `hooks.json` (in `~/.empryo`,
+or `%LOCALAPPDATA%\Empryo` on Windows) and never touches Empryo's `config.json`,
+so an Empryo session shows working and idle and comes back after a restart with
+`empryo --session <id>`. On Windows without WSL, Empryo's chat, fork, picker and
+coordinator work, but its sidebar status does not follow its hooks yet. Empryo has
+no launch option to accept every approval, so Agent approvals does not apply to it;
 Empryo's own `/yolo` does that instead.
 Agent Hooks let gxserver watch agent status, questions, and
 completions for chat and notifications. Installing the Claude Code hooks also

@@ -67,7 +67,11 @@ pub fn coordinator_role_queued_command(family: &str) -> Option<String> {
 /// file. The description keeps Empryo from delegating ordinary tasks to it.
 pub fn ensure_empryo_coordinator_agent_file(paths: &GxserverPaths) -> std::io::Result<PathBuf> {
     let hook_paths = crate::agent_hooks::config::HookPaths::from_paths(paths);
-    let path = crate::agent_hooks::config::empryo_home(&hook_paths)
+    // Empryo 3.9.1 reads global profiles from `<home>/.empryo/agents` on every platform, also on
+    // Windows, where its config and hooks live in `%LOCALAPPDATA%\Empryo` (`empryo_home`).
+    let path = hook_paths
+        .home_dir
+        .join(".empryo")
         .join("agents")
         .join(format!("{EMPRYO_COORDINATOR_AGENT_NAME}.md"));
     write_if_changed(
