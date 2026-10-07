@@ -183,8 +183,8 @@ jobs:
           [[ "$($ZIG_BIN version)" == "0.16.0" ]]
           printf 'ZIG=%s\nGHOSTEX_ZIG=%s\n' \
             "$ZIG_BIN" "$ZIG_BIN" >> "$GITHUB_ENV"
-      # The release runs this inside `macos.sh --phase prepare`
-      # (tooling/release-gpui/macos.sh, phase_prepare). It checks out the pinned
+      # The release runs this inside `macos.sh --phase prepare-sources`
+      # (tooling/release-gpui/macos.sh, prepare_references). It checks out the pinned
       # zed / cef-rs / gpui-component path dependencies the desktop crate
       # builds against.
       - name: Prepare pinned source references
@@ -192,7 +192,7 @@ jobs:
       - name: Pre-fetch Zig package dependencies
         run: tooling/release-gpui/fetch-zig-deps.sh ghostty
       # DUPLICATED COMMAND (not a cargo command): mirrors the GhosttyKit build
-      # in tooling/release-gpui/macos.sh phase_prepare, lines 143-160 (the
+      # in tooling/release-gpui/macos.sh prepare_ghosttykit (the
       # `zig build -Demit-xcframework -Dxcframework-target=universal
       # -Demit-macos-app=false` block with DEVELOPER_DIR / SDKROOT /
       # GHOSTTY_METAL_DEVELOPER_DIR). Only runs on a GhosttyKit cache miss.
@@ -212,8 +212,8 @@ jobs:
             -Dxcframework-target=universal \
             -Demit-macos-app=false
           [[ -d macos/GhosttyKit.xcframework ]]
-      # macos.sh refuses every phase but `prepare` unless the release output
-      # directory already exists (tooling/release-gpui/macos.sh line 68-72);
+      # macos.sh refuses every phase but the prepare ones unless the release output
+      # directory already exists (the prologue of tooling/release-gpui/macos.sh);
       # `prepare` itself needs the gxserver and code-server archives, which no
       # cargo build reads, so the directory is created directly.
       - name: Create the release output directory macos.sh expects

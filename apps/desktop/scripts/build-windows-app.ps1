@@ -64,13 +64,18 @@ if ($ReleaseArch -notin @("x64", "arm64")) {
     throw "GHOSTEX_WINDOWS_ARCH must be x64 or arm64, got $ReleaseArch"
 }
 # CDXC:Release 2026-09-02: tooling/release-gpui/windows.ps1 runs
-# this script in two watched release steps. "compile" stops after step 2 and
-# "stage" skips steps 1-2 (reusing that compile's dist/ and target/ output);
-# unset runs everything, which is what every other caller does.
+# this script in two watched release steps. "compile" stops after the Rust
+# builds and "stage" skips them (reusing that compile's dist/ and target/
+# output); unset runs everything, which is what every other caller does.
+# "compile-app" (sidebar bundle + desktop crate) and "compile-runtime" (native
+# gxserver, wmx, prompt editor) are the two halves of "compile", which the
+# release builds on separate runners (see windows.ps1).
 $BuildPhase = if ($env:GHOSTEX_WINDOWS_BUILD_PHASE) { $env:GHOSTEX_WINDOWS_BUILD_PHASE } else { "all" }
-if ($BuildPhase -notin @("all", "compile", "stage")) {
-    throw "GHOSTEX_WINDOWS_BUILD_PHASE must be compile, stage, or unset, got $BuildPhase"
+if ($BuildPhase -notin @("all", "compile", "compile-app", "compile-runtime", "stage")) {
+    throw "GHOSTEX_WINDOWS_BUILD_PHASE must be compile, compile-app, compile-runtime, stage, or unset, got $BuildPhase"
 }
+$BuildApp = $BuildPhase -in @("all", "compile", "compile-app")
+$BuildRuntime = $BuildPhase -in @("all", "compile", "compile-runtime")
 
 # Same CEF cache location contract as build-macos-app.sh: cef-dll-sys's build
 # script downloads the CEF binary distribution into CEF_PATH.
@@ -79,18 +84,21 @@ $env:CEF_PATH = $CefCacheDir
 # cef-dll-sys uses CEF_PATH/<CEF build>/ only when that folder exists and
 # otherwise accepts an older distribution sitting in CEF_PATH, so create the
 # pinned build's folder first and stage only from it (see cef-distribution.sh).
-$CefRsManifest = Join-Path $RepoRoot ".dependencies/cef-rs/Cargo.toml"
-$CefBuildMatch = Select-String -Path $CefRsManifest -Pattern '^version = "[^"+]*\+([^"]+)"$' |
-    Select-Object -First 1
-if (-not $CefBuildMatch) {
-    throw "Could not read the pinned CEF build from $CefRsManifest"
+# The runtime half links no CEF and runs without the cef-rs reference checkout.
+if ($BuildPhase -ne "compile-runtime") {
+    $CefRsManifest = Join-Path $RepoRoot ".dependencies/cef-rs/Cargo.toml"
+    $CefBuildMatch = Select-String -Path $CefRsManifest -Pattern '^version = "[^"+]*\+([^"]+)"$' |
+        Select-Object -First 1
+    if (-not $CefBuildMatch) {
+        throw "Could not read the pinned CEF build from $CefRsManifest"
+    }
+    $CefVersionedDir = Join-Path $CefCacheDir $CefBuildMatch.Matches[0].Groups[1].Value
+    New-Item -ItemType Directory -Force -Path $CefVersionedDir | Out-Null
 }
-$CefVersionedDir = Join-Path $CefCacheDir $CefBuildMatch.Matches[0].Groups[1].Value
-New-Item -ItemType Directory -Force -Path $CefVersionedDir | Out-Null
 $env:ZIG_GLOBAL_CACHE_DIR = Join-Path $RepoRoot "build/zig-global-cache"
 New-Item -ItemType Directory -Force -Path $env:ZIG_GLOBAL_CACHE_DIR | Out-Null
 
-if ($BuildPhase -ne "stage") {
+if ($BuildApp) {
     # 1) Sidebar bundle (same steps as the macOS script).
     Push-Location $RepoRoot
     try {
@@ -116,7 +124,7 @@ if ($BuildPhase -ne "stage") {
     }
 }
 
-if ($BuildPhase -ne "stage") {
+if ($BuildRuntime) {
     Push-Location (Join-Path $RepoRoot "server")
     try {
         cargo build --release --bin gxserver --bin ghostex
@@ -133,7 +141,7 @@ if ($BuildPhase -ne "stage") {
 
 # CDXC:PromptEditor 2026-09-16 WHY:
 # Ctrl+G needs the standalone helper as well as Code. Omitting it made every Windows build report the prompt editor unavailable.
-if ($BuildPhase -ne "stage") {
+if ($BuildRuntime) {
     Push-Location $RepoRoot
     try {
         bun apps/editor/scripts/build-editor-web.mjs
@@ -149,8 +157,8 @@ if ($BuildPhase -ne "stage") {
     finally { Pop-Location }
 }
 
-if ($BuildPhase -eq "compile") {
-    Write-Host "Compiled $AppName ($ReleaseArch); staging deferred to the stage phase"
+if ($BuildPhase -like "compile*") {
+    Write-Host "Compiled $AppName ($ReleaseArch, $BuildPhase); staging deferred to the stage phase"
     exit 0
 }
 
