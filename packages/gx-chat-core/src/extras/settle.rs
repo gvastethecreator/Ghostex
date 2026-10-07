@@ -106,10 +106,19 @@ fn settle_with_ids(
                 state.core.request_render();
             }
         }
-        // The Threads panel's remembered fold, read once when the chat starts.
-        Event::Start(_) => effects.push(Effect::ReadStorage {
-            key: coordinator_threads::threads_collapsed_key(),
-        }),
+        // The Tasks and Threads panels' remembered folds, read once when the chat starts, so a chat
+        // reopens them the way the user left them.
+        Event::Start(_) => effects.extend([
+            Effect::ReadStorage {
+                key: panels::tasks_collapsed_key(),
+            },
+            Effect::ReadStorage {
+                key: coordinator_threads::threads_collapsed_key(),
+            },
+        ]),
+        Event::StorageLoaded { key, value } if *key == panels::tasks_collapsed_key() => {
+            state.extras.panels.tasks_collapsed = panels::read_tasks_collapsed(value.as_deref());
+        }
         Event::StorageLoaded { key, value } if *key == coordinator_threads::threads_collapsed_key() => {
             state.extras.panels.threads_collapsed = value.as_deref() == Some("1");
         }
