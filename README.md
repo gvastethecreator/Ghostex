@@ -21,30 +21,30 @@
 
 <h3 align="center"><a href="#install"><ins>Download Ghostex</ins></a> &nbsp;·&nbsp; <a href="https://ghostex.dev">Website</a> &nbsp;·&nbsp; <a href="https://youtu.be/QzjFB4J6-8E">Watch the 3-minute tour</a></h3>
 
+<p align="center">
+  <a href="media/readme/gx-hero-dark.jpg"><picture><source media="(prefers-color-scheme: dark)" srcset="media/readme/gx-hero-dark.gif" /><img src="media/readme/gx-hero-light.gif" alt="Ghostex with see-through glass over a moving meadow: projects and agent sessions in the sidebar, a chat in the middle and the view picker on the right" width="960" /></picture></a>
+</p>
+
 <div align="center">
   <table>
     <tr>
-      <td width="50%" align="center"><a href="#a-real-chat-view-for-every-agent"><img src="media/readme/gx-card-chat.gif" alt="Just like the ChatGPT and Claude apps, but much more customizable and powerful" width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#agents-that-run-agents"><img src="media/readme/gx-card-orchestrate.gif" alt="Let one agent orchestrate the others. Agents message each other, too." width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#a-real-chat-view-for-every-agent"><img src="media/readme/gx-diff.jpg" alt="A chat showing the agent's code change as a diff" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#agents-that-run-agents"><img src="media/readme/gx-threads.jpg" alt="A coordinator with its threads in the sidebar and the Threads panel" width="100%" /></a></td>
     </tr>
     <tr>
-      <td width="50%" align="center"><a href="#any-agent-swap-on-the-fly"><img src="media/readme/gx-card-handover.gif" alt="Hand any chat to any agent. The whole conversation comes along." width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#embedded-chromium-browser"><img src="media/readme/gx-card-markup.gif" alt="Mark up any web page and send it to your agent" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#any-agent-swap-on-the-fly"><img src="media/readme/gx-agent-picker.gif" alt="The model picker switching between agents" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#embedded-chromium-browser"><img src="media/readme/gx-browser-pane.jpg" alt="A chat next to the built-in browser" width="100%" /></a></td>
     </tr>
     <tr>
-      <td width="50%" align="center"><a href="#ios-and-android-apps-with-easy-connect-or-tailscale"><img src="media/readme/gx-card-phone.gif" alt="Every machine, every session, in your pocket" width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#find-any-past-session"><img src="media/readme/gx-card-search.gif" alt="Instantly find any chat with smart search" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#ios-and-android-apps-with-easy-connect-or-tailscale"><img src="media/readme/gx-phone.gif" alt="Pairing the phone app, then sessions and a chat on the phone" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#find-any-past-session"><img src="media/readme/gx-search.gif" alt="Searching every past prompt" width="100%" /></a></td>
     </tr>
     <tr>
-      <td width="50%" align="center"><a href="#also-in-the-box"><img src="media/readme/gx-card-accounts.gif" alt="Add multiple Claude and Codex accounts and switch between them freely" width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#also-in-the-box"><img src="media/readme/gx-card-plugins.gif" alt="Tons of powerful plugins. All optional." width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#a-real-chat-view-for-every-agent"><img src="media/readme/gx-question.jpg" alt="An agent's question shown as a card with options" width="100%" /></a></td>
+      <td width="50%" align="center"><a href="#also-in-the-box"><img src="media/readme/gx-views.jpg" alt="The view picker with Code, Browser, Kanban, Automate, Files, Terminal, Linear and Jira" width="100%" /></a></td>
     </tr>
   </table>
 </div>
-
-<p align="center">
-  <img src="media/readme/gx-hero.jpg" alt="Ghostex with a Codex chat on the left showing a CSS fix as a diff, and the built-in browser on the right showing the fixed storefront grid" width="960" />
-</p>
 
 Ghostex is built for developers who keep many agents alive at once. A chat view for every agent, a native Rust/GPUI shell, embedded Chromium panes, and a mobile app share one workspace, and every session survives restarts.
 
@@ -64,7 +64,7 @@ Talk to Claude Code, Codex, or any other agent in a proper chat GUI: clickable i
 
 </td>
 <td width="50%">
-  <img src="media/readme/gx-chat-diff.jpg" alt="A Claude Code chat in Ghostex, showing the agent's two changed files as inline diffs under its reply" width="100%" />
+  <img src="media/readme/gx-diff.jpg" alt="A chat showing the agent's code change as a diff" width="100%" />
 </td>
 </tr>
 <tr>
@@ -80,7 +80,7 @@ Your agents in your pocket. Easy Connect pairs your phone with a single scan, no
 
 </td>
 <td width="50%">
-  <img src="media/readme/gx-card-phone.gif" alt="Every machine, every session, in your pocket" width="100%" />
+  <img src="media/readme/gx-phone.gif" alt="Pairing the phone app, then sessions and a chat on the phone" width="100%" />
 </td>
 </tr>
 <tr>
@@ -96,7 +96,7 @@ Claude Code, Codex, OpenCode, Pi, Gemini, Grok, Cursor, and more. Pick the model
 
 </td>
 <td width="50%">
-  <img src="media/readme/gx-card-handover.gif" alt="Hand any chat to any agent. The whole conversation comes along." width="100%" />
+  <img src="media/readme/gx-agent-picker.gif" alt="The model picker switching between agents" width="100%" />
 </td>
 </tr>
 <tr>
@@ -112,7 +112,7 @@ Click any element, type what should change, and the note lands in the agent's pr
 
 </td>
 <td width="50%">
-  <img src="media/readme/gx-card-markup.gif" alt="Mark up any web page and send it to your agent" width="100%" />
+  <img src="media/readme/gx-browser-pane.jpg" alt="A chat next to the built-in browser" width="100%" />
 </td>
 </tr>
 <tr>
@@ -128,7 +128,7 @@ Dump your thoughts on the board, then let an agent pick up the tickets. Runs on 
 
 </td>
 <td width="50%">
-  <img src="media/readme/gx-kanban.jpg" alt="The Kanban board with Backlog, Todo, In Progress, Test, Review and Done lanes, with agent sessions linked to cards" width="100%" />
+  <img src="media/readme/gx-kanban-board.jpg" alt="The Kanban board with Backlog, Todo, In Progress and Test lanes" width="100%" />
 </td>
 </tr>
 <tr>
@@ -144,7 +144,7 @@ Fuzzy search every prompt you ever sent, across all your agents, and press Enter
 
 </td>
 <td width="50%">
-  <img src="media/readme/gx-card-search.gif" alt="Instantly find any chat with smart search" width="100%" />
+  <img src="media/readme/gx-search.gif" alt="Searching every past prompt" width="100%" />
 </td>
 </tr>
 <tr>
@@ -160,7 +160,7 @@ Agents can open sessions, send prompts, and read replies from other agents throu
 
 </td>
 <td width="50%">
-  <img src="media/readme/gx-coordinator.jpg" alt="A coordinator with a crown in the sidebar, one thread under it, and a Threads panel listing one working and five done" width="100%" />
+  <img src="media/readme/gx-threads.jpg" alt="A coordinator with its threads in the sidebar and the Threads panel" width="100%" />
 </td>
 </tr>
 </table>
@@ -297,7 +297,7 @@ Ghostex builds on open source work from these projects and communities:
 - [vvterm](https://github.com/vivy-company/vvterm) and [Termux](https://github.com/termux/termux-app) for mobile terminal components
 - [Pierre](https://github.com/pierrecomputer/pierre) for diff and file rendering components
 
-Screenshot backdrops are public-domain paintings and prints by Monet, Hasui, Hiroshi, Church and Bierstadt.
+The moving background behind the screenshots is [Time lapse of a green meadow](https://mixkit.co/free-stock-video/time-lapse-of-a-green-meadow-4070/) from Mixkit, used under the Mixkit Stock Video Free License.
 
 ## License
 
