@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+## 10.15.0 - 2026-10-08
+
+**Ghostex 10.15.0 is out.** Empryo joins as a built-in agent, the chat feels instant (sending, the model name, `!` shell commands), Windows terminals use PowerShell 7, and Easy Connect pairs Windows administrator accounts.
+
+### 🤖 Agents
+- **Empryo is a built-in agent:** chat, questions and approvals as cards, its model and effort picker, forks, resume, coordinators and threads, and its prompts in Search by Prompt and on the phone. It installs on Windows too and starts switched off in Settings > Agents, thanks to @banozz0.
+- **Haiku 5.5 replaces Haiku 4.5** in the Claude Code and Cursor model pickers, and auto titles and other background helpers run on Haiku 5.5.
+- **Chat messages reach OMP in all eight of its prompt layouts.**
+- **Codex's own update works again inside Ghostex sessions on Windows** (it failed with "Get-FileHash is not recognized").
+
+### 💬 Chat
+- **Sending is instant:** your message leaves the composer and shows in the chat the moment you press Enter, images included.
+- **The model name shows right away,** and new sessions start on the model you last picked.
+- **`!` shell commands show as a Shell card** with their output streaming live.
+- **Scrolling up past a long reply no longer jumps to its top.**
+- The loading notice sits in the middle of an empty chat, tree guide lines line up with the icon above, the answer field's pills always match its text, and the Tasks panel reopens the way you left it.
+
+### 🧭 Coordinators
+- **Clicking a thread in the Threads panel opens it,** resuming a closed one.
+- **The Threads panel shows working threads and those active in the last 2 hours,** and remembers whether you folded it.
+
+### 🗂️ Sidebar and Files
+- **An expanded project shows only New agent, the agent picker and a ⋯ menu;** everything else moved into the menu.
+- **Clicking the file name at the top of the Files view copies its full path.**
+
+### 🪟 Windows
+- **Terminals use PowerShell 7 wherever it is installed** (Program Files, your user folder, the Microsoft Store or PATH) and Windows PowerShell 5.1 until then; Settings > General > Terminal offers **Install PowerShell 7** when only 5.1 is present.
+- **Easy Connect pairs a phone with a Windows administrator account** after one Windows admin prompt.
+- **Every build shows the real Ghostex version,** and About shows the app icon.
+
+### 📱 Phone
+- **A simpler sessions list,** Empryo in chat and Find, and pairing waits for the computer's admin prompt.
+
 ## 10.14.0 - 2026-10-07
 
 **Ghostex 10.14.0 is out.** Agents can show charts and pages right in the chat, Cursor and ZCode work properly on Windows, Settings > Agents gets a simple switch per agent, coordinators show one tidy list of threads, and the phone opens file links and attaches pictures reliably.
