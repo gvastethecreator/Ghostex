@@ -128,6 +128,10 @@ impl GpuiBrowserHistoryModalWindow {
             focus_handle: cx.focus_handle(),
             _subscriptions: vec![change],
         };
+        this._subscriptions
+            .extend(super::popup_dismissal::close_app_modal_on_click_away(
+                window, cx,
+            ));
         this.request(false, cx);
         this
     }

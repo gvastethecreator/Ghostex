@@ -338,4 +338,11 @@ pub(crate) trait ModalCornerClose: Render {
     fn shows_corner_close(&self, _cx: &App) -> bool {
         true
     }
+
+    /// True while a click away must leave the modal open (an unsaved form, a hotkey being
+    /// recorded). Read only by the modals that close on click-away
+    /// (`popup_dismissal::close_app_modal_on_click_away`).
+    fn keeps_open_on_click_away(&self, _window: &Window, _cx: &App) -> bool {
+        false
+    }
 }

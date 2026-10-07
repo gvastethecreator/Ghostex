@@ -90,6 +90,13 @@ pub(crate) struct AccountsTab {
     pub(crate) commit_inputs: HashSet<SharedString>,
 }
 
+impl super::HoldsUnsavedInput for AccountsTab {
+    /// An Add account setup, an account editor or an Uninstall confirmation is open.
+    fn holds_unsaved_input(&self, _cx: &gpui::App) -> bool {
+        self.adding.is_some() || self.editing.is_some() || self.helpers.confirm_uninstall.is_some()
+    }
+}
+
 impl SettingsPage for AccountsTab {
     fn settings_store(&self) -> &Entity<SettingsStore> {
         &self.store

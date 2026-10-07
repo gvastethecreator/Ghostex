@@ -36,6 +36,7 @@ pub(crate) struct GpuiGitFileDiffModalWindow {
     focus_handle: FocusHandle,
     /// The three display controls, which are tab stops as in the React dialog.
     control_focus: [FocusHandle; 3],
+    _click_away: Vec<gpui::Subscription>,
 }
 
 impl GpuiGitFileDiffModalWindow {
@@ -65,6 +66,7 @@ impl GpuiGitFileDiffModalWindow {
                 cx.focus_handle().tab_stop(true),
                 cx.focus_handle().tab_stop(true),
             ],
+            _click_away: super::super::popup_dismissal::close_app_modal_on_click_away(window, cx),
         }
     }
 

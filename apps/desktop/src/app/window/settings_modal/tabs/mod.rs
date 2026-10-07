@@ -48,3 +48,42 @@ pub(crate) fn settings_tab_view(
         // TAB-ARMS: one arm per page.
     }
 }
+
+/// A page that can hold input a click away must not throw away: an open add or edit form, an
+/// unsaved draft, a hotkey being recorded, or a confirmation waiting for its answer.
+pub(crate) trait HoldsUnsavedInput: 'static {
+    fn holds_unsaved_input(&self, cx: &App) -> bool;
+}
+
+impl HoldsUnsavedInput for actions::ActionsTab {
+    /// The Add or Edit action form is open.
+    fn holds_unsaved_input(&self, _cx: &App) -> bool {
+        self.editor.is_some()
+    }
+}
+
+impl HoldsUnsavedInput for extensions::ExtensionsTab {
+    /// The custom view or view scope editor is open.
+    fn holds_unsaved_input(&self, _cx: &App) -> bool {
+        self.view_editor.is_some() || self.scope_editor.is_some()
+    }
+}
+
+/// Whether page `view` holds unsaved input (`HoldsUnsavedInput`); pages without forms never do.
+pub(crate) fn settings_tab_holds_unsaved_input(view: &AnyView, cx: &App) -> bool {
+    fn holds<T: HoldsUnsavedInput>(view: &AnyView, cx: &App) -> bool {
+        view.clone()
+            .downcast::<T>()
+            .is_ok_and(|page| page.read(cx).holds_unsaved_input(cx))
+    }
+    holds::<accounts::AccountsTab>(view, cx)
+        || holds::<actions::ActionsTab>(view, cx)
+        || holds::<agents::AgentsTab>(view, cx)
+        || holds::<cloud_boxes::CloudBoxesTab>(view, cx)
+        || holds::<extensions::ExtensionsTab>(view, cx)
+        || holds::<hotkeys::HotkeysTab>(view, cx)
+        || holds::<integrations::IntegrationsTab>(view, cx)
+        || holds::<open_targets::OpenTargetsTab>(view, cx)
+        || holds::<projects::ProjectsTab>(view, cx)
+        || holds::<remote::RemoteTab>(view, cx)
+}

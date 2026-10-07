@@ -55,6 +55,12 @@ pub(super) struct ManagedToolsState {
     confirm_uninstall: Option<String>,
 }
 
+impl ManagedToolsState {
+    pub(super) fn confirming_uninstall(&self) -> bool {
+        self.confirm_uninstall.is_some()
+    }
+}
+
 fn icon(tool: &str) -> &'static str {
     match tool {
         "node" => "modals/settings/brand-nodejs.svg",

@@ -297,6 +297,8 @@ impl GpuiFindPromptsModalWindow {
             reduce_motion: crate::app::helpers::gpui_macos_reduce_motion_enabled(),
             _subscriptions: vec![change, menu_change, keys],
         };
+        this._subscriptions
+            .extend(super::super::popup_dismissal::close_app_modal_on_click_away(window, cx));
         this.run_search(0, cx);
         this
     }

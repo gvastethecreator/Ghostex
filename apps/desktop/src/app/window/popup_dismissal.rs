@@ -1,6 +1,7 @@
-//! When a popup that closes on click-away (the new-thread picker, the chat's option menus and
-//! Quick Access) has really been dismissed. The other app modals never close on click-away
-//! (CDXC:AppModal 2026-09-30 in app/window/modal_window_frame.rs).
+//! When a popup that closes on click-away (the new-thread picker, the chat's option menus,
+//! Quick Access and the app modals that opt in through `close_app_modal_on_click_away`) has
+//! really been dismissed. The other app modals never close on click-away (CDXC:AppModal
+//! 2026-09-30 in app/window/modal_window_frame.rs).
 //!
 //! CDXC:AppModal 2026-09-30 WHY:
 //! On Linux the window manager can move keyboard focus without a click: Hyprland (Omarchy's default) and other focus-follows-mouse setups focus the main window as soon as the pointer crosses onto it, so every popup that closed on focus loss closed when the mouse moved (Cmd+N's picker, the Saved Prompts Quick Access from a right-click, the chat's model menu, which flashed and vanished because the pointer is still over its trigger). Taking focus back fights the window manager on every pointer motion. So on Linux a focus loss dismisses a popup only once no Ghostex window holds focus (focus left the app), and a press in the main window after the popup opened is the click-away. macOS and Windows focus only on a click, so their focus loss stays the dismissal.
@@ -73,4 +74,98 @@ pub(crate) fn observe_main_window_press<T: 'static>(
         let _ = (window, cx, dismiss);
         Subscription::new(|| {})
     }
+}
+
+/// How long an app modal's focus loss waits before reading who took focus: the lost and the
+/// gained activation arrive as separate platform events.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+const MODAL_FOCUS_SETTLE: std::time::Duration = std::time::Duration::from_millis(120);
+
+/// Makes an app modal close on a click away, the way its Escape or corner X closes it
+/// (`ModalCornerClose::close_from_corner`), unless `keeps_open_on_click_away` says it holds
+/// unsaved input. Call once from the modal's constructor and keep the subscriptions.
+///
+/// CDXC:AppModal 2026-10-08 DECISION:
+/// User: "also close settings and find by prompt when i click on the main app window or click away outside them pls", then, picking from a list, the viewers (Browser History, the Markdown table viewer, the Mermaid diagram viewer, the Git file diff, the Export transcript result) and the Agents Hub. These modals call this: every Settings page kind (Settings, Hotkeys, Configure Agents, Configure Actions, Open Targets), Search by Prompt, the viewers above, Export Transcript once its export finished or failed, and the Agents Hub. They stay open while they hold unsaved input (`keeps_open_on_click_away`). The notice modals (Update available, Missing project folder, Agent hooks required, Portless setup) and Add Project keep the 2026-09-30 "let's not make the modals close when i click away anymore" rule (window/modal_window_frame.rs). Quick Access has its own click-away close (window/quick_access/window.rs).
+///
+/// CDXC:AppModal 2026-10-08 WHY:
+/// A dialog the modal opens itself (a file or folder picker, the system colour dialog, a confirm box, a UAC prompt) also takes focus from it, and must not count as a click away. So on macOS and Windows a focus loss closes the modal only when another Ghostex window took focus (the main window was clicked) or another app did; a window of this process that is not a GPUI window (the OS dialogs above) or no foreground window at all (the UAC secure desktop) keeps it open. Linux keeps the focus-follows-mouse rule above and closes only on a press in the main window, since its file pickers are portal dialogs in another process, indistinguishable from another app.
+pub(crate) fn close_app_modal_on_click_away<V: super::native_modal_kit::ModalCornerClose>(
+    window: &mut Window,
+    cx: &mut Context<V>,
+) -> Vec<Subscription> {
+    #[cfg_attr(
+        not(any(target_os = "windows", target_os = "macos")),
+        allow(unused_mut)
+    )]
+    let mut subscriptions = vec![observe_main_window_press(window, cx, close_unless_kept)];
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    {
+        let modal = window.window_handle();
+        let was_active = std::rc::Rc::new(std::cell::Cell::new(window.is_window_active()));
+        subscriptions.push(cx.observe_window_activation(window, move |_, window, cx| {
+            if window.is_window_active() {
+                was_active.set(true);
+                return;
+            }
+            // The inactive report a window gets before it is first shown is not a click away.
+            if !was_active.get() {
+                return;
+            }
+            cx.spawn_in(window, async move |this, cx| {
+                cx.background_executor().timer(MODAL_FOCUS_SETTLE).await;
+                let _ = this.update_in(cx, |this, window, cx| {
+                    if window.is_window_active() {
+                        return;
+                    }
+                    let clicked_away = match cx.active_window() {
+                        Some(active) => active != modal,
+                        None => focus_left_app(),
+                    };
+                    if clicked_away {
+                        close_unless_kept(this, window, cx);
+                    }
+                });
+            })
+            .detach();
+        }));
+    }
+    subscriptions
+}
+
+fn close_unless_kept<V: super::native_modal_kit::ModalCornerClose>(
+    this: &mut V,
+    window: &mut Window,
+    cx: &mut Context<V>,
+) {
+    if !this.keeps_open_on_click_away(window, cx) {
+        this.close_from_corner(window, cx);
+    }
+}
+
+/// Whether another app holds the foreground, rather than a dialog of this process (a file
+/// picker, the colour dialog, a message box) or nothing (the UAC secure desktop).
+#[cfg(target_os = "windows")]
+fn focus_left_app() -> bool {
+    use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowThreadProcessId,
+    };
+    let foreground = unsafe { GetForegroundWindow() };
+    if foreground.is_null() {
+        return false;
+    }
+    let mut process_id = 0u32;
+    unsafe { GetWindowThreadProcessId(foreground, &mut process_id) };
+    process_id != 0 && process_id != unsafe { GetCurrentProcessId() }
+}
+
+/// Whether another app is frontmost, rather than a panel of this process (NSOpenPanel,
+/// NSColorPanel, an alert).
+#[cfg(target_os = "macos")]
+fn focus_left_app() -> bool {
+    unsafe extern "C" {
+        fn GhostexGpuiApplicationIsActive() -> bool;
+    }
+    !unsafe { GhostexGpuiApplicationIsActive() }
 }

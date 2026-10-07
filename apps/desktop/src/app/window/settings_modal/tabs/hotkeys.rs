@@ -191,6 +191,13 @@ impl HotkeysTab {
     }
 }
 
+impl super::HoldsUnsavedInput for HotkeysTab {
+    /// A hotkey is being recorded.
+    fn holds_unsaved_input(&self, _cx: &gpui::App) -> bool {
+        self.recorder.recording().is_some()
+    }
+}
+
 impl SettingsPage for HotkeysTab {
     fn settings_store(&self) -> &Entity<SettingsStore> {
         &self.store

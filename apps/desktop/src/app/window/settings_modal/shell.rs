@@ -132,6 +132,9 @@ impl GpuiSettingsModalWindow {
             last_show_advanced,
             _subscriptions: vec![search_subscription, store_subscription],
         };
+        shell
+            ._subscriptions
+            .extend(super::super::popup_dismissal::close_app_modal_on_click_away(window, cx));
         let active = shell.store.read(cx).active_tab();
         shell.ensure_tab_view(active, window, cx);
         // A deep link to a General section lands on it.
@@ -443,5 +446,13 @@ impl Render for GpuiSettingsModalWindow {
 impl ModalCornerClose for GpuiSettingsModalWindow {
     fn close_from_corner(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.close(window, cx);
+    }
+
+    /// A page opened during this visit that holds a form, edit or confirmation not finished yet
+    /// keeps Settings open on a click away; settings that apply at once never do.
+    fn keeps_open_on_click_away(&self, _window: &Window, cx: &App) -> bool {
+        self.tabs
+            .values()
+            .any(|view| super::tabs::settings_tab_holds_unsaved_input(view, cx))
     }
 }

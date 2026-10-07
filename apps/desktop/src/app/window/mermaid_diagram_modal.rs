@@ -122,6 +122,7 @@ pub(crate) struct GpuiMermaidDiagramModalWindow {
     copied: bool,
     copied_generation: u64,
     focus_handle: FocusHandle,
+    _click_away: Vec<gpui::Subscription>,
 }
 
 impl GpuiMermaidDiagramModalWindow {
@@ -189,6 +190,7 @@ impl GpuiMermaidDiagramModalWindow {
             copied: false,
             copied_generation: 0,
             focus_handle,
+            _click_away: super::popup_dismissal::close_app_modal_on_click_away(window, cx),
         }
     }
 

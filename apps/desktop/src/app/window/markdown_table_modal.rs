@@ -29,6 +29,7 @@ pub(crate) struct GpuiMarkdownTableModalWindow {
     source: String,
     focus_handle: FocusHandle,
     scroll: ScrollHandle,
+    _click_away: Vec<gpui::Subscription>,
 }
 
 impl GpuiMarkdownTableModalWindow {
@@ -47,6 +48,7 @@ impl GpuiMarkdownTableModalWindow {
             source,
             focus_handle,
             scroll: ScrollHandle::new(),
+            _click_away: super::popup_dismissal::close_app_modal_on_click_away(window, cx),
         }
     }
 

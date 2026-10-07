@@ -34,6 +34,13 @@ pub(crate) struct AdvancedState {
     subscriptions: Vec<Subscription>,
 }
 
+impl AdvancedState {
+    /// The ports or allowed keys text is being edited and not saved yet.
+    pub(super) fn has_draft(&self) -> bool {
+        self.ports_draft.is_some() || self.keys_draft.is_some()
+    }
+}
+
 /// `commitPorts`: parse, report a bad list, or save a changed one.
 fn commit_ports(tab: &mut RemoteTab, cx: &mut Context<RemoteTab>) {
     let Some(draft) = tab.advanced.ports_draft.clone() else {

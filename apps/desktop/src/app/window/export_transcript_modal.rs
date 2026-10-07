@@ -195,6 +195,7 @@ pub(crate) struct GpuiExportTranscriptModalWindow {
     agent_select: ModalSelect,
     fit: ModalFit,
     focus_handle: FocusHandle,
+    _click_away: Vec<gpui::Subscription>,
 }
 
 impl GpuiExportTranscriptModalWindow {
@@ -230,6 +231,7 @@ impl GpuiExportTranscriptModalWindow {
             agent_select: ModalSelect::new(),
             fit: ModalFit::new(),
             focus_handle,
+            _click_away: super::popup_dismissal::close_app_modal_on_click_away(window, cx),
         }
     }
 
@@ -877,5 +879,13 @@ impl Render for GpuiExportTranscriptModalWindow {
 impl ModalCornerClose for GpuiExportTranscriptModalWindow {
     fn close_from_corner(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.cancel(window, cx);
+    }
+
+    /// Only the result closes on a click away; the options and a running export stay.
+    fn keeps_open_on_click_away(&self, _window: &Window, _cx: &App) -> bool {
+        matches!(
+            self.stage,
+            ExportTranscriptStage::Options | ExportTranscriptStage::Exporting
+        )
     }
 }

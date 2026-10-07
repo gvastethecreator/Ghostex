@@ -261,6 +261,13 @@ impl CloudBoxesTab {
     }
 }
 
+impl super::HoldsUnsavedInput for CloudBoxesTab {
+    /// The Add Server form or a Destroy confirmation is open.
+    fn holds_unsaved_input(&self, _cx: &gpui::App) -> bool {
+        self.adding_server || self.confirm_destroy.is_some()
+    }
+}
+
 impl SettingsPage for CloudBoxesTab {
     fn settings_store(&self) -> &Entity<SettingsStore> {
         &self.store

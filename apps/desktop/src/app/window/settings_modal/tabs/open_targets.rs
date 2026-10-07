@@ -378,6 +378,13 @@ impl OpenTargetsTab {
     }
 }
 
+impl super::HoldsUnsavedInput for OpenTargetsTab {
+    /// The Add or Edit target form is open.
+    fn holds_unsaved_input(&self, _cx: &gpui::App) -> bool {
+        self.editor.is_some()
+    }
+}
+
 impl SettingsPage for OpenTargetsTab {
     fn settings_store(&self) -> &Entity<SettingsStore> {
         &self.store

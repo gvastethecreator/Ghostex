@@ -152,6 +152,13 @@ pub(crate) struct RemoteTab {
     preview_applied: bool,
 }
 
+impl super::HoldsUnsavedInput for RemoteTab {
+    /// An unsaved Advanced edit or a device removal confirmation.
+    fn holds_unsaved_input(&self, _cx: &gpui::App) -> bool {
+        self.advanced.has_draft() || self.confirming_device.is_some()
+    }
+}
+
 impl SettingsPage for RemoteTab {
     fn settings_store(&self) -> &Entity<SettingsStore> {
         &self.store

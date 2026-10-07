@@ -417,6 +417,13 @@ impl IntegrationsTab {
     }
 }
 
+impl super::HoldsUnsavedInput for IntegrationsTab {
+    /// An Uninstall confirmation is open.
+    fn holds_unsaved_input(&self, _cx: &gpui::App) -> bool {
+        self.managed.confirming_uninstall()
+    }
+}
+
 impl SettingsPage for IntegrationsTab {
     fn settings_store(&self) -> &Entity<SettingsStore> {
         &self.store

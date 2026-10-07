@@ -506,6 +506,29 @@ impl ProjectsTab {
     }
 }
 
+impl super::HoldsUnsavedInput for ProjectsTab {
+    /// The selected project's fields or a view binding were edited and not saved yet.
+    fn holds_unsaved_input(&self, cx: &App) -> bool {
+        if self
+            .seeded_from
+            .as_ref()
+            .is_some_and(|project| ProjectDrafts::from_project(project) != self.drafts)
+        {
+            return true;
+        }
+        if self.view_drafts.is_empty() {
+            return false;
+        }
+        let views = source_views(&self.store.read(cx).value("customViews"));
+        self.view_drafts.iter().any(|(view_id, draft)| {
+            views.iter().any(|view| {
+                view.id == *view_id
+                    && initial_draft(view, &self.view_drafts_project).binding != draft.binding
+            })
+        })
+    }
+}
+
 impl SettingsPage for ProjectsTab {
     fn settings_store(&self) -> &Entity<SettingsStore> {
         &self.store

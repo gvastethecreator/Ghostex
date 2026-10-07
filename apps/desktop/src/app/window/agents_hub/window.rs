@@ -299,6 +299,8 @@ impl GpuiAgentsHubModalWindow {
             sync_search,
             _subscriptions: vec![search_change, sync_search_change, keys],
         };
+        this._subscriptions
+            .extend(super::super::popup_dismissal::close_app_modal_on_click_away(window, cx));
         this.update_search_placeholder(window, cx);
         /*
         CDXC:AgentLauncher 2026-05-14-08:29:
@@ -972,5 +974,13 @@ impl Render for GpuiAgentsHubModalWindow {
 impl super::super::native_modal_kit::ModalCornerClose for GpuiAgentsHubModalWindow {
     fn close_from_corner(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.send(AgentsHubModalCommand::Close, cx);
+    }
+
+    /// An edited file not saved yet, a sync plan waiting for its answer or a sync being applied
+    /// keep the Hub open on a click away.
+    fn keeps_open_on_click_away(&self, _window: &Window, _cx: &App) -> bool {
+        self.editor.as_ref().is_some_and(|editor| editor.dirty)
+            || self.sync.sheet.is_some()
+            || self.sync.applying
     }
 }

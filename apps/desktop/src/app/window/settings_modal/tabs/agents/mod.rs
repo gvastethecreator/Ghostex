@@ -314,6 +314,13 @@ impl AgentsTab {
     }
 }
 
+impl super::HoldsUnsavedInput for AgentsTab {
+    /// The Add custom agent form or the Skip permissions? confirmation is open.
+    fn holds_unsaved_input(&self, _cx: &gpui::App) -> bool {
+        self.editor.is_some() || self.confirming_bypass
+    }
+}
+
 impl SettingsPage for AgentsTab {
     fn settings_store(&self) -> &Entity<SettingsStore> {
         &self.store
