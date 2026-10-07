@@ -97,7 +97,9 @@ view from the strip.
   the session that was there, and a session already on screen in another pane
   is focused there instead. To split, drag a session row from the sidebar onto
   the left, right, top or bottom edge of a pane (terminal or Session Chat); drop
-  it in the middle of a pane to show it there instead. You can also press
+  it in the middle of a pane to show it there instead. Only sessions of the
+  project on screen can go into its panes: a pane under a session from another
+  project dims and says it can't split there. You can also press
   Option+Shift+D to move the focused session into a pane on the right. While the screen is split,
   the focused pane has a small bar along its top: click it for Close Pane (the
   sessions keep running) and Merge All Panes, or drag it to move that session
