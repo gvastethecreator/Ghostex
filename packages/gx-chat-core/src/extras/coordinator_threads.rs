@@ -152,6 +152,62 @@ pub fn settle_read(
     true
 }
 
+/// A thread row was clicked: gxserver resumes the thread when its session is closed
+/// (`openCoordinatorThread`), and [`settle_open`] then asks the host to focus it.
+///
+/// CDXC:Coordinators 2026-10-08 WHY:
+/// Each host used to decide on its own whether a clicked thread needed waking, and the web build never woke one, so a closed thread opened as a dead transcript. The decision is gxserver's now (server/src/server/coordinator_open_http.rs) and every host only focuses the session it is handed.
+pub fn open_thread(
+    panels: &mut PanelsState,
+    project_id: &str,
+    session_id: &str,
+    request_id: u64,
+) -> Option<Effect> {
+    let (project_id, session_id) = (project_id.trim(), session_id.trim());
+    if project_id.is_empty() || session_id.is_empty() {
+        return None;
+    }
+    panels.threads_open_request = Some(request_id);
+    Some(Effect::SendRpc {
+        request_id,
+        method: ChatRpcMethod::OpenCoordinatorThread,
+        params: Box::new(json!({
+            "threadProjectId": project_id,
+            "threadSessionId": session_id,
+        })),
+    })
+}
+
+/// Takes the answer to [`open_thread`]: the host's focus, or a toast when the thread could not be
+/// resumed. `None` when `request_id` is not that call; an empty list when a newer click replaced it.
+pub fn settle_open(
+    panels: &mut PanelsState,
+    request_id: u64,
+    answer: Result<&Value, String>,
+) -> Option<Vec<Effect>> {
+    if panels.threads_open_request != Some(request_id) {
+        return None;
+    }
+    panels.threads_open_request = None;
+    Some(vec![match answer {
+        Ok(result) => Effect::HostAction {
+            action: "openCoordinatorThread".to_string(),
+            params: Box::new(json!({
+                "projectId": text(result, "projectId"),
+                "sessionId": text(result, "sessionId"),
+            })),
+        },
+        Err(message) => Effect::Toast {
+            level: "error".to_string(),
+            message: if message.is_empty() {
+                "Could not open that thread.".to_string()
+            } else {
+                message
+            },
+        },
+    }])
+}
+
 fn parse_rows(rows: Option<&Value>) -> Vec<(String, CoordinatorThreadRow)> {
     rows.and_then(Value::as_array)
         .into_iter()
@@ -167,7 +223,8 @@ fn parse_rows(rows: Option<&Value>) -> Vec<(String, CoordinatorThreadRow)> {
                     title: text(row, "title"),
                     detail: text(row, "detail"),
                     working,
-                    needs_approval: !working && row.get("needsApproval") == Some(&Value::Bool(true)),
+                    needs_approval: !working
+                        && row.get("needsApproval") == Some(&Value::Bool(true)),
                     recent: row.get("recent") == Some(&Value::Bool(true)),
                     branch: text(row, "branch"),
                     lifecycle_state: text(row, "lifecycleState"),
@@ -225,7 +282,11 @@ pub fn coordinator_threads_panel(
         meta.push(format!("{working} working"));
     }
     if approval > 0 {
-        meta.push(plural(approval, "needs your approval", "need your approval"));
+        meta.push(plural(
+            approval,
+            "needs your approval",
+            "need your approval",
+        ));
     }
     meta.push(plural(total, "thread", "threads"));
     let rows: Vec<CoordinatorThreadRow> = rows

@@ -25,14 +25,15 @@ use crate::ghostex_cli::rpc::{
 /// minus the two the host answers itself, plus `switchSessionAgent`, the call behind the chat's own
 /// More actions > Switch Account rows for agents without the Accounts panel (the desktop host makes
 /// it for its chat, the phone has no other way to), `readCoordinatorThreads`, the full list behind a
-/// coordinator's Threads panel "N more" row, and `claimSessionChatLaunchDraft`, which the
+/// coordinator's Threads panel "N more" row, `openCoordinatorThread`, which resumes a closed thread
+/// before one of that panel's rows opens it, and `claimSessionChatLaunchDraft`, which the
 /// desktop host calls when a session opens straight in Chat and the phone calls for a Handoff's new
 /// conversation so the staged handover link lands in its chat composer. It stays a chat bridge
 /// rather than a door to every gxserver path, the same rule `saved_prompts.rs` keeps. Params travel
 /// base64-encoded so no shell
 /// (POSIX, PowerShell, WSL) can re-quote a JSON body on its way through.
 /// SEE-ALSO: packages/gx-chat-core/src/wire/rpc.rs, apps/mobile/app/src/chat/rust/transport.ts
-const SESSION_CHAT_RPC_METHODS: [&str; 29] = [
+const SESSION_CHAT_RPC_METHODS: [&str; 30] = [
     "readSessionChat",
     "readSessionChatSkills",
     "readSessionChatFiles",
@@ -60,6 +61,7 @@ const SESSION_CHAT_RPC_METHODS: [&str; 29] = [
     "saveStashedPrompt",
     "runProjectDocsAction",
     "readCoordinatorThreads",
+    "openCoordinatorThread",
     "switchSessionAgent",
     "claimSessionChatLaunchDraft",
 ];

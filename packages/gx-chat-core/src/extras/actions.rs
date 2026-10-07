@@ -41,7 +41,9 @@ pub fn handle_with_ids(
         ActionKind::ToggleCoordinatorThreads => {
             let collapsed = !flag(action, "open");
             state.extras.panels.threads_collapsed = collapsed;
-            vec![crate::extras::coordinator_threads::write_threads_collapsed(collapsed)]
+            vec![crate::extras::coordinator_threads::write_threads_collapsed(
+                collapsed,
+            )]
         }
         ActionKind::ToggleCoordinatorThreadsMore => {
             let panels = &mut state.extras.panels;
@@ -58,11 +60,15 @@ pub fn handle_with_ids(
             .into_iter()
             .collect()
         }
-        // Opening a thread is the host's: it focuses (and wakes) another session.
-        ActionKind::OpenCoordinatorThread => vec![Effect::HostAction {
-            action: "openCoordinatorThread".to_string(),
-            params: Box::new(Value::Object(action.params.clone())),
-        }],
+        // gxserver resumes a closed thread first; the host's focus follows its answer.
+        ActionKind::OpenCoordinatorThread => crate::extras::coordinator_threads::open_thread(
+            &mut state.extras.panels,
+            text(action, "projectId"),
+            text(action, "sessionId"),
+            next_request_id(),
+        )
+        .into_iter()
+        .collect(),
 
         ActionKind::SearchOpen => {
             search::open(&mut state.extras.search);

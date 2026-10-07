@@ -75,6 +75,12 @@ fn settle_with_ids(
                 *request_id,
                 answer.clone(),
             ) {
+            } else if let Some(more) = coordinator_threads::settle_open(
+                &mut state.extras.panels,
+                *request_id,
+                answer.clone(),
+            ) {
+                effects.extend(more);
             } else if let Some(more) = settle_terminal_tail_rpc(state, *request_id, answer) {
                 effects.extend(more);
             }
@@ -119,7 +125,9 @@ fn settle_with_ids(
         Event::StorageLoaded { key, value } if *key == panels::tasks_collapsed_key() => {
             state.extras.panels.tasks_collapsed = panels::read_tasks_collapsed(value.as_deref());
         }
-        Event::StorageLoaded { key, value } if *key == coordinator_threads::threads_collapsed_key() => {
+        Event::StorageLoaded { key, value }
+            if *key == coordinator_threads::threads_collapsed_key() =>
+        {
             state.extras.panels.threads_collapsed = value.as_deref() == Some("1");
         }
         _ => {}

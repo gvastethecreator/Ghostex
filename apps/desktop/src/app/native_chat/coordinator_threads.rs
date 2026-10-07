@@ -149,7 +149,6 @@ impl NativeChatView {
             "type": "openCoordinatorThread",
             "projectId": row["projectId"],
             "sessionId": row["sessionId"],
-            "lifecycleState": row["lifecycleState"],
         });
         div()
             .id(gpui::SharedString::from(format!(

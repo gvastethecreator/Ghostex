@@ -523,6 +523,15 @@ pub(super) async fn route_sessions_http(
             &body_json,
             |_, db, params, server_id| search_presentation_sessions(db, server_id, params),
         ),
+        "/api/openCoordinatorThread" => {
+            coordinator_open_http::handle_open_coordinator_thread_http(
+                &state,
+                endpoint.path,
+                request_id,
+                body_json,
+            )
+            .await
+        }
         "/api/openConversation" => {
             open_conversation_http::handle_open_conversation_http(
                 &state,

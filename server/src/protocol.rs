@@ -519,6 +519,7 @@ pub fn endpoint_for(path: &str) -> Option<EndpointDescriptor> {
         | "/api/updateCoordinator"
         | "/api/linkCoordinatorThread"
         | "/api/setCoordinatorThreadResolved"
+        | "/api/openCoordinatorThread"
         | "/api/promoteCoordinator"
         | "/api/toggleCloseAfterDone"
         | "/api/openConversation"

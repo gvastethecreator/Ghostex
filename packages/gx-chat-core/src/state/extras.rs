@@ -81,6 +81,8 @@ pub struct PanelsState {
     pub threads_all: Option<(String, Value)>,
     /// The `readCoordinatorThreads` in flight and the revision it was asked for.
     pub threads_all_request: Option<(u64, String)>,
+    /// The `openCoordinatorThread` in flight for a clicked thread row; a newer click replaces it.
+    pub threads_open_request: Option<u64>,
 }
 
 impl Default for PanelsState {
@@ -94,6 +96,7 @@ impl Default for PanelsState {
             threads_show_all: false,
             threads_all: None,
             threads_all_request: None,
+            threads_open_request: None,
         }
     }
 }

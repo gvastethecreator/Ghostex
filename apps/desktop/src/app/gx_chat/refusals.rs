@@ -118,6 +118,7 @@ fn rpc_method_name(wire: &str) -> &'static str {
         ChatRpcMethod::ReadNativeComposer => "readNativeComposer",
         ChatRpcMethod::RunProjectDocsAction => "runProjectDocsAction",
         ChatRpcMethod::ReadCoordinatorThreads => "readCoordinatorThreads",
+        ChatRpcMethod::OpenCoordinatorThread => "openCoordinatorThread",
         ChatRpcMethod::Other(_) => "other",
     }
 }

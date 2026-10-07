@@ -49,6 +49,8 @@ pub enum ChatRpcMethod {
     RunProjectDocsAction,
     /// Every thread of a coordinator, behind its Threads panel's "N more" row.
     ReadCoordinatorThreads,
+    /// Resumes a coordinator's closed thread before one of its Threads panel rows opens it.
+    OpenCoordinatorThread,
     /// A method this build does not know; kept verbatim.
     Other(String),
 }
@@ -86,6 +88,7 @@ impl ChatRpcMethod {
             Self::ReadNativeComposer => "readNativeComposer",
             Self::RunProjectDocsAction => "runProjectDocsAction",
             Self::ReadCoordinatorThreads => "readCoordinatorThreads",
+            Self::OpenCoordinatorThread => "openCoordinatorThread",
             Self::Other(name) => name.as_str(),
         }
     }
@@ -122,6 +125,7 @@ impl ChatRpcMethod {
             "readNativeComposer" => Self::ReadNativeComposer,
             "runProjectDocsAction" => Self::RunProjectDocsAction,
             "readCoordinatorThreads" => Self::ReadCoordinatorThreads,
+            "openCoordinatorThread" => Self::OpenCoordinatorThread,
             other => Self::Other(other.to_string()),
         }
     }

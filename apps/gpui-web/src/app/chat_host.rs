@@ -23,6 +23,7 @@ impl GhostexGpuiApp {
             // The composer's terminal button: the same session, as a terminal.
             Some("terminalView" | "switchToTerminal") => self.web_show_terminal(true, cx),
             // A row of a coordinator's Threads panel: that thread's chat, on the same machine.
+            // gxserver resumed it first when it was closed (`openCoordinatorThread`).
             Some("openCoordinatorThread") => {
                 let text = |key: &str| {
                     message[key]

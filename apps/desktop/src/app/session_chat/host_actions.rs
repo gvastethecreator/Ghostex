@@ -589,7 +589,7 @@ impl GhostexGpuiApp {
             );
             return;
         }
-        // CDXC:Coordinators 2026-09-30 WHY: a row of a coordinator's Threads panel opens that thread the way a fork branch opens: wake it when it was closed, then focus and reveal it in the sidebar.
+        // CDXC:Coordinators 2026-10-08 WHY: a row of a coordinator's Threads panel opens that thread the way a fork branch opens, by focusing and revealing it in the sidebar; gxserver already resumed it when it was closed (server/src/server/coordinator_open_http.rs), so the action carries no lifecycleState and nothing is woken here. Supersedes the 2026-09-30 note that this host woke it.
         if action == "selectForkBranch" || action == "openCoordinatorThread" {
             self.select_session_chat_fork_branch(session_id, &message, cx);
             return;
