@@ -214,7 +214,8 @@ fn run(instance: &Arc<Instance>, mut plan: Plan, api_port: u16) -> Result<()> {
         };
         #[cfg(windows)]
         let mut command = {
-            let mut command = Command::new("powershell.exe");
+            // The project command runs in the PowerShell its sessions use (7 when installed, else 5.1).
+            let mut command = Command::new(crate::platform::shell::powershell_executable());
             command.args(["-NoProfile", "-Command", &plan.command]);
             command
         };

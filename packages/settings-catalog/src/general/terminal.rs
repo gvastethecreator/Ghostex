@@ -14,6 +14,7 @@ pub(crate) fn terminal(platform: Platform) -> Section {
             row("windowsTerminalBackend", "Windows Environment", "PowerShell (default) runs native Windows projects and agents. WSL runs Linux projects. Changing environments prompts you to restart Ghostex.")
                 .options(&[opt("PowerShell (Native)", "powershell"), opt("WSL (Linux)", "wsl")]),
             row("windowsWslDistribution", "WSL distribution", "Optional exact distro name from `wsl.exe --list --verbose`; blank uses automatic WSL2 discovery."),
+            row("windowsPowerShell7", "PowerShell 7", "New terminals use PowerShell 7 when it is installed (Program Files, your user folder, the Microsoft Store or PATH) and Windows PowerShell 5.1 until then. Install PowerShell 7 runs winget for you; terminals that are already open keep their shell."),
         ]);
     }
     settings.extend([

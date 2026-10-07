@@ -4,6 +4,7 @@
 //! Sessions and Experimental, in that order (CDXC:Settings 2026-08-24: each rail group's sections stay
 //! contiguous), then Reset to defaults.
 mod chat_tools;
+mod powershell;
 mod sidebar;
 mod system;
 mod terminal;
@@ -29,6 +30,7 @@ use serde_json::{Value, json};
 pub(crate) struct GeneralTab {
     store: Entity<SettingsStore>,
     fields: FieldStates,
+    powershell: powershell::PowerShellState,
 }
 
 impl GeneralTab {
@@ -38,10 +40,15 @@ impl GeneralTab {
         cx: &mut Context<Self>,
     ) -> Self {
         cx.observe(&store, |_, _, cx| cx.notify()).detach();
-        Self {
+        let mut page = Self {
             store,
             fields: FieldStates::default(),
+            powershell: powershell::PowerShellState::default(),
+        };
+        if settings_catalog().flag(module::SEARCH_CATALOG, "IS_WINDOWS_HOST") {
+            page.load_powershell(cx);
         }
+        page
     }
 }
 

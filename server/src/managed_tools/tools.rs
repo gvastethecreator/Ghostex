@@ -17,10 +17,11 @@ pub(crate) enum ToolId {
     Beads,
     Gh,
     Glab,
+    PowerShell,
 }
 
 impl ToolId {
-    pub(crate) const ALL: [ToolId; 7] = [
+    pub(crate) const ALL: [ToolId; 8] = [
         ToolId::Node,
         ToolId::Uv,
         ToolId::Homebrew,
@@ -28,6 +29,7 @@ impl ToolId {
         ToolId::Beads,
         ToolId::Gh,
         ToolId::Glab,
+        ToolId::PowerShell,
     ];
 
     pub(crate) fn id(self) -> &'static str {
@@ -39,6 +41,7 @@ impl ToolId {
             ToolId::Beads => "beads",
             ToolId::Gh => "gh",
             ToolId::Glab => "glab",
+            ToolId::PowerShell => "powershell",
         }
     }
 
@@ -55,6 +58,7 @@ impl ToolId {
             ToolId::Beads => "Beads",
             ToolId::Gh => "GitHub CLI",
             ToolId::Glab => "GitLab CLI",
+            ToolId::PowerShell => "PowerShell 7",
         }
     }
 
@@ -73,6 +77,9 @@ impl ToolId {
             ToolId::Beads => "The bd command behind the Project board.",
             ToolId::Gh => "Lets Add Project clone and list your GitHub repositories.",
             ToolId::Glab => "Lets Add Project clone and list your GitLab repositories.",
+            ToolId::PowerShell => {
+                "The current PowerShell. New terminals on Windows use it instead of Windows PowerShell 5.1."
+            }
         }
     }
 }
@@ -109,6 +116,8 @@ pub(crate) struct Status {
     pub terminal_command: Option<String>,
     /// Extra status line (for example which system tools are missing).
     pub detail: Option<String>,
+    /// Where to get the tool by hand when Ghostex cannot install it here.
+    pub download_url: Option<String>,
     /// Operations that make sense for this install (before blockers are applied).
     pub operations: Vec<&'static str>,
 }
@@ -125,6 +134,7 @@ impl Status {
             plan: String::new(),
             terminal_command: None,
             detail: None,
+            download_url: None,
             operations: Vec::new(),
         }
     }
@@ -219,7 +229,7 @@ pub(crate) fn latest_version(tool: ToolId, fresh: bool) -> Option<Result<String,
         ToolId::Uv => super::uv::latest_version(),
         ToolId::Beads | ToolId::Gh | ToolId::Glab => super::binaries::latest_version(tool),
         ToolId::Homebrew => super::homebrew::latest_homebrew_version(),
-        ToolId::SystemTools => return None,
+        ToolId::SystemTools | ToolId::PowerShell => return None,
     };
     if let Ok(mut cache) = LATEST.lock() {
         cache.insert(tool, (Instant::now(), answer.clone()));

@@ -1320,6 +1320,15 @@ when an administrator account connects over SSH, because Codex refuses to run as
 administrator. For a single command that needs administrator
 rights, turn on `sudo` in Windows Settings > System > For developers and run
 `sudo <command>`, then approve the prompt on the Windows desktop.
+Native Windows terminals use PowerShell 7 when it is installed (in Program Files,
+your user folder, from the Microsoft Store, or anywhere on PATH; a stable release
+is preferred over a preview) and Windows PowerShell 5.1 until then, so nothing
+breaks on a computer that only has 5.1. When only 5.1 is present, Settings >
+General > Terminal shows a **PowerShell 7** row with an **Install PowerShell 7**
+button that runs `winget install --id Microsoft.PowerShell --source winget`
+(Windows may ask you to allow the installer; without winget the row links to
+Microsoft's download page). New terminals and agents use PowerShell 7 right after
+it is installed; terminals that are already open keep their shell.
 Keys: `windowsTerminalBackend`, `windowsWslDistribution`.
 
 Terminals are embedded Ghostty surfaces. Font, theme, cursor, padding,

@@ -244,13 +244,18 @@ fn command_shell_candidates() -> Vec<String> {
 }
 
 fn shell_kind_for_path(path: &str) -> PlatformShellKind {
-    match Path::new(path)
+    let name = Path::new(path)
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    #[cfg(windows)]
+    if ["pwsh.exe", "pwsh-preview.exe", "powershell.exe"]
+        .iter()
+        .any(|powershell| name.eq_ignore_ascii_case(powershell))
     {
-        #[cfg(windows)]
-        "pwsh.exe" | "powershell.exe" => PlatformShellKind::PowerShell,
+        return PlatformShellKind::PowerShell;
+    }
+    match name {
         "bash" => PlatformShellKind::Bash,
         "zsh" => PlatformShellKind::Zsh,
         _ => PlatformShellKind::Sh,
@@ -295,21 +300,17 @@ fn dedupe(values: Vec<String>) -> Vec<String> {
         .collect()
 }
 
+/// PowerShell 7 wherever it is installed (see `ghostex_paths::powershell`), otherwise Windows
+/// PowerShell 5.1. Looked up on every call, so a PowerShell 7 installed while gxserver runs is
+/// used by the next session without a restart; sessions already running keep their shell.
 #[cfg(windows)]
 pub fn powershell_executable() -> String {
-    let program_files = env::var_os("ProgramFiles").map(PathBuf::from);
-    if let Some(path) = program_files
-        .map(|root| root.join("PowerShell/7/pwsh.exe"))
-        .filter(|path| path.is_file())
-    {
-        return path.to_string_lossy().into_owned();
-    }
-    env::var_os("SystemRoot")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("C:/Windows"))
-        .join("System32/WindowsPowerShell/v1.0/powershell.exe")
-        .to_string_lossy()
-        .into_owned()
+    ghostex_paths::powershell::preferred_powershell(
+        &ghostex_paths::powershell::Environment::from_process(),
+        crate::platform::live_path::directories,
+    )
+    .to_string_lossy()
+    .into_owned()
 }
 
 #[cfg(windows)]

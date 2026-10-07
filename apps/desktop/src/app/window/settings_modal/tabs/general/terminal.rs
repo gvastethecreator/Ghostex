@@ -221,6 +221,9 @@ fn terminal_section(
                 cx,
             ));
         }
+        if g.values.string("windowsTerminalBackend") != "wsl" {
+            rows.extend(page.powershell_row(g, cx));
+        }
         if g.values.string("windowsTerminalBackend") == "wsl"
             && g.visible(s, "windowsWslDistribution")
         {

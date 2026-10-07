@@ -1,19 +1,19 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use std::path::{Path, PathBuf};
 
+/// PowerShell 7 wherever it is installed, otherwise Windows PowerShell 5.1: the same lookup
+/// gxserver uses for sessions (`ghostex_paths::powershell`).
 pub(super) fn shell() -> String {
-    let pwsh = std::env::var_os("ProgramFiles")
-        .map(PathBuf::from)
-        .map(|root| root.join("PowerShell/7/pwsh.exe"));
-    if let Some(path) = pwsh.filter(|path| path.is_file()) {
-        return path.to_string_lossy().into_owned();
-    }
-    std::env::var_os("SystemRoot")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("C:/Windows"))
-        .join("System32/WindowsPowerShell/v1.0/powershell.exe")
-        .to_string_lossy()
-        .into_owned()
+    ghostex_paths::powershell::preferred_powershell(
+        &ghostex_paths::powershell::Environment::from_process(),
+        || {
+            std::env::var_os("PATH")
+                .map(|value| std::env::split_paths(&value).collect())
+                .unwrap_or_default()
+        },
+    )
+    .to_string_lossy()
+    .into_owned()
 }
 
 pub(super) fn invocation(command: Option<String>, cwd: Option<&Path>) -> (String, Vec<String>) {

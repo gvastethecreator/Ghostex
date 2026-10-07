@@ -5,6 +5,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub mod powershell;
+
 const PRODUCT_DIR_UNIX: &str = "ghostex";
 #[cfg(target_os = "windows")]
 const PRODUCT_DIR_NATIVE: &str = "Ghostex";

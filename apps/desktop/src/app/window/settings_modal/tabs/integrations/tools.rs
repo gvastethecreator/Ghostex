@@ -487,7 +487,11 @@ impl IntegrationsTab {
                 None,
             )),
             Some(tools) => {
-                for tool in tools.iter().filter(|tool| tool["supported"] == true) {
+                // PowerShell 7 has its own row in General > Terminal.
+                for tool in tools
+                    .iter()
+                    .filter(|tool| tool["supported"] == true && id(tool) != "powershell")
+                {
                     rows.push(self.managed_tool_row(p, tool, cx));
                     let key = id(tool);
                     if self.managed.confirm_uninstall.as_deref() == Some(key.as_str())

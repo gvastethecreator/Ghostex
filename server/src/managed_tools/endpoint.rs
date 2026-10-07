@@ -4,7 +4,7 @@ use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
 use super::{
-    binaries, homebrew, jobs, node, paths, system_tools,
+    binaries, homebrew, jobs, node, paths, powershell, system_tools,
     tools::{self, Status, ToolId},
     uv,
 };
@@ -67,6 +67,7 @@ pub(crate) fn status(tool: ToolId, home: &Path) -> Status {
         ToolId::Uv => uv::status(home),
         ToolId::Homebrew => homebrew::homebrew_status(home),
         ToolId::SystemTools => system_tools::status(home),
+        ToolId::PowerShell => powershell::status(),
         ToolId::Beads | ToolId::Gh | ToolId::Glab => binaries::status(tool, home),
     }
 }
@@ -103,6 +104,9 @@ pub(crate) fn state(tool: ToolId, home: &Path, fresh: bool) -> Value {
     }
     if let Some(reason) = &status.install_blocker {
         value["unavailableReason"] = json!(reason);
+    }
+    if let Some(url) = &status.download_url {
+        value["downloadUrl"] = json!(url);
     }
     if let Some(command) = &status.terminal_command {
         value["terminalCommand"] = json!(command);
@@ -189,6 +193,10 @@ fn run_operation(tool: ToolId, operation: &str, home: &Path, log: &Log) -> Resul
         (ToolId::Homebrew, false) => return Err("Ghostex does not uninstall Homebrew.".into()),
         (ToolId::SystemTools, true) => system_tools::install(home, log)?,
         (ToolId::SystemTools, false) => return Err("Ghostex does not remove system tools.".into()),
+        (ToolId::PowerShell, true) => powershell::install(log)?,
+        (ToolId::PowerShell, false) => {
+            return Err("Ghostex does not remove PowerShell 7.".into())
+        }
     }
     crate::agent_hooks::probing::refresh_cli_environment(home);
     Ok(())

@@ -622,7 +622,9 @@ pub fn run_native_statusline_hook(args: Vec<String>) -> Result<(), DomainStateEr
             command
         }
         None => {
-            let mut command = std::process::Command::new("powershell.exe");
+            // PowerShell 7 when installed anywhere, else 5.1: the shell sessions use (ghostex_paths::powershell).
+            let mut command =
+                std::process::Command::new(crate::platform::shell::powershell_executable());
             command
                 .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"])
                 .arg(&wrapped);
