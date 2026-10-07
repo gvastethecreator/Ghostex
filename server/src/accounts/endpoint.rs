@@ -218,6 +218,8 @@ pub(crate) fn dispatch(
                 saved.selector = found.selector.clone();
             }
             if !reconnecting {
+                // CDXC:AgentProviders 2026-10-07 DECISION:
+                // User: "please also make 'available for automatic switching' enabled by default for accounts when added in settings in ghostex". A newly registered account starts with `eligible: true`; this is the only place an account is created (Settings, `setup.rs` and the phone all call `register`), and accounts already saved keep their own value.
                 if registry.accounts.len() >= 50 {
                     return Err(DomainStateError::bad_request(
                         "At most 50 accounts can be registered.",

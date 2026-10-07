@@ -1200,6 +1200,9 @@ last reading with its age ("Usage is from 3 hours ago") and Ghostex keeps
 retrying on its own. Automatic switching and the Account for new sessions rule
 skip that account until its usage refreshes. A login problem shows what to do
 instead, such as "The saved login expired. Reconnect this account."
+A newly added account starts with Available for automatic switching on; turn it
+off in the account's editor in Settings > Accounts to keep that account out of
+automatic switching.
 Reconnecting a Codex account works while that account's sessions keep running.
 When Codex still has to stop first, Settings lists the sessions in the way and
 offers Sleep sessions and continue; sleeping keeps them in the sidebar and they
