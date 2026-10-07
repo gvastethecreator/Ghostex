@@ -192,7 +192,15 @@ impl SessionChatQueueRuntime {
     }
 
     async fn run_tick(&self) {
-        for ready in self.collect_ready_deliveries() {
+        // The readiness pass reads SQLite and transcripts (an Empryo transcript is rebuilt from
+        // its raw log), so it runs on a blocking thread, never on an async worker.
+        let runtime = self.clone();
+        let Ok(deliveries) =
+            tokio::task::spawn_blocking(move || runtime.collect_ready_deliveries()).await
+        else {
+            return;
+        };
+        for ready in deliveries {
             let key = session_queue_key(&ready.project_id, &ready.session_id);
             if !self.begin_delivery(&key) {
                 continue;
@@ -492,15 +500,19 @@ impl SessionChatQueueRuntime {
         self.finish_delivery(&key);
     }
 
+    /// The transcript read happens outside the `gates` lock, which deliveries also take.
     fn transcript_lifecycle_is_working(&self, key: &str, session: &Value) -> bool {
-        let Ok(mut gates) = self.gates.lock() else {
-            return true;
+        let mut transcript = {
+            let Ok(mut gates) = self.gates.lock() else {
+                return true;
+            };
+            std::mem::take(&mut gates.entry(key.to_string()).or_default().transcript)
         };
-        gates
-            .entry(key.to_string())
-            .or_default()
-            .transcript
-            .is_working(session)
+        let working = transcript.is_working(session);
+        if let Ok(mut gates) = self.gates.lock() {
+            gates.entry(key.to_string()).or_default().transcript = transcript;
+        }
+        working
     }
 
     fn stability_window_elapsed(&self, key: &str, now: DateTime<Utc>) -> bool {

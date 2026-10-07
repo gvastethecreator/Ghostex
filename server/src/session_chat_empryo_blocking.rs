@@ -84,10 +84,12 @@ fn trust_notice(screen_text: &str, lines: &[String]) -> Option<SessionChatTermin
         .map(|(declared, _)| declared.trim())
         .filter(|declared| !declared.is_empty())
         .unwrap_or("settings");
-    // Ctrl+U empties the input line first; Ctrl+K would open Empryo's command palette.
+    // Ctrl+U empties the input box first, once per line a draft can span, so `/trust` starts the
+    // box and runs as a command; Ctrl+K would open Empryo's command palette.
     let trust_keys = format!(
         "{}/trust{}",
-        crate::session_chat_send::AGENT_TUI_CLEAR_INPUT_LINE,
+        crate::session_chat_send::AGENT_TUI_CLEAR_INPUT_LINE
+            .repeat(crate::session_chat_send::AGENT_TUI_CLEAR_MAX_LINES),
         crate::session_chat_send::SESSION_CHAT_SUBMIT
     );
     Some(
@@ -138,13 +140,17 @@ fn login_notice(screen_text: &str, lines: &[String]) -> Option<SessionChatTermin
     )
 }
 
-/// A 429 retry row in the turn that is still running.
-fn rate_limit_notice(screen_text: &str, lines: &[String]) -> Option<SessionChatTerminalNotice> {
+/// A 429 retry row in the turn that is still running, which the caller vouches for.
+fn rate_limit_notice(
+    screen_text: &str,
+    lines: &[String],
+    turn_running: bool,
+) -> Option<SessionChatTerminalNotice> {
     let evidence = since_last_prompt(lines)
         .iter()
         .rev()
         .find(|line| line.contains(RATE_LIMITED))?;
-    if crate::session_chat_composer::empryo_composer_busy(screen_text) != Some(true) {
+    if !turn_running {
         return None;
     }
     let evidence = evidence
@@ -204,6 +210,24 @@ pub fn classify_empryo_terminal_notice(screen_text: &str) -> Option<SessionChatT
             let lines = screen_lines(screen_text);
             login_notice(screen_text, &lines)
                 .or_else(|| trust_notice(screen_text, &lines))
-                .or_else(|| rate_limit_notice(screen_text, &lines))
+                .or_else(|| {
+                    let busy = crate::session_chat_composer::empryo_composer_busy(screen_text)
+                        == Some(true);
+                    rate_limit_notice(screen_text, &lines, busy)
+                })
         })
+}
+
+/// CDXC:AgentScreenDetection 2026-10-07 WHY:
+/// Empryo 3.9.1-beta no longer marks a running turn on its prompt glyph, so the screen alone never shows the rate-limit card there. The chat's own detection holds the session and asks its transcript mirror whether a turn is in flight, and shows the card for that turn when the screen-only classifier found nothing.
+pub(crate) fn empryo_rate_limit_notice_for_session(
+    repository: &crate::domain::DomainRepository<'_>,
+    session: &serde_json::Value,
+    screen_text: &str,
+) -> Option<SessionChatTerminalNotice> {
+    let log = crate::session_chat_pi_models::empryo_session_log(repository, session)?;
+    let mirror =
+        crate::session_chat_empryo_mirror::resolve_empryo_chat_transcript_path(None, Some(&log))?;
+    crate::session_chat_empryo_mirror::empryo_turn_in_flight(&mirror)?;
+    rate_limit_notice(screen_text, &screen_lines(screen_text), true)
 }

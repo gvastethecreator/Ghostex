@@ -3,12 +3,14 @@ use serde_json::{Map, Value};
 #[cfg(not(windows))]
 mod claude_background;
 mod claude_identity;
+mod empryo_wake;
 mod hermes_profile;
 #[cfg(windows)]
 mod windows;
 use super::*;
 #[cfg(not(windows))]
 use claude_background::build_claude_attach_or_resume_command;
+pub(crate) use empryo_wake::seed_empryo_wake_session;
 #[cfg(windows)]
 pub(crate) use windows::*;
 
@@ -457,7 +459,7 @@ pub(crate) fn build_agent_resume_command(
             )
         }),
         // CDXC:AgentProviders 2026-10-06 DECISION: "Resume. `empryo --session <id>`. The process-identity scan reads `--session` from argv." SEE-ALSO: extract_agent_process_session_id in server/src/zmx/process_identity.rs.
-        // A session with no written folder (`get_empryo_session_reference`) wakes as a fresh `empryo`.
+        // A session with no written folder: see `get_empryo_session_reference`.
         "omp" | "empryo" => exact_reference
             .map(|reference| {
                 format!(
@@ -751,7 +753,7 @@ pub(crate) fn get_exact_agent_session_reference(
 }
 
 /// CDXC:SessionIdentity 2026-10-06 WHY:
-/// Empryo reports its session id when it mounts but writes `.empryo/sessions/<id>/` only with the first prompt, so waking a session that slept before its first message ran `empryo --session <id>` for a folder that never existed and Empryo printed "Session not found" (seen live 2026-10-06). Only a written session folder resumes; anything else wakes as a fresh `empryo`, which is all that session ever was (a missing resume command would leave the pane unstarted).
+/// Empryo reports its session id when it mounts but writes `.empryo/sessions/<id>/` only with the first prompt, so waking a session that slept before its first message ran `empryo --session <id>` for a folder that never existed and Empryo printed "Session not found" (seen live 2026-10-06). Only a written session folder resumes; a session without one is seeded a fresh folder before it wakes (`seed_empryo_wake_session`), and a plan built without that seeding runs a fresh `empryo` (a missing resume command would leave the pane unstarted).
 fn get_empryo_session_reference(input: &AgentResumeInput) -> Option<String> {
     let session_id = input.agent_session_id.as_deref()?.trim();
     if !crate::session_chat_empryo_mirror::is_safe_empryo_session_id(session_id) {

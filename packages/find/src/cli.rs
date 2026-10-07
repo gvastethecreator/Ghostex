@@ -14,7 +14,7 @@ pub const HELP: &str = concat!(
     "Sources: claude (~/.claude), codex (~/.codex), pi (~/.pi),\n",
     "         opencode (~/.local/share/opencode/opencode.db),\n",
     "         cursor (~/.cursor/projects), grok (~/.grok/sessions),\n",
-    "         empryo (each repo's .empryo/sessions, found through ~/.empryo/threads.db)\n",
+    "         empryo (each repo's .empryo/sessions, found through Empryo's threads.db)\n",
     "\n",
     "Usage:\n",
     "  zehn            find a prompt, then RESUME that session in its agent\n",

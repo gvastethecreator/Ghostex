@@ -112,9 +112,12 @@ pub(crate) async fn verify_session_chat_paste_landed(
                         &crate::session_chat_options::strip_ansi_sgr(&screen),
                     )
                     .contains(SESSION_CHAT_PASTING_INDICATOR_NEEDLE);
+                    // Text a cursorless capture cannot tell from a tip still counts here: it is only
+                    // matched against the message just typed, which no tip spells (seen live
+                    // 2026-10-07: every Empryo slash command from the chat failed on wmx).
                     let body =
                         crate::session_chat_composer::session_chat_composer_input(agent, &screen)
-                            .filter(|input| !input.is_empty())
+                            .filter(|input| !input.is_empty() || input.text_unreadable())
                             .map(|input| input.text)
                             .unwrap_or_default();
                     (body, pasting)

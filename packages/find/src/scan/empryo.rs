@@ -14,11 +14,16 @@ impl Scanner {
 
     /// CDXC:PromptSearch 2026-10-06 WHY:
     /// Empryo keeps each session inside its repository (`<repo>/.empryo/sessions/<id>/`), so there
-    /// is no single history folder to walk. Its own thread index, `~/.empryo/threads.db`, names
-    /// every repository it has run in; the scan opens it read-only and reads the session folders
-    /// of each one, which also finds a session the index has not caught up with yet.
+    /// is no single history folder to walk. Its own thread index, `threads.db` in Empryo's home
+    /// (`~/.empryo`, or `AppData\Local\Empryo` on Windows, as gxserver's `empryo_home` resolves it),
+    /// names every repository it has run in; the scan opens it read-only and reads the session
+    /// folders of each one, which also finds a session the index has not caught up with yet.
     pub(super) fn scan_empryo(&mut self) {
-        let db = self.path(".empryo/threads.db");
+        let db = if cfg!(windows) {
+            self.path("AppData/Local/Empryo/threads.db")
+        } else {
+            self.path(".empryo/threads.db")
+        };
         if !db.exists() {
             return;
         }
@@ -138,15 +143,35 @@ pub fn parse_empryo_meta(data: &[u8]) -> EmpryoInfo {
     }
 }
 
-/// Every repository Empryo has run in, from its thread index, opened read-only.
+/// Every repository Empryo has run in, from its thread index, opened read-only. Each table is read
+/// on its own so an Empryo version without one of them still yields the other's repositories, and
+/// Empryo writing the index at the same moment waits briefly instead of failing the scan.
 fn read_empryo_checkouts(db_path: &Path) -> Result<Vec<String>, String> {
     use rusqlite::{Connection, OpenFlags};
-    let read = || -> rusqlite::Result<Vec<String>> {
-        let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-        let mut stmt = conn
-            .prepare("SELECT checkout FROM threads UNION SELECT path FROM checkouts ORDER BY 1")?;
-        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-        Ok(rows.flatten().collect())
+    let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| format!("open {}: {e}", db_path.display()))?;
+    conn.busy_timeout(std::time::Duration::from_millis(1000))
+        .map_err(|e| format!("open {}: {e}", db_path.display()))?;
+    let column = |sql: &str| -> rusqlite::Result<Vec<String>> {
+        let mut stmt = conn.prepare(sql)?;
+        let rows = stmt.query_map([], |row| row.get::<_, Option<String>>(0))?;
+        rows.filter_map(|row| row.transpose()).collect()
     };
-    read().map_err(|e| format!("read {}: {e}", db_path.display()))
+    let mut checkouts = Vec::new();
+    let mut errors = Vec::new();
+    for sql in [
+        "SELECT DISTINCT checkout FROM threads",
+        "SELECT DISTINCT path FROM checkouts",
+    ] {
+        match column(sql) {
+            Ok(rows) => checkouts.extend(rows),
+            Err(e) => errors.push(e.to_string()),
+        }
+    }
+    if errors.len() == 2 {
+        return Err(format!("read {}: {}", db_path.display(), errors.join("; ")));
+    }
+    checkouts.sort();
+    checkouts.dedup();
+    Ok(checkouts)
 }

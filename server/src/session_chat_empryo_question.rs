@@ -251,7 +251,17 @@ pub fn build_empryo_ask_answer_keys(
         .map(str::trim)
         .filter(|text| !text.is_empty() && panel.other)?;
     let mut keys = pick_keys(&panel, panel.options.len());
-    keys.push(AskAnswerKeyGroup::Text(other.to_string()));
+    // Typed, never pasted: Empryo attaches the clipboard's image to any text paste (see
+    // `build_empryo_input_bytes`). The answer box is one line, so line breaks become spaces.
+    let other = other
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    keys.push(AskAnswerKeyGroup::Raw(
+        crate::session_chat_send::build_empryo_input_bytes(&other),
+    ));
     keys.push(AskAnswerKeyGroup::Raw(ENTER.to_string()));
     Some(keys)
 }

@@ -130,6 +130,26 @@ pub async fn clear_session_chat_composer(
                                     input.rows + AGENT_TUI_CLEAR_LINE_SLACK,
                                 ))
                             }
+                            Some(ComposerClearMethod::KillLinesBackward)
+                                if input.attachments() > 0 && input.text_unreadable() =>
+                            {
+                                // The seed could never be seen typed, so the Ctrl+C that drops the
+                                // images is never safe here (it quits Empryo on an empty box).
+                                if attachment_seed_sent {
+                                    let _ = write_session_chat_payload(
+                                        project_id,
+                                        session_id,
+                                        zmx_name,
+                                        source,
+                                        &kill_lines_backward(input.rows),
+                                    )
+                                    .await;
+                                }
+                                return Err(SessionChatSendError::new(
+                                    SessionChatSendFailure::ComposerNotCleared,
+                                    "Empryo's input box holds an attached image that Ghostex cannot clear in this terminal. Remove it in the terminal, then send again. Your chat draft has been kept.".to_string(),
+                                ));
+                            }
                             Some(ComposerClearMethod::KillLinesBackward) => {
                                 backward_burst_sent = true;
                                 Some(
@@ -210,6 +230,9 @@ async fn place_session_chat_draft(
                 agent: agent.clone(),
                 settle_ms: super::SESSION_CHAT_COMPOSER_WAIT_SETTLE_MS,
                 timeout_ms: super::SESSION_CHAT_COMPOSER_WAIT_TIMEOUT_MS,
+            },
+            super::SessionChatSendStep::SelectEmpryoTab {
+                wait_ms: crate::session_chat_empryo_tabs::EMPRYO_SEND_TAB_WAIT_MS,
             },
             super::SessionChatSendStep::GuardEmpryoDraft {
                 replacement: content.to_string(),

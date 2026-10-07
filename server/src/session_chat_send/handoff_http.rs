@@ -249,9 +249,14 @@ async fn empryo_draft_to_chat(
         &target.session_id,
         &target.zmx_name,
         "session-chat-draft-handoff",
-        vec![SessionChatSendStep::ClearComposer {
-            agent: "empryo".to_string(),
-        }],
+        vec![
+            SessionChatSendStep::SelectEmpryoTab {
+                wait_ms: crate::session_chat_empryo_tabs::EMPRYO_SEND_TAB_WAIT_MS,
+            },
+            SessionChatSendStep::ClearComposer {
+                agent: "empryo".to_string(),
+            },
+        ],
     )
     .await
     .map_err(|error| internal(error.message))?;

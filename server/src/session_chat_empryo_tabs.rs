@@ -1,5 +1,5 @@
-//! CDXC:SessionChat 2026-10-07 DECISION:
-//! Coordinator for Sven: "right after a window joins, Ghostex makes Empryo show this session's own tab … a send must never land in another session's tab: hold it until the right tab shows."
+//! CDXC:SessionChat 2026-10-07 WHY:
+//! Right after a window joins, Ghostex makes Empryo show this session's own tab, and a send never lands in another session's tab: it is held until the right tab shows (the Empryo build coordinator's call for Sven).
 //!
 //! CDXC:SessionChat 2026-10-07 WHY:
 //! Empryo 3.9.1-beta runs one engine per repository for every window in it. A window that starts while the engine is up joins it, holds the engine's tabs plus its own, and opens on `tabs.find(own) ?? tabs[0]` (its engine boot), so the coordinator's `/agent` line and chat messages typed there went into another session's conversation (seen live 2026-10-07). A window never learns of tabs added after it joined, so every bar is a prefix of the engine's tab order, and `.empryo/tabs.json` (the last window to change tabs writes its own bar there once it holds two or more) or the engine's own session `meta.json` gives a session's own tab (the first tab of its own folder) its place in any bar that holds it; Empryo's Ctrl+] / Ctrl+\ step to it. The tab's turns are then logged in the engine's session (session_chat_empryo_mirror.rs follows them there).
@@ -104,7 +104,7 @@ fn hosts_engine(folder: &Path) -> bool {
     read_json(&folder.join("writer.lock"))
         .and_then(|lock| lock.get("pid").and_then(Value::as_u64))
         .and_then(|pid| u32::try_from(pid).ok())
-        .is_some_and(crate::runtime::is_process_running)
+        .is_some_and(crate::platform::process::process_is_alive)
 }
 
 /// [`hosts_engine`] for the folder of the session's own log.
@@ -183,6 +183,7 @@ pub(crate) async fn select_empryo_own_tab(
     };
     let deadline = Instant::now() + Duration::from_millis(wait_ms);
     let mut held = EMPRYO_TAB_MISSING_MESSAGE;
+    let mut nudged = false;
     loop {
         let bar = capture_session_terminal_text_vt(zmx_name)
             .await
@@ -197,15 +198,30 @@ pub(crate) async fn select_empryo_own_tab(
                 }
             }
             Some(Some((shown, Some(active)))) => {
-                if let Some(target) = tab_position(&log, &tab).filter(|target| *target < shown) {
-                    held = EMPRYO_TAB_NOT_SELECTED_MESSAGE;
-                    let key = match target.cmp(&active) {
-                        Ordering::Equal => return Ok(()),
-                        Ordering::Greater => EMPRYO_NEXT_TAB,
-                        Ordering::Less => EMPRYO_PREVIOUS_TAB,
-                    };
-                    write_session_chat_payload(project_id, session_id, zmx_name, source, key)
+                match tab_position(&log, &tab).filter(|target| *target < shown) {
+                    Some(target) => {
+                        held = EMPRYO_TAB_NOT_SELECTED_MESSAGE;
+                        let key = match target.cmp(&active) {
+                            Ordering::Equal => return Ok(()),
+                            Ordering::Greater => EMPRYO_NEXT_TAB,
+                            Ordering::Less => EMPRYO_PREVIOUS_TAB,
+                        };
+                        write_session_chat_payload(project_id, session_id, zmx_name, source, key)
+                            .await?;
+                    }
+                    // CDXC:SessionChat 2026-10-07 WHY: a window that joined the engine holds its own tab in its bar, but neither the engine's `meta.json` nor `.empryo/tabs.json` lists that tab until it runs a turn or a window changes tabs (seen live 2026-10-07: a fork beside its open source session held every send, so its first turn could never start). One step through the bar makes the window write its bar to `tabs.json`, which places the tab; only the shown tab changes, nothing is typed into a conversation.
+                    None if shown >= 2 && !nudged => {
+                        nudged = true;
+                        write_session_chat_payload(
+                            project_id,
+                            session_id,
+                            zmx_name,
+                            source,
+                            EMPRYO_NEXT_TAB,
+                        )
                         .await?;
+                    }
+                    None => {}
                 }
             }
             _ => {}

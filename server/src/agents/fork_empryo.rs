@@ -1,6 +1,6 @@
 //! Empryo fork: a copy of the session folder under a new id, resumed with `empryo --session`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -24,7 +24,7 @@ pub(crate) fn fork_empryo_session_folder(
     project: &Value,
     source_session: &Value,
     fork_id: &str,
-) -> Result<(), DomainStateError> {
+) -> Result<EmpryoForkFolder, DomainStateError> {
     let runtime = object_field(source_session, "runtimeSettings");
     let source_id = read_text_from_map(&runtime, "agentSessionId")
         .filter(|id| is_safe_empryo_session_id(id))
@@ -47,8 +47,14 @@ pub(crate) fn fork_empryo_session_folder(
         .ok_or_else(|| {
             DomainStateError::bad_request("Empryo's session index (meta.json) is unreadable.")
         })?;
+    // CDXC:SessionFork 2026-10-07 WHY: a session whose window hosts the repository's shared Empryo engine logs every joined window's tab too, so its log and `meta.json` hold other Ghostex sessions' conversations (seen live 2026-10-07: a second fork of such a session opened on the first fork's conversation, its newest turn). The fork keeps only the tabs the source's chat shows, leaving out the ones `empryo_tab_scan` names as other sessions' (session_chat_empryo_mirror.rs follows the same set).
+    let foreign =
+        crate::session_chat_empryo_tabs::empryo_tab_scan(&source_dir.join("session.jsonl"))
+            .map(|(_, foreign)| foreign)
+            .unwrap_or_default();
+    let meta = without_foreign_tabs(meta, &foreign);
     let names = ForkNames::of(&meta);
-    let (fork_log, mut references) = fork_session_log(&log, fork_id, &names).ok_or_else(|| {
+    let (fork_log, mut references) = fork_session_log(&log, fork_id, &names, &foreign).ok_or_else(|| {
         DomainStateError::bad_request(
             "Fork is only available after an Empryo turn has finished. Wait for its reply, then fork it.",
         )
@@ -68,16 +74,40 @@ pub(crate) fn fork_empryo_session_folder(
         .unwrap_or_default();
     let written = write_private_file(&fork_dir.join("session.jsonl"), fork_log.as_bytes())
         .and_then(|()| write_private_file(&fork_dir.join("meta.json"), meta_text.as_bytes()));
+    let folder = EmpryoForkFolder {
+        dir: fork_dir,
+        repo,
+        tags: copied_tags,
+    };
     if let Err(error) = written {
-        // The folder was created by this call (`create` refuses an existing one) and the tags carry
-        // the fork's fresh tab prefix, so both hold only this fork's half-made state.
-        let _ = fs::remove_dir_all(&fork_dir);
-        if let Some(repo) = repo.as_deref() {
-            delete_checkpoint_tags(repo, &copied_tags);
-        }
+        folder.discard();
         return Err(io_error(error));
     }
-    Ok(())
+    Ok(folder)
+}
+
+/// What [`fork_empryo_session_folder`] wrote: the fork's folder and the checkpoint tags it copied.
+pub(crate) struct EmpryoForkFolder {
+    dir: PathBuf,
+    repo: Option<String>,
+    tags: Vec<String>,
+}
+
+impl EmpryoForkFolder {
+    /// The fork's `session.jsonl`, recorded on the fork's row as its `agentSessionPath`.
+    pub(crate) fn session_log(&self) -> PathBuf {
+        self.dir.join("session.jsonl")
+    }
+
+    /// Removes the fork's folder and tags, for a fork whose session was never created. The folder
+    /// was created by the fork (`create` refuses an existing one) and the tags carry the fork's
+    /// fresh tab prefix, so both hold only this fork's state.
+    pub(crate) fn discard(self) {
+        let _ = fs::remove_dir_all(&self.dir);
+        if let Some(repo) = self.repo.as_deref() {
+            delete_checkpoint_tags(repo, &self.tags);
+        }
+    }
 }
 
 /// `<root>/.empryo/sessions/<id>`: the folder the hook-reported log sits in, else the one under the
@@ -112,11 +142,18 @@ fn fork_session_log(
     log: &str,
     fork_id: &str,
     names: &ForkNames,
+    foreign_tabs: &HashSet<String>,
 ) -> Option<(String, ForkReferences)> {
     let lines: Vec<(&str, RecordHead)> = log
         .split_inclusive('\n')
         .take_while(|line| line.ends_with('\n'))
         .map_while(|line| Some((line, serde_json::from_str::<RecordHead>(line).ok()?)))
+        .filter(|(_, record)| {
+            record
+                .tab_id
+                .as_ref()
+                .is_none_or(|tab| !foreign_tabs.contains(tab))
+        })
         .collect();
     let last_reply = lines.iter().rposition(|(_, record)| record.ends_turn())?;
     let end = lines[last_reply + 1..]
@@ -326,6 +363,27 @@ impl ForkNames {
             active_tab,
         }
     }
+}
+
+/// `meta` without the tabs in `foreign_tabs`; an active tab among them gives way to the first kept.
+fn without_foreign_tabs(mut meta: Value, foreign_tabs: &HashSet<String>) -> Value {
+    let Some(tabs) = meta.get_mut("tabs").and_then(Value::as_array_mut) else {
+        return meta;
+    };
+    tabs.retain(|tab| {
+        tab.get("id")
+            .and_then(Value::as_str)
+            .is_none_or(|id| !foreign_tabs.contains(id))
+    });
+    let first = tabs.first().and_then(|tab| tab.get("id")).cloned();
+    let active_is_foreign = meta
+        .get("activeTabId")
+        .and_then(Value::as_str)
+        .is_some_and(|id| foreign_tabs.contains(id));
+    if let (true, Some(first)) = (active_is_foreign, first) {
+        meta["activeTabId"] = first;
+    }
+    meta
 }
 
 fn fork_session_meta(mut meta: Value, source_id: &str, fork_id: &str, names: &ForkNames) -> Value {

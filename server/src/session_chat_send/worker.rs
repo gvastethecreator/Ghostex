@@ -600,21 +600,32 @@ pub(super) async fn run_session_chat_send_worker(
                         ));
                         break;
                     };
+                    // Text the capture cannot tell from Empryo's tip is not carried, and the
+                    // handoff then clears nothing, so a typed draft stays in the terminal.
                     if let Some(sink) = captured_draft.take() {
                         let _ = sink.send(CapturedTerminalDraft {
-                            content: (!input.text_is_empty()).then_some(input.text),
+                            content: (!input.text_is_empty() && !input.text_unreadable())
+                                .then_some(input.text),
                             ..CapturedTerminalDraft::default()
                         });
                     }
                 }
                 SessionChatSendStep::GuardEmpryoDraft { replacement } => {
-                    let held = capture_session_terminal_text_vt(&zmx_name)
-                        .await
-                        .and_then(|screen| {
-                            crate::session_chat_composer::session_chat_composer_input(
-                                "empryo", &screen,
-                            )
-                        })
+                    let input =
+                        capture_session_terminal_text_vt(&zmx_name)
+                            .await
+                            .and_then(|screen| {
+                                crate::session_chat_composer::session_chat_composer_input(
+                                    "empryo", &screen,
+                                )
+                            });
+                    if input.as_ref().is_some_and(|input| input.text_unreadable()) {
+                        outcome = Err(SessionChatSendError::not_attempted(
+                            EMPRYO_DRAFT_UNREADABLE.to_string(),
+                        ));
+                        break;
+                    }
+                    let held = input
                         .filter(|input| !input.text_is_empty())
                         .map(|input| input.text);
                     if held.is_some_and(|held| held != replacement.trim()) {
@@ -625,7 +636,11 @@ pub(super) async fn run_session_chat_send_worker(
                         break;
                     }
                 }
-                SessionChatSendStep::VerifySubmitted { agent, text } => {
+                SessionChatSendStep::VerifySubmitted {
+                    agent,
+                    text,
+                    submit,
+                } => {
                     if let Err(error) = crate::session_chat_send_submit::confirm_submitted(
                         &agent,
                         &project_id,
@@ -633,6 +648,7 @@ pub(super) async fn run_session_chat_send_worker(
                         &zmx_name,
                         &source,
                         &text,
+                        &submit,
                         &|| job_generation != generation.load(Ordering::SeqCst),
                     )
                     .await

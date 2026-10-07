@@ -52,6 +52,10 @@ fn empryo_model_search(screen: &str) -> Option<(String, Vec<EmpryoResultRow>)> {
             .position(|line| line.contains(" Results "))?;
     let mut rows = Vec::new();
     for line in &lines[header + 1..] {
+        // CDXC:AgentScreenDetection 2026-10-07 WHY: the panel is a drawer right of a `┃` border, and the conversation beside it draws its own `├─`/`╰─` tool and event rows on the same screen lines; reading the whole line took those for results (seen live 2026-10-07: "Waiting for Genome…" read as the only row, so no row was ever focused and every model pick timed out).
+        let line = line
+            .rsplit_once('\u{2503}')
+            .map_or(line.as_str(), |(_, panel)| panel);
         let Some(at) = line
             .rfind("\u{251c}\u{2500}")
             .or_else(|| line.rfind("\u{2570}\u{2500}"))
@@ -128,6 +132,21 @@ fn empryo_shows_model(shown: &str, model: &str, labels: &[String]) -> bool {
         || empryo_shown_names_value(shown, model)
 }
 
+/// Empryo only: the session's `session.jsonl`, whose `meta.json` names the tab's model.
+pub(crate) fn plan_session_log(
+    state: &AppState,
+    agent: Option<&str>,
+    session: &Value,
+) -> Option<std::path::PathBuf> {
+    (agent == Some("empryo"))
+        .then(|| crate::storage::open_gxserver_database(&state.paths).ok())
+        .flatten()
+        .and_then(|db| {
+            let repository = crate::domain::DomainRepository::new(&db, &state.metadata.server_id);
+            crate::session_chat_pi_models::empryo_session_log(&repository, session)
+        })
+}
+
 impl PickerDriver<'_> {
     pub(super) async fn drive_empryo(
         &self,
@@ -146,10 +165,7 @@ impl PickerDriver<'_> {
             .await
             .and_then(|screen| empryo_footer(&screen));
         // CDXC:AgentProviders 2026-10-06 WHY:
-        // Empryo paints its config's default model for a moment while it restores a `--session`
-        // tab, so a pick read off that first frame typed `/models` for a model the tab already had
-        // and saved it as the default (seen live on a seeded launch). The tab's own `meta.json` is
-        // exact, so it decides first and the statusline only when there is none.
+        // Empryo paints its config's default model for a moment while it restores a `--session` tab, so a pick read off that first frame typed `/models` for a model the tab already had and saved it as the default (seen live on a seeded launch). The tab's own `meta.json` is exact, so it decides first and the statusline only when there is none.
         let recorded = plan
             .empryo_session_log
             .as_deref()

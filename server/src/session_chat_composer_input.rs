@@ -128,6 +128,7 @@ fn freebuff_composer_input(lines: &[String]) -> Option<SessionChatComposerInput>
         shell_mode: false,
         placeholder,
         attachments: 0,
+        text_unreadable: false,
     })
 }
 
@@ -286,7 +287,7 @@ fn vt_capture_cursor(screen: &str) -> Option<(usize, usize)> {
 }
 
 /// CDXC:AgentScreenDetection 2026-10-06 WHY:
-/// Empryo's empty input shows a rotating tip in its theme's muted color, and typed text differs from it only by color, which every theme sets differently. The cursor is the theme-free witness: it rests on the first input cell exactly when the input is empty. A capture without a cursor (wmx) reads as empty, and the send's Ctrl+U burst still runs first, so a draft there is cleared as far as the burst reaches.
+/// Empryo's empty input shows a rotating tip in its theme's muted color, and typed text differs from it only by color, which every theme sets differently. The cursor is the theme-free witness: it rests on the first input cell exactly when the input is empty. wmx's styled-row capture carries no cursor, so text there is marked unreadable: placing a Chat draft (which clears the box) and the attached-image clear stop with an error instead of wiping it, and carrying a terminal draft to Chat carries nothing and clears nothing, which keeps it in the terminal.
 fn empryo_composer_input(screen: &str, lines: &[StyledLine]) -> Option<SessionChatComposerInput> {
     let plain: Vec<String> = lines.iter().map(|line| line.text.clone()).collect();
     let region = empryo_input_region(&plain)?;
@@ -316,12 +317,14 @@ fn empryo_composer_input(screen: &str, lines: &[StyledLine]) -> Option<SessionCh
         .rev()
         .map_while(|line| empryo_attachment_row(line))
         .sum();
+    let text = rows.join("\n").trim().to_string();
+    let cursor = vt_capture_cursor(screen);
     Some(SessionChatComposerInput {
-        text: rows.join("\n").trim().to_string(),
+        text_unreadable: cursor.is_none() && !text.is_empty(),
+        text,
         rows: region.len(),
         shell_mode: false,
-        placeholder: vt_capture_cursor(screen)
-            .is_none_or(|cursor| cursor == (region.start, input_column)),
+        placeholder: cursor.is_none_or(|cursor| cursor == (region.start, input_column)),
         attachments,
     })
 }
@@ -331,9 +334,7 @@ fn empryo_composer_input(screen: &str, lines: &[StyledLine]) -> Option<SessionCh
 /// VT capture. `None` while no tab bar is on screen.
 ///
 /// CDXC:AgentScreenDetection 2026-10-07 WHY:
-/// Empryo 3.9.1-beta paints the active tab's label bold and every other label in its plain tab
-/// color; a tab's number badge, when shown, is bold in every tab, so only the label's letters
-/// tell the active tab, in every theme.
+/// Empryo 3.9.1-beta paints the active tab's label bold and every other label in its plain tab color; a tab's number badge, when shown, is bold in every tab, so only the label's letters tell the active tab, in every theme.
 pub(crate) fn empryo_tab_bar(screen: &str) -> Option<(usize, Option<usize>)> {
     styled_lines(screen).iter().find_map(|line| {
         let mut tabs = 0;
@@ -485,6 +486,9 @@ pub struct SessionChatComposerInput {
     /// An empty shell editor still needs to return to normal mode before replacement.
     pub shell_mode: bool,
     placeholder: bool,
+    /// Text is on screen but the capture cannot tell a tip from a typed draft (Empryo without a
+    /// cursor); `text_is_empty` still reports it empty.
+    text_unreadable: bool,
     /// Images attached in the input box (Empryo draws each as a box above its text).
     attachments: usize,
 }
@@ -503,6 +507,10 @@ impl SessionChatComposerInput {
 
     pub(crate) fn attachments(&self) -> usize {
         self.attachments
+    }
+
+    pub(crate) fn text_unreadable(&self) -> bool {
+        self.text_unreadable
     }
 }
 
@@ -815,6 +823,7 @@ pub fn session_chat_composer_input(agent: &str, screen: &str) -> Option<SessionC
                 shell_mode: false,
                 placeholder,
                 attachments: 0,
+                text_unreadable: false,
             }
         });
     }
@@ -867,6 +876,7 @@ pub fn session_chat_composer_input(agent: &str, screen: &str) -> Option<SessionC
             shell_mode: false,
             placeholder: agent == "omp" && region.len() == 1 && omp_hint_only(&lines[region.start]),
             attachments: 0,
+            text_unreadable: false,
         });
     }
     let region = match agent {
@@ -929,6 +939,7 @@ pub fn session_chat_composer_input(agent: &str, screen: &str) -> Option<SessionC
         shell_mode,
         placeholder,
         attachments: 0,
+        text_unreadable: false,
     };
     if agent == "codex" {
         let mut images = codex_remote_images(&lines, region.start);

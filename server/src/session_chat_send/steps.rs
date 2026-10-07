@@ -74,10 +74,12 @@ pub enum SessionChatSendStep {
     GuardEmpryoDraft {
         replacement: String,
     },
-    /// Read Codex's or Claude Code's input box after the Return; see session_chat_send_submit.rs.
+    /// Read the agent's input box after the submit key; see session_chat_send_submit.rs.
     VerifySubmitted {
         agent: String,
         text: String,
+        /// The submit key the send wrote, pressed again when the box still holds the message.
+        submit: String,
     },
     /// Close a positively identified Claude Code panel whose Escape is safe (Settings, or
     /// an offer listed in session_chat_claude_popups.rs), or Codex's side conversation with
@@ -303,8 +305,8 @@ pub fn build_session_chat_message_steps(
             .unwrap_or(SessionChatSendStep::SleepMs(SESSION_CHAT_SUBMIT_DELAY_MS)),
     );
     /*
-    CDXC:SessionChat 2026-10-07 DECISION:
-    Every Empryo message is submitted with Alt+Q and every slash command with Enter (coordinator for Sven, who delegated the call to the cleanest Empryo experience). This supersedes 2026-10-06's "Enter when idle, Alt+Q when busy": Empryo 3.9.1-beta no longer marks a running turn on its prompt glyph, and its own submit sends an Alt+Q message at once while idle, queues it as its own turn while one runs (Enter would steer that turn), and skips the "Enter again" gate of a repo map still building; slash commands run directly either way, and Enter keeps them clear of the queue. Multi-line text is typed with Shift+Enter between lines rather than pasted (CDXC:SessionChat 2026-10-06 in input_bytes.rs).
+    CDXC:SessionChat 2026-10-07 WHY:
+    Every Empryo message is submitted with Alt+Q and every slash command with Enter (the Empryo build coordinator's call; Sven delegated it to the cleanest Empryo experience). This supersedes 2026-10-06's "Enter when idle, Alt+Q when busy": Empryo 3.9.1-beta no longer marks a running turn on its prompt glyph, and its own submit sends an Alt+Q message at once while idle, queues it as its own turn while one runs (Enter would steer that turn), and skips the "Enter again" gate of a repo map still building; slash commands run directly either way, and Enter keeps them clear of the queue. Multi-line text is typed with Shift+Enter between lines rather than pasted (CDXC:SessionChat 2026-10-06 in input_bytes.rs).
     */
     // Empryo's own slash check: a trimmed `/` start runs as a command with either key.
     let submit = if empryo && !text.trim().starts_with('/') {
@@ -320,6 +322,7 @@ pub fn build_session_chat_message_steps(
         steps.push(SessionChatSendStep::VerifySubmitted {
             agent,
             text: text.to_string(),
+            submit: submit.to_string(),
         });
     }
     steps

@@ -66,22 +66,39 @@ pub(super) async fn route_sessions_http(
                 let project_id = value_text(&session, "projectId")?;
                 let session_id = value_text(&session, "sessionId")?;
                 // Queued before the response, so it goes ahead of the first request a client
-                // queues next.
-                if let Some(command) = is_coordinator
+                // queues next. The session and its coordinator record are committed, so a failure
+                // from here on is reported, not raised.
+                let role_error = is_coordinator
                     .then(|| crate::agents::session_agent_family_id(&project, &session))
                     .flatten()
                     .and_then(|family| {
                         crate::coordinators::coordinator_role_queued_command(&family)
                     })
-                {
-                    coordinator_runtime::queue_coordinator_role_command(
-                        &state,
-                        &project_id,
-                        &session_id,
-                        &command,
-                        true,
-                    )?;
-                }
+                    .and_then(|command| {
+                        coordinator_runtime::queue_coordinator_role_command(
+                            &state,
+                            &project_id,
+                            &session_id,
+                            &command,
+                            true,
+                        )
+                        .err()
+                    })
+                    .map(|error| {
+                        let _ = state.logger.log(crate::logging::GxserverLogInput {
+                            level: crate::logging::LogLevel::Error,
+                            event: "coordinatorRoleQueueFailed".into(),
+                            server_id: Some(state.metadata.server_id.clone()),
+                            request_id: None,
+                            client: None,
+                            duration_ms: None,
+                            error: Some(error.message.clone()),
+                            details: Some(
+                                json!({ "projectId": project_id, "sessionId": session_id }),
+                            ),
+                        });
+                        error.message
+                    });
                 crate::session_chat_empryo_tabs::select_empryo_own_tab_after_start(
                     &session,
                     Some((*state).clone()),
@@ -101,7 +118,11 @@ pub(super) async fn route_sessions_http(
                         session_id,
                     );
                 }
-                Ok(json!({ "session": session }))
+                let mut response = json!({ "session": session });
+                if let Some(role_error) = role_error {
+                    response["coordinatorRoleError"] = json!(role_error);
+                }
+                Ok(response)
             },
         ),
         "/api/readResourceSessionOwners" => handle_domain_http(

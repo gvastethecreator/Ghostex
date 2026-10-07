@@ -374,7 +374,7 @@ pub(super) fn title_generation_preview(agent: &str, command: Option<&str>) -> St
         ),
         "empryo" => here_doc(
             &format!(
-                "{command} --headless --quiet --no-genome --marionette-mode none --max-steps 1 --effort low"
+                "{command} --headless --quiet --no-genome --marionette-mode none --max-steps 1"
             ),
             &prompt,
         ),

@@ -498,9 +498,21 @@ fn repair_empryo_coordinator_roles(
         {
             continue;
         }
-        let idle = crate::zmx::read_zmx_session_history_capture(repository, &key.0, &key.1)
+        // The send clears the input box first, so a box holding the user's unsent text is left
+        // alone until it is empty; one holding only the role command (a send that typed it but
+        // was never submitted) is retyped. A capture without a cursor (wmx) cannot tell a tip
+        // from typed text, so there only that leftover command counts.
+        let idle = crate::zmx::read_zmx_session_history_capture_vt(repository, &key.0, &key.1)
             .is_ok_and(|screen| {
                 crate::session_chat_composer::empryo_composer_busy(&screen.text) == Some(false)
+                    && crate::session_chat_composer::session_chat_composer_input(
+                        "empryo",
+                        &screen.text,
+                    )
+                    .is_some_and(|input| {
+                        (input.text_is_empty() && !input.text_unreadable())
+                            || input.text.trim() == command.trim()
+                    })
             });
         if !idle || coordinators::ensure_empryo_coordinator_agent_file(&state.paths).is_err() {
             continue;
@@ -525,9 +537,11 @@ fn repair_empryo_coordinator_roles(
     }
 }
 
-/// CDXC:Coordinators 2026-10-07 DECISION:
-/// Coordinator for Sven: "let the coordinator supervisor count an Empryo thread's turns (working, finished, final message) from its own tab's transcript instead of hooks, scoped to Empryo."
-/// WHY: Empryo 3.9.1-beta runs every window of a repository on one engine, which runs the hooks of all of them in the first window's process with that window's session id and no tab, so a thread whose window joined another's engine never reported a turn, and the first window's hooks spoke for its neighbours' turns too (seen live 2026-10-07). Its own tab's transcript (session_chat_empryo_mirror.rs) is exact: an open turn is work, and a turn that ended after the thread's last report is a finished turn to report; an older one was reported already. A question or approval card still reads as waiting.
+/// CDXC:Coordinators 2026-10-07 WHY:
+/// The coordinator supervisor counts an Empryo thread's turns (working, finished, final message) from its own tab's transcript instead of hooks, scoped to Empryo.
+/// Empryo 3.9.1-beta runs every window of a repository on one engine, which runs the hooks of all of them in the first window's process with that window's session id and no tab, so a thread whose window joined another's engine never reported a turn, and the first window's hooks spoke for its neighbours' turns too (seen live 2026-10-07).
+/// Its own tab's transcript (session_chat_empryo_mirror.rs) is exact: an open turn is work, and a turn that ended after the thread's last report is a finished turn to report; an older one was reported already.
+/// A question or approval panel on its screen reads as waiting even while its turn is open, since the turn that asked stays open until it is answered.
 fn empryo_thread_state(
     db: &rusqlite::Connection,
     memory: &mut SupervisorMemory,
@@ -535,6 +549,9 @@ fn empryo_thread_state(
     session: &Value,
     hook_state: ThreadState,
 ) -> ThreadState {
+    if hook_state == ThreadState::Waiting && coordinators::waits_on_screen(session) {
+        return ThreadState::Waiting;
+    }
     let lifecycle = memory
         .transcript_gates
         .entry(thread.key())

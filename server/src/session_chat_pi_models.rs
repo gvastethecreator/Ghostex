@@ -245,7 +245,11 @@ fn pinned_models(agent: PiFamilyAgent, home: &Path) -> (Option<String>, Vec<Stri
         }
         // A project's own `.empryo/config.json` can name another; the lineup is the user's.
         PiFamilyAgent::Empryo => (
-            empryo_config_default_model(&home.join(".empryo")),
+            empryo_config_default_model(&crate::agent_hooks::config::empryo_home(
+                &crate::agent_hooks::config::HookPaths::from_paths(
+                    &crate::paths::get_gxserver_paths(None),
+                ),
+            )),
             Vec::new(),
         ),
     }

@@ -9,7 +9,7 @@
 use super::*;
 
 #[path = "session_chat_empryo_picker.rs"]
-mod empryo_picker;
+pub(super) mod empryo_picker;
 
 use crate::session_chat_composer::{
     detect_session_chat_composer_readiness, session_chat_composer_input, SessionChatComposerState,

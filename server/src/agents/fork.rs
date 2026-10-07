@@ -60,16 +60,41 @@ pub(crate) fn fork_session(
         )
         .into());
     }
-    if let Some(fork_id) = plan.get("empryoForkSessionId").and_then(Value::as_str) {
-        super::fork_empryo::fork_empryo_session_folder(&project, &source_session, fork_id)?;
-    }
-    let fork_params = create_agent_fork_session_params(&project, &source_session, &plan);
-    let created_session = repository.create_session(
+    let mut fork_params = create_agent_fork_session_params(&project, &source_session, &plan);
+    let empryo_fork = plan
+        .get("empryoForkSessionId")
+        .and_then(Value::as_str)
+        .map(|fork_id| {
+            super::fork_empryo::fork_empryo_session_folder(&project, &source_session, fork_id)
+                .map(|folder| (fork_id.to_string(), folder))
+        })
+        .transpose()?;
+    // CDXC:SessionFork 2026-10-07 WHY: the chat finds an Empryo log by the row's `agentSessionPath`, which otherwise arrives only with Empryo's first hook, and an Empryo hook reports nothing on native Windows (seen live 2026-10-07: a fork's chat stayed empty while its terminal showed the copied conversation). The fork wrote that folder itself, so its row records the id and log at once, as a create's seeded session does.
+    if let (Some((fork_id, folder)), Some(runtime)) = (
+        empryo_fork.as_ref(),
         fork_params
-            .as_object()
-            .ok_or_else(|| DomainStateError::corrupt_state("Fork params must be an object."))?,
-        false,
-    )?;
+            .get_mut("runtimeSettings")
+            .and_then(Value::as_object_mut),
+    ) {
+        runtime.insert("agentSessionId".to_string(), json!(fork_id));
+        runtime.insert(
+            "agentSessionPath".to_string(),
+            json!(folder.session_log().to_string_lossy()),
+        );
+    }
+    let fork_params = fork_params
+        .as_object()
+        .ok_or_else(|| DomainStateError::corrupt_state("Fork params must be an object."))?;
+    let empryo_fork = empryo_fork.map(|(_, folder)| folder);
+    let created_session = match repository.create_session(fork_params, false) {
+        Ok(session) => session,
+        Err(error) => {
+            if let Some(folder) = empryo_fork {
+                folder.discard();
+            }
+            return Err(error.into());
+        }
+    };
     let project_id = read_text_value(&created_session, "projectId")
         .ok_or_else(|| DomainStateError::corrupt_state("Forked session is missing projectId."))?;
     let session_id = read_text_value(&created_session, "sessionId")

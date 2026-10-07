@@ -57,6 +57,19 @@ pub(crate) fn create_attach_session_metadata_with_observed_state(
     } else {
         None
     };
+    let probed_session = if probe.lifecycle_state == "missing"
+        && explicit_startup_text.is_none()
+        && queued_launch_startup_text.is_none()
+    {
+        crate::agents::seed_empryo_wake_session(
+            repository,
+            &project,
+            probed_session,
+            agent_settings,
+        )?
+    } else {
+        probed_session
+    };
     let startup_text = explicit_startup_text
         .clone()
         .or(queued_launch_startup_text.clone())
@@ -203,6 +216,19 @@ pub(crate) fn start_session_provider_with_observed_state(
         get_queued_agent_launch_startup_text_for_session(&probed_session)
     } else {
         None
+    };
+    let probed_session = if probe.lifecycle_state == "missing"
+        && explicit_startup_text.is_none()
+        && queued_launch_startup_text.is_none()
+    {
+        crate::agents::seed_empryo_wake_session(
+            repository,
+            &project,
+            probed_session,
+            agent_settings,
+        )?
+    } else {
+        probed_session
     };
     let startup_text = explicit_startup_text
         .clone()

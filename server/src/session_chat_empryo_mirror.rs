@@ -1,16 +1,6 @@
 /*
 CDXC:SessionChat 2026-10-06 WHY:
-Empryo (3.9.0-beta) appends `<project>/.empryo/sessions/<id>/session.jsonl`, the path its hooks
-report, and writes a whole turn as ONE record: the user's prompt, then a cumulative
-`turn-checkpoint` snapshot of the reply while it works (not on every turn), then the finished `assistant`
-record, each carrying ordered `segments` (`text`, `reasoning`, `tools`) over a `toolCalls` list
-whose entries hold their own results. The chat contract decodes one message per line, so this
-module mirrors the log into a Ghostex-owned jsonl in the gxserver state dir with one row per
-chat message plus explicit turn rows, and `session_chat_decode_empryo.rs` stays line-local. A
-turn's rows come from its newest snapshot, so a checkpoint or the final record rewrites the
-mirror's tail, which the rename-on-rewrite contract the Antigravity and Cursor mirrors share
-reports to the follower as replaced content. Older logs reuse one `turnId` for every prompt in a
-tab, so turns are keyed by the user record's own `ui.id`, which is unique in every format seen.
+Empryo (3.9.0-beta) appends `<project>/.empryo/sessions/<id>/session.jsonl`, the path its hooks report, and writes a whole turn as ONE record: the user's prompt, then a cumulative `turn-checkpoint` snapshot of the reply while it works (not on every turn), then the finished `assistant` record, each carrying ordered `segments` (`text`, `reasoning`, `tools`) over a `toolCalls` list whose entries hold their own results. The chat contract decodes one message per line, so this module mirrors the log into a Ghostex-owned jsonl in the gxserver state dir with one row per chat message plus explicit turn rows, and `session_chat_decode_empryo.rs` stays line-local. A turn's rows come from its newest snapshot, so a checkpoint or the final record rewrites the mirror's tail, which the rename-on-rewrite contract the Antigravity and Cursor mirrors share reports to the follower as replaced content. Older logs reuse one `turnId` for every prompt in a tab, so turns are keyed by the user record's own `ui.id`, which is unique in every format seen.
 */
 
 use std::collections::{HashMap, HashSet};
@@ -248,8 +238,7 @@ struct EmpryoLog {
     /// The newest `pendingPrompts` patch per tab, in the order its prompts were typed.
     pending_by_tab: HashMap<String, Vec<(String, String)>>,
     /// CDXC:SessionChat 2026-10-06 DECISION:
-    /// Sven: one Ghostex session follows one Empryo tab, the tab of the most recent user turn;
-    /// records from its other tabs are hidden.
+    /// Sven: one Ghostex session follows one Empryo tab, the tab of the most recent user turn; records from its other tabs are hidden.
     followed_tab: Option<String>,
     /// CDXC:SessionChat 2026-10-07 WHY:
     /// Empryo 3.9.1-beta logs every window that joins a repository's shared engine in the engine's session, so one `session.jsonl` holds other Ghostex sessions' tabs too (their first tab, session_chat_empryo_tabs.rs). Those are never this session's to follow.
@@ -288,9 +277,7 @@ pub(crate) fn pending_prompts(patch: &Value) -> Option<Vec<(String, String)>> {
 
 impl EmpryoLog {
     /// CDXC:SessionChat 2026-10-06 DECISION:
-    /// Sven: Empryo's chat reads the `ui` copy of the `user`, `assistant` and `turn-checkpoint`
-    /// records and ignores the `core` copy, which carries the repository map Empryo appends to
-    /// every prompt.
+    /// Sven: Empryo's chat reads the `ui` copy of the `user`, `assistant` and `turn-checkpoint` records and ignores the `core` copy, which carries the repository map Empryo appends to every prompt.
     fn observe(&mut self, line: &str) {
         // Every record opens with its kind; skip the large ones chat never reads (edit
         // baselines, `core` rewrites) before parsing them.
@@ -424,8 +411,7 @@ impl EmpryoLog {
                 }
             }
             // CDXC:SessionChat 2026-10-06 WHY:
-            // `/checkpoint undo` (and Empryo's other rewinds) cut the tab's history with a `ui-truncate` from a turn or a message, and `/clear` with a `ui-clear`.
-            // Empryo's own replay drops everything from that point, so the chat drops the same turns its terminal stops showing.
+            // `/checkpoint undo` (and Empryo's other rewinds) cut the tab's history with a `ui-truncate` from a turn or a message, and `/clear` with a `ui-clear`. Empryo's own replay drops everything from that point, so the chat drops the same turns its terminal stops showing.
             "ui-truncate" => {
                 let Some(turns) = self.turns_by_tab.get_mut(&tab) else {
                     return;
@@ -646,9 +632,7 @@ fn push_reply_rows(rows: &mut Vec<Value>, turn: &EmpryoTurn, reply: &Map<String,
 }
 
 /// CDXC:SessionChat 2026-10-06 DECISION:
-/// Sven: a `pendingPrompts` tab patch or a `user` record starts an Empryo turn, an `assistant`
-/// record with status `complete` or `partial` ends it, and a `turn-checkpoint` updates the turn in
-/// flight.
+/// Sven: a `pendingPrompts` tab patch or a `user` record starts an Empryo turn, an `assistant` record with status `complete` or `partial` ends it, and a `turn-checkpoint` updates the turn in flight.
 fn turn_row(key: &str, state: &str, timestamp: Value) -> Value {
     json!({ "row": "turn", "turn": key, "state": state, "ts": timestamp })
 }
@@ -871,9 +855,13 @@ fn mirror_rows(
             ));
         }
     }
-    let in_flight = blocks
+    // The running turn is the newest recorded one while it is open; otherwise the first accepted
+    // prompt, which Empryo is briefing. Prompts queued behind it are not running yet.
+    let recorded = turns.len();
+    let in_flight = blocks[..recorded]
         .last()
         .filter(|block| block.closing.is_none())
+        .or_else(|| blocks[recorded..].first())
         .map(|block| EmpryoInFlight {
             key: block.key.clone(),
             prompt: block.prompt.clone(),
@@ -993,6 +981,9 @@ fn write_mirror(
 
 /// One sync pass. Rebuilds only when the raw log's size or mtime moved, or the mirror is gone
 /// (a wiped state dir or a fresh daemon always rebuilds).
+///
+/// CDXC:SessionChat 2026-10-07 WHY:
+/// A rebuild parses the whole raw log, because tab membership, the in-flight turn and where screen events attach all depend on earlier records; parsing only the appended tail would need all of that carried between passes. It is blocking file work, which is why the queue scheduler runs its readiness pass in `spawn_blocking`.
 fn sync_mirror(mirror_path: &Path, state: &mut EmpryoMirrorState) -> Option<()> {
     // A tab whose window joined another session's engine is logged there, which shows once the
     // window has named its tab in `tabs.json`; a session started later adds its own tab to the ones
@@ -1030,7 +1021,17 @@ fn sync_mirror(mirror_path: &Path, state: &mut EmpryoMirrorState) -> Option<()> 
     if up_to_date {
         return Some(());
     }
-    let raw = fs::read(&state.raw_path).ok()?;
+    let mut raw = fs::read(&state.raw_path).ok()?;
+    // CDXC:SessionChat 2026-10-07 WHY: a tab followed in another session's engine log has only its turns since it joined there; what came before stays in the session's own log, where a fork's copied conversation sits under the fork's tab (seen live 2026-10-07: a fork beside its open source session showed an empty chat, then only its new turns). The own log is read first, so those turns lead the chat.
+    if state.raw_path != state.own_path {
+        if let Ok(mut own) = fs::read(&state.own_path) {
+            if !own.is_empty() && !own.ends_with(b"\n") {
+                own.push(b'\n');
+            }
+            own.extend_from_slice(&raw);
+            raw = own;
+        }
+    }
     let (output, in_flight) = build_mirror(
         &raw,
         state.foreign_tabs.clone(),

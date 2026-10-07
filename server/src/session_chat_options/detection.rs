@@ -346,6 +346,22 @@ pub fn detect_session_chat_terminal_state(
     let mut notice = screen.and_then(|capture| {
         crate::session_chat_notice::classify_session_chat_terminal_notice(agent_id, &capture.text)
     });
+    if notice.is_none() && agent == Some(SessionChatOptionAgent::Empryo) {
+        notice = screen
+            .zip(
+                repository
+                    .get_session(project_id, session_id)
+                    .ok()
+                    .flatten(),
+            )
+            .and_then(|(capture, session)| {
+                crate::session_chat_empryo_blocking::empryo_rate_limit_notice_for_session(
+                    repository,
+                    &session,
+                    &capture.text,
+                )
+            });
+    }
     if let Some(notice) = notice.as_mut() {
         crate::session_chat_codex_lock::enrich_notice(repository, project_id, session_id, notice);
     }

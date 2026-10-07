@@ -86,7 +86,7 @@ pub(crate) async fn generate_first_prompt_session_title(
 /// Pi and Antigravity CLI generate titles through their non-interactive print modes (`pi -p`, `agy -p`), verified against the real binaries; before that a machine with only those CLIs fell back to the Codex default, which was not installed (GitHub issue #125).
 /// Pi gets `--no-tools --no-context-files --no-session` so a title prompt never runs tools, loads AGENTS.md, or leaves a session behind; Antigravity gets `--disable-slash-commands` so a prompt starting with `/` is not expanded.
 /// CDXC:SessionTitles 2026-10-07 WHY:
-/// Empryo generates titles through `empryo --headless` (verified against 3.9.1-beta: a one-line title in about ten seconds, read from stdin); `--no-genome` and `--marionette-mode none` skip the repo map and the prompt pre-pass, `--max-steps 1` keeps it from running tools, and it saves no session without `--save-session`. Without it the Rename dialog offered Empryo, remembered it, and every Generate Name failed with "Choose a configured agent that supports name generation" (seen live 2026-10-07).
+/// Empryo generates titles through `empryo --headless` (verified against 3.9.1-beta: a one-line title in about ten seconds, read from stdin); `--no-genome` and `--marionette-mode none` skip the repo map and the prompt pre-pass, `--max-steps 1` keeps it from running tools, and it saves no session without `--save-session`. Without it the Rename dialog offered Empryo, remembered it, and every Generate Name failed with "Choose a configured agent that supports name generation" (seen live 2026-10-07). It passes no `--effort`: the title runs on the user's default model, and Empryo rejects an effort that model lacks.
 /// SEE-ALSO: apps/desktop/src/app/window/settings_modal/tabs/agents/model.rs `title_generation_preview`, which must preview the same commands.
 pub(crate) fn normalize_title_generation_agent(value: Option<&str>) -> String {
     match value {
@@ -156,7 +156,7 @@ pub(crate) fn build_title_generation_command(
             quote_shell_arg(prompt)
         ),
         "empryo" => create_here_doc_command(
-            &format!("{command} --headless --quiet --no-genome --marionette-mode none --max-steps 1 --effort low" ),
+            &format!("{command} --headless --quiet --no-genome --marionette-mode none --max-steps 1"),
             delimiter,
             prompt,
         ),

@@ -504,15 +504,21 @@ pub(crate) fn resolve_config_directory(
     }
 }
 
-/// Empryo's own folder (`EMPRYO_HOME`, else `~/.empryo`): its hooks file and its agent profiles.
+/// CDXC:AgentProviders 2026-10-07 WHY: Empryo's own folder, where it reads `hooks.json`, `agents/` and its global `config.json` and keeps `threads.db`. Empryo 3.9.1 resolves it as `%LOCALAPPDATA%\Empryo` (else `<home>\AppData\Local\Empryo`) on Windows and `$HOME/.empryo` elsewhere, and its main home ignores `EMPRYO_HOME` (only its computer-use and browser helpers read that), so honouring `EMPRYO_HOME` or using `~/.empryo` on Windows wrote hooks and the coordinator profile where Empryo never looks. `packages/find` (`scan/empryo.rs`) resolves the same folder for `threads.db`.
 pub(crate) fn empryo_home(hook_paths: &HookPaths) -> PathBuf {
-    resolve_config_directory(
-        &hook_paths.home_dir,
-        hook_paths.respect_config_environment,
-        "EMPRYO_HOME",
-        ".empryo",
-        None,
-    )
+    if cfg!(windows) {
+        let local_app_data = hook_paths
+            .respect_config_environment
+            .then(|| std::env::var_os("LOCALAPPDATA"))
+            .flatten()
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute());
+        local_app_data
+            .unwrap_or_else(|| hook_paths.home_dir.join("AppData").join("Local"))
+            .join("Empryo")
+    } else {
+        hook_paths.home_dir.join(".empryo")
+    }
 }
 
 pub(crate) fn resolve_omp_agent_directory(home_dir: &Path, respect_environment: bool) -> PathBuf {
