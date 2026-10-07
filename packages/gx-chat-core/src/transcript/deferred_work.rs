@@ -9,10 +9,13 @@
 //! The LRU cache is load bearing and is ported with it: reopening a section the user already
 //! expanded must not walk history again, which on a long conversation is several round trips.
 
+use std::collections::BTreeMap;
+
 use serde_json::Value;
 
 use crate::jsnum::js_safe_integer;
 
+use crate::state::MessagesState;
 use crate::wire::ChatMessage;
 
 /// How many sections the cache holds, and how many bytes of them.
@@ -156,6 +159,37 @@ impl DeferredWalk {
         self.seen.push(cursor);
         self.cursor = cursor;
         WalkStep::ReadPage { cursor }
+    }
+}
+
+/// CDXC:SessionChat 2026-10-07 WHY:
+/// gxserver folds every completed turn but the newest into `deferredWork` whenever it sends a whole new list (a snapshot, or a replaced transcript, which Empryo's mirror causes on nearly every prompt). A turn the chat followed live therefore came back folded with no rows, and a reader who had already opened its "Worked for" saw an empty log: renderers only ask for deferred work on the press that opens it (Sven's 3-minute Empryo turn, 2026-10-07). The rows the chat already holds for such a turn are its work, so they become the turn's loaded section, and an open row keeps its log on desktop, web and phone alike.
+/// A turn is kept only when the chat holds it from its prompt to the `endId` gxserver folded it to, so a turn held in part still loads from history.
+pub fn keep_held_work(
+    held: &MessagesState,
+    next: &[ChatMessage],
+    loaded: &mut BTreeMap<String, Vec<ChatMessage>>,
+) {
+    let held_at = |id: &str| {
+        let at = *held.index_by_id.get(id)?;
+        held.list.get(at)?.deferred_work.is_none().then_some(at)
+    };
+    for folded in next {
+        let Some(work) = &folded.deferred_work else {
+            continue;
+        };
+        if loaded.contains_key(&folded.id) {
+            continue;
+        }
+        let (Some(start), Some(end)) = (
+            held_at(&folded.id),
+            work.end_id.as_deref().and_then(held_at),
+        ) else {
+            continue;
+        };
+        if end > start {
+            loaded.insert(folded.id.clone(), held.list[start + 1..=end].to_vec());
+        }
     }
 }
 
