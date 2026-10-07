@@ -8,6 +8,51 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
         <link>https://github.com/maddada/Ghostex/releases</link>
         <description>Sparkle appcast for Ghostex macOS releases.</description>
         <item>
+            <title>10.15.0</title>
+            <pubDate>Wed, 07 Oct 2026 21:37:16 +0000</pubDate>
+            <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v10.15.0</sparkle:fullReleaseNotesLink>
+            <sparkle:version>101500</sparkle:version>
+            <sparkle:shortVersionString>10.15.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[# Ghostex 10.15.0
+
+## 10.15.0 - 2026-10-08
+
+**Ghostex 10.15.0 is out.** Empryo joins as a built-in agent, the chat feels instant (sending, the model name, `!` shell commands), Windows terminals use PowerShell 7, and Easy Connect pairs Windows administrator accounts.
+
+### 🤖 Agents
+- **Empryo is a built-in agent:** chat, questions and approvals as cards, its model and effort picker, forks, resume, coordinators and threads, and its prompts in Search by Prompt and on the phone. It installs on Windows too and starts switched off in Settings > Agents, thanks to @banozz0.
+- **Haiku 5.5 replaces Haiku 4.5** in the Claude Code and Cursor model pickers, and auto titles and other background helpers run on Haiku 5.5.
+- **Chat messages reach OMP in all eight of its prompt layouts.**
+- **Codex's own update works again inside Ghostex sessions on Windows** (it failed with "Get-FileHash is not recognized").
+
+### 💬 Chat
+- **Sending is instant:** your message leaves the composer and shows in the chat the moment you press Enter, images included.
+- **The model name shows right away,** and new sessions start on the model you last picked.
+- **`!` shell commands show as a Shell card** with their output streaming live.
+- **Scrolling up past a long reply no longer jumps to its top.**
+- The loading notice sits in the middle of an empty chat, tree guide lines line up with the icon above, the answer field's pills always match its text, and the Tasks panel reopens the way you left it.
+
+### 🧭 Coordinators
+- **Clicking a thread in the Threads panel opens it,** resuming a closed one.
+- **The Threads panel shows working threads and those active in the last 2 hours,** and remembers whether you folded it.
+
+### 🗂️ Sidebar and Files
+- **An expanded project shows only New agent, the agent picker and a ⋯ menu;** everything else moved into the menu.
+- **Clicking the file name at the top of the Files view copies its full path.**
+
+### 🪟 Windows
+- **Terminals use PowerShell 7 wherever it is installed** (Program Files, your user folder, the Microsoft Store or PATH) and Windows PowerShell 5.1 until then; Settings > General > Terminal offers **Install PowerShell 7** when only 5.1 is present.
+- **Easy Connect pairs a phone with a Windows administrator account** after one Windows admin prompt.
+- **Every build shows the real Ghostex version,** and About shows the app icon.
+
+### 📱 Phone
+- **A simpler sessions list,** Empryo in chat and Find, and pairing waits for the computer's admin prompt.
+]]></description>
+            <enclosure url="https://github.com/maddada/Ghostex/releases/download/v10.15.0/ghostex-10.15.0-arm64.dmg" length="115989052" type="application/octet-stream" sparkle:edSignature="4P6Hukdbb0fWSoviKR3P/iAQQg4ZFFE5SbL5OGSryHERqzyAMOtpgy+rU1GqEF4Tg+X6VZlMGOiaQhfIfOr5BA=="/>
+        </item>
+        <item>
             <title>10.14.0</title>
             <pubDate>Wed, 07 Oct 2026 02:22:12 +0000</pubDate>
             <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v10.14.0</sparkle:fullReleaseNotesLink>
@@ -249,56 +294,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
             <enclosure url="https://github.com/maddada/Ghostex/releases/download/v10.11.0/ghostex-10.11.0-arm64.dmg" length="111299670" type="application/octet-stream" sparkle:edSignature="CQib0B1TqRwk52qbOuvXa0CcE04EoztnWR7naIQrGsUAHHNIorPm6Fmzs4w9eHh9ApC8dWU9RuRsq/rZ8GAeAw=="/>
         </item>
         <item>
-            <title>10.10.0</title>
-            <pubDate>Sun, 04 Oct 2026 08:42:26 +0000</pubDate>
-            <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v10.10.0</sparkle:fullReleaseNotesLink>
-            <sparkle:version>101000</sparkle:version>
-            <sparkle:shortVersionString>10.10.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Ghostex 10.10.0
-
-## 10.10.0 - 2026-10-04
-
-**Ghostex 10.10.0 is out.** Coordinators check that the work they hand to a thread actually arrives, Freebuff joins the agents with chat, the phone can start a coordinator and nests its threads, embedded pages can open apps like Okta Verify, and Windows gets a working account sign-in, a red Close button and more reliable remote setup.
-
-### 🧭 Coordinators
-- **Coordinators check that a thread received its work.** A new thread reports started only once its brief has arrived, and the coordinator hears about any message that never reached a thread.
-- **`ghostex agents send` says whether a message was delivered,** pending, accepted or queued, and control characters in a message no longer act as keys.
-- **New Coordinator… is first in a project's agent menu,** and a coordinator keeps the name you gave it.
-- **The crew badge counts working threads, else waiting ones, else all of them,** with a tint that matches.
-
-### 🤖 Agents
-- **Freebuff joins the agents with simple chat support:** messages, replies, tool results and its questions as chat cards. Its chat appears after the first message, and sign-in and `/model` stay in its terminal.
-- **macOS: agents start for fish users whose agent command is only on fish's PATH,** and they keep Ghostex's prompt editor, thanks to @escottalexander.
-- **A chat message sent while the computer is busy is no longer lost** when its paste arrives late.
-
-### 📱 On the phone
-- **Start a coordinator from the phone's agent menu,** and its threads nest under it as they do on the computer.
-- **A Handoff's new conversation opens with the handover link in its chat box.**
-
-### 🪟 Windows
-- **Signing in to an account from Settings > Accounts works on Windows.**
-- **The window buttons reach the top-right corner, and Close turns red on hover.**
-- **Remote setup over SSH finds the SSH server reliably** and says clearly what blocks it, such as missing admin rights, a pending restart or a policy block.
-- **The Ghostex server never runs your sessions from an SSH or background session,** and a server started over SSH keeps running when nobody is signed in.
-- **A new agent created in another project gets focus.**
-
-### 🌐 Browser and extensions
-- **Embedded pages can open other apps and reach local apps after asking,** so sign-ins that use Okta Verify work. Ghostex asks before opening an app or letting a site connect to apps on this computer.
-- **Prerender Buddy is in the extension store:** open your Prerender Buddy workspace beside your agent to review AI visibility, crawler access, website health and articles.
-
-### 🩹 Fixes and polish
-- **Full Reload keeps focus on the session it reloads.**
-- **The chat keeps following new output** at the bottom, and the scroll-down button shows exactly when it doesn't.
-- **The chat history rail is shorter and starts below the fork button.**
-- **A modal's close X sits on its top-right corner** and shows whenever the pointer is in the modal's top 80px.
-- **Dragging a session no longer reveals hidden sidebar sections.**
-- **Experimental terminal shaders skip terminals they can't draw on,** thanks to @vespillo-tech.
-]]></description>
-            <enclosure url="https://github.com/maddada/Ghostex/releases/download/v10.10.0/ghostex-10.10.0-arm64.dmg" length="111136119" type="application/octet-stream" sparkle:edSignature="Mgdqq3QeC20nDpr7fV8gA6luMWl6QhUUk/CuRrTrlnuuwoSZbVoaO3Cg9mCGuB0HKhlf2s5K30h3pBj4tygXBQ=="/>
-        </item>
-        <item>
             <title>3.26.1</title>
             <pubDate>Mon, 01 Jun 2026 18:43:20 +0400</pubDate>
             <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v3.26.1</sparkle:fullReleaseNotesLink>
@@ -310,6 +305,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: b5lHE+Ltbba3MdZ38JUidXSZMYXwdVmXMZ2HHx1ndoylm2lDHpNMYpj7TmswQvlZ60lsB9D0vy99+Uw/nbdpAw==
-length: 25095
+edSignature: 4cac10rWQDyVyNCHww/mDiqwGz2E3kxUhF9v8kwzaGMRFFLflyIZul0/hxWU0TL3PE1Tdcr1WyycRncAp61nDw==
+length: 24437
 -->
