@@ -114,12 +114,8 @@ fn run_privileged_enable() -> SshEnableResult {
 // capability, set `sshd` to start automatically, start it, and make sure the
 // `OpenSSH-Server-In-TCP` inbound rule exists. They need an elevated process,
 // so a non-elevated PowerShell launches an elevated one with
-// `Start-Process -Verb RunAs -Wait -PassThru` and forwards its exit code.
-// Both scripts are written to temp files and run with `-File`, which keeps
-// paths and quoting out of the command line entirely. The elevated process
-// cannot share stdout with its parent, so it reports through exit codes and
-// a log file the parent reads afterwards; the log holds only the reason for
-// a failure, never progress lines, because it is shown to the user verbatim.
+// `Start-Process -Verb RunAs -Wait -PassThru` and forwards its exit code
+// (`windows_elevation.rs`).
 /*
 CDXC:RemotePairing 2026-10-03 WHY:
 `Get-Service sshd` returning nothing does not mean OpenSSH Server is missing:
@@ -140,27 +136,19 @@ for a feature Windows already counts as installed.
 */
 #[cfg(windows)]
 mod windows_enable {
-    use std::{
-        fs,
-        path::{Path, PathBuf},
-        process::{Command, Stdio},
+    use super::super::windows_elevation::{
+        run_elevated_powershell, EXIT_LAUNCH_FAILED, EXIT_NO_DESKTOP, EXIT_NO_EXIT_CODE,
+        EXIT_NO_PROCESS, EXIT_UAC_CANCELLED,
     };
-
     use super::{cancelled, enabled, failed, SshEnableResult};
 
-    // Exit codes chosen by the elevated script. 1223 is Windows'
-    // ERROR_CANCELLED, which is what a declined UAC prompt raises.
+    // Exit codes chosen by the elevated script.
     const EXIT_CAPABILITY_FAILED: i32 = 2;
     const EXIT_SERVICE_FAILED: i32 = 3;
     const EXIT_RESTART_NEEDED: i32 = 4;
     const EXIT_FIREWALL_FAILED: i32 = 5;
     const EXIT_NOT_ELEVATED: i32 = 6;
     const EXIT_OTHER_SSH_SERVER: i32 = 7;
-    const EXIT_LAUNCH_FAILED: i32 = 91;
-    const EXIT_NO_PROCESS: i32 = 92;
-    const EXIT_NO_EXIT_CODE: i32 = 93;
-    const EXIT_NO_DESKTOP: i32 = 94;
-    const EXIT_UAC_CANCELLED: i32 = 1223;
 
     const ELEVATED_SCRIPT: &str = r#"param([string]$LogPath)
 $ErrorActionPreference = 'Stop'
@@ -216,35 +204,13 @@ exit 0
 "#;
 
     pub(super) fn run() -> SshEnableResult {
-        let files = match TempFiles::create() {
-            Ok(files) => files,
-            Err(error) => {
-                return failed(format!("Could not prepare the elevation script: {error}."))
-            }
+        let run = match run_elevated_powershell("ghostex-ssh-enable", ELEVATED_SCRIPT, &[]) {
+            Ok(run) => run,
+            Err(message) => return failed(message),
         };
-        let mut command = Command::new("powershell");
-        command
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-            ])
-            .arg(&files.launcher)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        super::hide_console_window(&mut command);
-        let output = match command.output() {
-            Ok(output) => output,
-            Err(error) => {
-                return failed(format!("Could not open the administrator prompt: {error}."))
-            }
-        };
-        let log = files.read_log();
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        match output.status.code() {
+        let log = run.log;
+        let stderr = run.stderr;
+        match run.code {
             Some(0) => enabled(),
             Some(EXIT_UAC_CANCELLED) => cancelled(),
             Some(EXIT_CAPABILITY_FAILED) => failed(capability_failed_message(&log)),
@@ -308,93 +274,6 @@ exit 0
         } else {
             format!("{lead}: {detail}.")
         }
-    }
-
-    struct TempFiles {
-        launcher: PathBuf,
-        script: PathBuf,
-        log: PathBuf,
-    }
-
-    impl TempFiles {
-        fn create() -> std::io::Result<Self> {
-            let stem = format!(
-                "ghostex-ssh-enable-{}-{}",
-                std::process::id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|elapsed| elapsed.as_nanos())
-                    .unwrap_or_default()
-            );
-            let dir = std::env::temp_dir();
-            let files = Self {
-                launcher: dir.join(format!("{stem}-launch.ps1")),
-                script: dir.join(format!("{stem}.ps1")),
-                log: dir.join(format!("{stem}.log")),
-            };
-            fs::write(&files.log, "")?;
-            fs::write(&files.script, ELEVATED_SCRIPT)?;
-            fs::write(&files.launcher, launcher_script(&files.script, &files.log))?;
-            Ok(files)
-        }
-
-        fn read_log(&self) -> String {
-            let text = fs::read_to_string(&self.log).unwrap_or_default();
-            let lines = text
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty())
-                .collect::<Vec<_>>();
-            lines.join(" ").chars().take(600).collect()
-        }
-    }
-
-    impl Drop for TempFiles {
-        fn drop(&mut self) {
-            for path in [&self.launcher, &self.script, &self.log] {
-                let _ = fs::remove_file(path);
-            }
-        }
-    }
-
-    // The launcher waits for the elevated PowerShell and exits with its exit
-    // code. When the user declines the UAC prompt, `Start-Process` throws with
-    // a Win32Exception whose NativeErrorCode is 1223 (ERROR_CANCELLED)
-    // somewhere in the exception chain; that number is matched instead of the
-    // message, which is localized. A gxserver started from an SSH connection
-    // lives in session 0 with no interactive window station, where
-    // `Start-Process -Verb RunAs` can only throw "This operation requires an
-    // interactive window station"; that case is named up front so the user
-    // gets the fix (restart the background service from the desktop) instead
-    // of the raw exception.
-    fn launcher_script(script: &Path, log: &Path) -> String {
-        format!(
-            r#"$ErrorActionPreference = 'Stop'
-if (-not [Environment]::UserInteractive) {{ exit {EXIT_NO_DESKTOP} }}
-try {{
-    $p = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', '"{script}"', '"{log}"')
-}} catch {{
-    $e = $_.Exception
-    while ($null -ne $e) {{
-        if ($e -is [System.ComponentModel.Win32Exception] -and $e.NativeErrorCode -eq {EXIT_UAC_CANCELLED}) {{ exit {EXIT_UAC_CANCELLED} }}
-        $e = $e.InnerException
-    }}
-    [Console]::Error.WriteLine($_.Exception.Message)
-    exit {EXIT_LAUNCH_FAILED}
-}}
-if ($null -eq $p) {{ exit {EXIT_NO_PROCESS} }}
-if ($null -eq $p.ExitCode) {{ exit {EXIT_NO_EXIT_CODE} }}
-exit $p.ExitCode
-"#,
-            script = single_quoted_literal(script),
-            log = single_quoted_literal(log),
-        )
-    }
-
-    // Inside a single-quoted PowerShell string the only special character is
-    // the quote itself, written as two quotes.
-    fn single_quoted_literal(path: &Path) -> String {
-        path.to_string_lossy().replace('\'', "''")
     }
 }
 

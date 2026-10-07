@@ -271,6 +271,11 @@ impl From<PairDeviceError> for RemoteAccessHttpError {
                 message: "This code has expired. Show a fresh code on the computer and scan again."
                     .to_string(),
             },
+            PairDeviceError::ApprovalDeclined => Self {
+                status: StatusCode::FORBIDDEN,
+                code: PAIR_DEVICE_APPROVAL_DECLINED_ERROR,
+                message: "The computer asked for administrator approval to add this phone's key, and the Windows prompt was declined. Scan the new code on the computer and choose Yes when Windows asks.".to_string(),
+            },
             PairDeviceError::BadRequest(message) => Self::bad_request(message),
             PairDeviceError::Internal(error) => error.into(),
         }

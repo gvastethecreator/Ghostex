@@ -7,7 +7,7 @@ use crate::tailcat::{
     apply_tailcat_state_update, read_tailcat_status_payload, TailcatRuntime, TailcatStateUpdate,
 };
 
-use super::authorized_keys::remove_authorized_key;
+use super::authorized_keys::{remove_authorized_key, AdministratorApprovalDeclined};
 use super::repository::{RemotePairedDeviceRecord, RemotePairingRepository};
 
 /// Wire shape of `GxserverPairedDevice` in `packages/shared/gxserver-protocol-health.ts`.
@@ -30,12 +30,8 @@ pub fn list_paired_devices_json(db: &Connection) -> Result<Value> {
 }
 
 /*
-CDXC:RemotePairing 2026-09-03:
-Unpairing reverses everything pairing did, in the order that leaves the
-least behind if a later step fails: the row goes first so the device stops
-being listed, then its `authorized_keys` line (the actual access), then its
-tailcat allow-list entry. Returns the removed record, or `None` when no such
-device exists.
+CDXC:RemotePairing 2026-10-08 WHY:
+Unpairing reverses everything pairing did, key line first: on a Windows administrator account removing it needs a UAC prompt the user can decline, and a device whose row went first would keep SSH access with nothing left to click Remove on. With the key first, a declined or failed removal leaves the device listed so Remove can be retried, and a failure after it leaves only a row without access. Then the row, then its tailcat allow-list entry. Supersedes the 2026-09-03 row-first order. Returns the removed record, or `None` when no such device exists.
 */
 pub fn remove_paired_device(
     paths: &GxserverPaths,
@@ -43,10 +39,23 @@ pub fn remove_paired_device(
     tailcat_runtime: &TailcatRuntime,
     device_id: &str,
 ) -> Result<Option<RemotePairedDeviceRecord>> {
-    let Some(device) = RemotePairingRepository::new(db).remove_device(device_id)? else {
+    let repository = RemotePairingRepository::new(db);
+    let Some(device) = repository.find_device(device_id)? else {
         return Ok(None);
     };
-    remove_authorized_key(&device.id)?;
+    remove_authorized_key(&device.id).map_err(|error| {
+        match error.downcast_ref::<AdministratorApprovalDeclined>() {
+            Some(declined) => anyhow::anyhow!(
+                "{} is still paired: Windows asked for administrator approval to remove its key from {}, and the prompt was declined. Click Remove again and choose Yes.",
+                device.name,
+                declined.keys_file.display()
+            ),
+            None => error,
+        }
+    })?;
+    if repository.remove_device(&device.id)?.is_none() {
+        return Ok(None);
+    }
     if let Some(client_key) = device.tailcat_client_key.as_deref() {
         remove_tailcat_client_key(paths, db, tailcat_runtime, client_key)?;
     }

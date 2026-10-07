@@ -1870,7 +1870,11 @@ password when you sign in with one; SSH never accepts the Windows Hello PIN).
 Turning SSH on in Windows Ghostex installs and starts Windows' OpenSSH Server
 feature after one administrator prompt; if Windows needs a restart to finish,
 or another SSH server is already installed, the message under the button says
-what to do. When a connection needs Ghostex's background service on Windows
+what to do. On a Windows administrator account, pairing a phone with Easy
+Connect (and removing it from Paired devices) shows one more administrator
+prompt on the computer, because Windows' SSH reads administrators' keys from
+`C:\ProgramData\ssh\administrators_authorized_keys`; choose Yes. If the prompt
+is declined the phone says so: scan the new code and choose Yes. When a connection needs Ghostex's background service on Windows
 and you are signed in to that computer's desktop, the service starts in your
 desktop session, so agents there work as if you had opened Ghostex yourself.
 When nobody is signed in, it starts in the background as before, and opening

@@ -106,12 +106,27 @@ pub fn authorized_key_marker(device_id: &str) -> String {
 
 /// Appends `<type> <blob> ghostex-paired:<deviceId> <deviceName>`, creating
 /// `~/.ssh` (0700) and `authorized_keys` (0600) when they do not exist yet.
+/// On Windows the line goes wherever sshd reads this account's keys from,
+/// through a UAC prompt when that is outside the profile (see
+/// `windows_authorized_keys.rs`).
 pub fn append_authorized_key(
     key: &ParsedSshPublicKey,
     device_id: &str,
     device_name: &str,
 ) -> Result<()> {
-    ensure_user_authorized_keys_grants_access()?;
+    let line = format!(
+        "{} {} {} {}\n",
+        key.key_type,
+        key.blob_base64,
+        authorized_key_marker(device_id),
+        single_line_comment(device_name)
+    );
+    #[cfg(windows)]
+    if let super::windows_authorized_keys::KeysFile::Elevated(path) =
+        super::windows_authorized_keys::keys_file_for_this_account()?
+    {
+        return super::windows_authorized_keys::append_elevated(&path, &line);
+    }
     let directory = ssh_directory_path();
     if !directory.is_dir() {
         fs::create_dir_all(&directory)
@@ -125,13 +140,6 @@ pub fn append_authorized_key(
     } else {
         String::new()
     };
-    let line = format!(
-        "{} {} {} {}\n",
-        key.key_type,
-        key.blob_base64,
-        authorized_key_marker(device_id),
-        single_line_comment(device_name)
-    );
     let mut file = fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -151,13 +159,29 @@ pub fn append_authorized_key(
 }
 
 /// Deletes exactly the line(s) carrying `ghostex-paired:<deviceId>` as a
-/// whitespace-separated field. Returns whether any line was removed.
+/// whitespace-separated field. Returns whether any line was removed. On
+/// Windows a key that is not in the profile's file is looked for in the file
+/// sshd reads for this account, through a UAC prompt when that is outside
+/// the profile.
 pub fn remove_authorized_key(device_id: &str) -> Result<bool> {
+    let marker = authorized_key_marker(device_id);
+    if remove_marked_lines_from_user_file(&marker)? {
+        return Ok(true);
+    }
+    #[cfg(windows)]
+    if let super::windows_authorized_keys::KeysFile::Elevated(path) =
+        super::windows_authorized_keys::keys_file_for_this_account()?
+    {
+        return super::windows_authorized_keys::remove_elevated(&path, &marker);
+    }
+    Ok(false)
+}
+
+fn remove_marked_lines_from_user_file(marker: &str) -> Result<bool> {
     let path = authorized_keys_path();
     if !path.is_file() {
         return Ok(false);
     }
-    let marker = authorized_key_marker(device_id);
     let existing = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     // Split with the terminators kept, so LF/CRLF endings and the presence or
     // absence of a final newline survive the rewrite byte for byte.
@@ -196,36 +220,24 @@ fn single_line_comment(device_name: &str) -> String {
         .collect()
 }
 
-/*
-CDXC:RemotePairing 2026-09-03:
-Known gap on Windows: OpenSSH Server ignores `%USERPROFILE%\.ssh\authorized_keys`
-for members of the Administrators group and reads
-`%ProgramData%\ssh\administrators_authorized_keys` instead (the default
-`sshd_config` `Match Group administrators` block). Writing that file needs
-elevation and ACL repair, which pairing does not do yet, so an administrator
-account gets a clear failure instead of a key line that sshd will never read.
-*/
-#[cfg(windows)]
-fn ensure_user_authorized_keys_grants_access() -> Result<()> {
-    const ADMINISTRATORS_GROUP_SID: &str = "S-1-5-32-544";
-    let output = std::process::Command::new("whoami")
-        .args(["/groups", "/fo", "csv", "/nh"])
-        .output()
-        .with_context(|| "read group membership with whoami")?;
-    let groups = String::from_utf8_lossy(&output.stdout);
-    if output.status.success() && groups.contains(ADMINISTRATORS_GROUP_SID) {
-        bail!(
-            "Pairing failed: this account is an administrator, and SSH on this computer reads administrator keys from {}\\ssh\\administrators_authorized_keys instead of the account's authorized_keys file. Add the key there by hand, or pair from a standard account.",
-            std::env::var("ProgramData").unwrap_or_else(|_| "C:\\ProgramData".to_string())
-        );
-    }
-    Ok(())
+/// A Windows administrator prompt the user declined. Pairing and unpairing
+/// answer it with their own sentence instead of a generic failure.
+#[derive(Debug)]
+pub struct AdministratorApprovalDeclined {
+    pub keys_file: PathBuf,
 }
 
-#[cfg(not(windows))]
-fn ensure_user_authorized_keys_grants_access() -> Result<()> {
-    Ok(())
+impl std::fmt::Display for AdministratorApprovalDeclined {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "Windows asked for administrator approval to change {}, and the prompt was declined.",
+            self.keys_file.display()
+        )
+    }
 }
+
+impl std::error::Error for AdministratorApprovalDeclined {}
 
 #[cfg(unix)]
 fn set_private_mode(path: &std::path::Path, mode: u32) -> Result<()> {

@@ -9,6 +9,10 @@ pub mod repository;
 pub mod ssh_enable;
 pub mod ssh_status;
 pub mod tailscale;
+#[cfg(windows)]
+mod windows_authorized_keys;
+#[cfg(windows)]
+mod windows_elevation;
 
 // `http` exposes only the crate-internal endpoint handler, so its re-export
 // matches that visibility rather than widening it to `pub`.

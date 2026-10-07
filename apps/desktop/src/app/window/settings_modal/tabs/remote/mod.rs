@@ -49,6 +49,9 @@ use style::RemoteTokens;
 const RPC_TIMEOUT: Duration = Duration::from_secs(15);
 /// `/api/enableSshAccess` waits on the admin prompt until the user answers it.
 const ENABLE_SSH_TIMEOUT: Duration = Duration::from_secs(300);
+/// `/api/removePairedDevice` waits on the Windows admin prompt when the key is in the
+/// administrators keys file.
+const REMOVE_PAIRED_DEVICE_TIMEOUT: Duration = Duration::from_secs(300);
 /// Starting or stopping the sidecar.
 const UPDATE_TAILCAT_TIMEOUT: Duration = Duration::from_secs(60);
 /// The Easy Connect helper install downloads and may build.
@@ -534,7 +537,7 @@ impl RemoteTab {
         self.rpc(
             "/api/removePairedDevice",
             json!({ "deviceId": device_id }),
-            RPC_TIMEOUT,
+            REMOVE_PAIRED_DEVICE_TIMEOUT,
             cx,
             |this, result, cx| {
                 this.removing_device = None;

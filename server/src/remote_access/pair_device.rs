@@ -10,7 +10,10 @@ use crate::logging::{GxserverLogInput, GxserverLogger, LogLevel};
 use crate::paths::GxserverPaths;
 use crate::tailcat::TailcatRuntime;
 
-use super::authorized_keys::{append_authorized_key, parse_ssh_public_key, remove_authorized_key};
+use super::authorized_keys::{
+    append_authorized_key, parse_ssh_public_key, remove_authorized_key,
+    AdministratorApprovalDeclined,
+};
 use super::identity::read_remote_access_identity;
 use super::pairing_code::{hash_remote_pairing_secret, RemotePairingRuntime};
 use super::repository::{now_iso, RemotePairedDeviceRecord, RemotePairingRepository};
@@ -31,6 +34,9 @@ pub const PAIR_DEVICE_ATTEMPT_WINDOW: Duration = Duration::from_secs(60);
 /// the substring `expired`), returned for an unknown, used, or expired secret.
 pub const PAIR_DEVICE_CODE_EXPIRED_ERROR: &str = "pairingCodeExpired";
 pub const PAIR_DEVICE_RATE_LIMITED_ERROR: &str = "pairingRateLimited";
+/// The computer's administrator prompt was declined (Windows administrator
+/// accounts). The phone shows the message; it must never contain "expired".
+pub const PAIR_DEVICE_APPROVAL_DECLINED_ERROR: &str = "pairingApprovalDeclined";
 
 const DEVICE_NAME_MAX_CHARS: usize = 80;
 const PLATFORM_MAX_CHARS: usize = 32;
@@ -63,6 +69,8 @@ pub enum PairDeviceError {
     CodeExpired,
     /// Malformed request body.
     BadRequest(String),
+    /// The Windows administrator prompt for the keys file was declined.
+    ApprovalDeclined,
     Internal(anyhow::Error),
 }
 
@@ -136,7 +144,13 @@ pub fn pair_device(
     pairing_runtime.forget_secret();
 
     let device_id = uuid::Uuid::new_v4().simple().to_string();
-    append_authorized_key(&key, &device_id, &params.device_name)?;
+    append_authorized_key(&key, &device_id, &params.device_name).map_err(|error| {
+        if error.is::<AdministratorApprovalDeclined>() {
+            PairDeviceError::ApprovalDeclined
+        } else {
+            PairDeviceError::Internal(error)
+        }
+    })?;
     let record = RemotePairedDeviceRecord {
         id: device_id.clone(),
         name: params.device_name,
