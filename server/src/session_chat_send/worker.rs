@@ -586,33 +586,6 @@ pub(super) async fn run_session_chat_send_worker(
                         break;
                     }
                 }
-                SessionChatSendStep::SubmitEmpryo => {
-                    let busy = capture_session_terminal_text(&zmx_name)
-                        .await
-                        .and_then(|screen| {
-                            crate::session_chat_composer::empryo_composer_busy(&screen)
-                        })
-                        == Some(true);
-                    if let Err(error) = write_session_chat_payload(
-                        &project_id,
-                        &session_id,
-                        &zmx_name,
-                        &source,
-                        if busy {
-                            SESSION_CHAT_EMPRYO_QUEUE_SUBMIT
-                        } else {
-                            SESSION_CHAT_SUBMIT
-                        },
-                    )
-                    .await
-                    {
-                        outcome = Err(SessionChatSendError::new(
-                            SessionChatSendFailure::Write,
-                            error,
-                        ));
-                        break;
-                    }
-                }
                 SessionChatSendStep::VerifySubmitted { agent, text } => {
                     if let Err(error) = crate::session_chat_send_submit::confirm_submitted(
                         &agent,

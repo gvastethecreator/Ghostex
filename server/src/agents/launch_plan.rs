@@ -128,6 +128,26 @@ pub(crate) fn create_agent_session_params_for_project(
     if let Some(id) = pi_session_id.as_deref() {
         runtime_settings.insert("agentSessionId".to_string(), json!(id));
     }
+    /*
+    CDXC:SessionIdentity 2026-10-07 WHY:
+    A plain Empryo launch ran bare `empryo`, which reopens the folder's latest session: the row never learned an agent session id (its chat had no transcript), and a second launch in the same repo shared the first one's session (seen live on 3.9.1-beta). Every new local Empryo session gets a seeded folder of its own, as a launch model's does, with no model in its tab so Empryo opens it on the folder's current default. Resume and fork arrive with their id and keep it.
+    */
+    let empryo_session_id = match empryo_session_id {
+        None if agentbox_provider.is_none()
+            && read_text_from_map(&runtime_settings, "agentSessionId").is_none()
+            && resume_agent_family_id(Some(agent_id.clone()), &agent_config, &launch_settings)
+                .as_deref()
+                == Some("empryo") =>
+        {
+            let id = crate::session_chat_empryo_launch_selection::seed_empryo_launch_session(
+                &empryo_cwd(params, project)?,
+                None,
+            )?;
+            runtime_settings.insert("agentSessionId".to_string(), json!(id));
+            Some(id)
+        }
+        seeded => seeded,
+    };
     let session_agent_id = (agent_icon.is_none()
         && !agent_id.starts_with("custom-")
         && default_agent_command(&agent_id).is_none()
@@ -374,6 +394,19 @@ pub(crate) fn project_agent_session_default_title(project: &Value, session: &Val
     )
 }
 
+/// The folder an Empryo create starts in: the requested `cwd`, else the project's.
+fn empryo_cwd(
+    params: &Map<String, Value>,
+    project: &Value,
+) -> Result<std::path::PathBuf, DomainStateError> {
+    read_text(params, "cwd")
+        .or_else(|| read_text_value(project, "path"))
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| {
+            DomainStateError::bad_request("The project has no folder to start Empryo in.")
+        })
+}
+
 /// CDXC:AgentProviders 2026-10-06 DECISION:
 /// User: "yes, Ghostex chooses Pi's model and thinking level at launch, like Claude and Codex." This extends the 2026-09-17 decision (an agent spawning another agent sets that worker's model and effort for the session only, and a resumed worker keeps them) from Claude and Codex to Pi, whose model is `provider/id` (`--model`) and whose effort is its thinking level (`--thinking`).
 /// Typing `/model` or `/effort` into Claude Code saves the choice as the default for every new session, so the choice travels as launch flags instead.
@@ -409,12 +442,8 @@ fn apply_requested_agent_model(
     if family == "empryo" {
         use crate::session_chat_empryo_launch_selection as launch;
         let model = launch::empryo_launch_model(model.as_deref())?;
-        let cwd = read_text(params, "cwd")
-            .or_else(|| read_text_value(project, "path"))
-            .ok_or_else(|| {
-                DomainStateError::bad_request("The project has no folder to start Empryo in.")
-            })?;
-        let session_id = launch::seed_empryo_launch_session(std::path::Path::new(&cwd), model)?;
+        let session_id =
+            launch::seed_empryo_launch_session(&empryo_cwd(params, project)?, Some(model))?;
         runtime_settings.insert("agentSessionId".to_string(), json!(session_id));
         if let Some(effort) = effort.as_deref() {
             launch::record_empryo_launch_effort(runtime_settings, model, effort);

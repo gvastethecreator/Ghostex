@@ -27,17 +27,21 @@ pub(crate) fn empryo_launch_model(model: Option<&str>) -> Result<&str, DomainSta
         })
 }
 
-/// Writes `<cwd>/.empryo/sessions/<new id>/` with one tab on `model`, the minimum `--session`
-/// resumes (a `meta.json` index and the `session.jsonl` log it replays), and returns the id.
+/// Writes `<cwd>/.empryo/sessions/<new id>/` with one tab on `model` (without one, on whatever
+/// default Empryo resolves for the folder), the minimum `--session` resumes (a `meta.json` index and
+/// the `session.jsonl` log it replays), and returns the id.
 pub(crate) fn seed_empryo_launch_session(
     cwd: &Path,
-    model: &str,
+    model: Option<&str>,
 ) -> Result<String, DomainStateError> {
     let session_id = uuid::Uuid::new_v4().to_string();
     let tab_id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().timestamp_millis();
     let cwd_text = cwd.to_string_lossy();
-    let tab = json!({ "label": "TAB-1", "activeModel": model, "forgeMode": "default" });
+    let mut tab = json!({ "label": "TAB-1", "forgeMode": "default" });
+    if let Some(model) = model {
+        tab["activeModel"] = json!(model);
+    }
     let mut meta_tab = tab.clone();
     meta_tab["id"] = json!(tab_id);
     meta_tab["sessionId"] = json!(session_id);

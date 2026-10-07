@@ -179,7 +179,7 @@ fn empryo_input_box(lines: &[String]) -> Option<(usize, Range<usize>)> {
     {
         return None;
     }
-    let body = head + 1 + empryo_tray_rows(&lines[head + 1..foot])?;
+    let body = head + 1 + empryo_box_panel_rows(&lines[head + 1..foot])?;
     let start = (body..foot).find(|&row| empryo_marker(&lines[row]).is_some())?;
     lines[body..start]
         .iter()
@@ -188,19 +188,18 @@ fn empryo_input_box(lines: &[String]) -> Option<(usize, Range<usize>)> {
 }
 
 /// CDXC:AgentScreenDetection 2026-10-07 WHY:
-/// After a turn Empryo 3.9.1-beta opens its input box with a tray (`│ ▸ Events 1 · ▸ Queue 2`, `▾` with its list drawn below while open) closed off by a rule row, all above the prompt glyph. The rows the tray takes at the top of `rows` (the box's interior), `Some(0)` without one, `None` for a tray with no rule under it.
-fn empryo_tray_rows(rows: &[String]) -> Option<usize> {
-    if !rows
-        .first()
-        .is_some_and(|row| box_interior(row).starts_with(['\u{25b8}', '\u{25be}']))
-    {
-        return Some(0);
-    }
-    let rule = rows.iter().position(|row| {
-        let row = box_interior(row);
-        !row.is_empty() && row.chars().all(|ch| ch == '\u{2500}')
-    })?;
-    Some(rule + 1)
+/// Empryo 3.9.1-beta draws panels inside its input box above the prompt glyph, each closed off by a rule row: the tray after a turn (`│ ▸ Events 1`, `▾ 1 queued` with its list) and the slash-command list while a `/` command is typed. The rows those panels take at the top of `rows` (the box's interior), up to the last rule row above the prompt glyph row; `None` when no row holds the glyph.
+fn empryo_box_panel_rows(rows: &[String]) -> Option<usize> {
+    let glyph = rows.iter().rposition(|row| empryo_marker(row).is_some())?;
+    Some(
+        rows[..glyph]
+            .iter()
+            .rposition(|row| {
+                let row = box_interior(row);
+                !row.is_empty() && row.chars().all(|ch| ch == '\u{2500}')
+            })
+            .map_or(0, |rule| rule + 1),
+    )
 }
 
 /// A box row's text between its `│` borders, trimmed.
