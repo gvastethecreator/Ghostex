@@ -95,7 +95,6 @@
     "binary": "gemini",
     "docsUrl": "https://github.com/google-gemini/gemini-cli#installation",
     "npmPackage": "@google/gemini-cli",
-    "brewFormula": "gemini-cli",
     "miseTool": "gemini"
   },
   {
@@ -163,11 +162,12 @@
     "docsUrl": "https://ampcode.com/docs/cli",
     "native": {
       "install": "curl -fsSL https://ampcode.com/install.sh | bash",
-      "update": "amp update"
+      "update": "amp update",
+      "windowsInstall": "irm https://ampcode.com/install.ps1 | iex"
     },
-    "miseTool": "amp",
     "installDirs": {
-      "unix": ["~/.local/bin"]
+      "windows": ["~/.amp/bin"],
+      "unix": ["~/.local/bin", "~/.amp/bin"]
     }
   },
   {
@@ -221,12 +221,16 @@
     "docsUrl": "https://kiro.dev/downloads/",
     "native": {
       "install": "curl -fsSL https://cli.kiro.dev/install | bash",
+      "update": "kiro-cli update --non-interactive",
+      "windowsInstall": "irm https://cli.kiro.dev/install.ps1 | iex",
       "requires": {
         "unix": ["unzip"]
       },
-      "needsApplicationsFolder": true
+      "needsApplicationsFolder": true,
+      "pathMarkers": ["/kiro-cli/"]
     },
     "installDirs": {
+      "windows": ["%LOCALAPPDATA%/Kiro-Cli"],
       "unix": ["~/.local/bin"]
     }
   },
@@ -236,7 +240,16 @@
     "docsUrl": "https://github.com/can1357/oh-my-pi#install",
     "npmPackage": "@oh-my-pi/pi-coding-agent",
     "packageManagers": ["bun"],
-    "brewFormula": "can1357/tap/omp"
+    "brewFormula": "can1357/tap/omp",
+    "native": {
+      "install": "curl -fsSL https://omp.sh/install | sh",
+      "windowsInstall": "irm https://omp.sh/install.ps1 | iex",
+      "pathMarkers": ["/appdata/local/omp/"]
+    },
+    "installDirs": {
+      "windows": ["%LOCALAPPDATA%/omp"],
+      "unix": ["~/.local/bin"]
+    }
   },
   {
     "agentId": "kimi",

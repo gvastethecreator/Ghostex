@@ -727,6 +727,14 @@ Sign in with Device Code shows its link and the one-time code to enter in any
 browser, handy on a remote computer. When Codex quits to the terminal (after
 Update now on its update prompt, or `/logout`), the chat says so and offers
 Restart Codex, which starts it again on the same conversation.
+When Cursor isn't signed in, its chat shows Sign in to Cursor: Sign in opens
+Cursor's sign-in page in the browser, and the card then shows the sign-in link,
+which also works from your phone or another computer. The chat continues by
+itself once you're signed in. If Cursor closes without signing in, the card's
+Sign in starts it again. Cursor's plan approval (Ready to build?: build here,
+build in the cloud, or propose changes), its requests to switch mode, and its
+questions are answered from the chat too, and the plan shows in the
+conversation.
 OpenCode v2 supports streamed replies, reasoning, tool results, image attachments,
 questions, permissions, queued prompts, and conversation rewind in Chat. Install
 its hooks in Settings > Agents, then open a new OpenCode session to connect it.
@@ -1341,7 +1349,10 @@ adds it to your user PATH so new terminals find the command; Add to PATH
 does the same for a CLI installed earlier. Installs run one at a time and wait
 their turn. Ghostex selects an updater for recognized installations; choose the
 original installation method when it cannot be detected. mise is offered for supported CLIs and is the
-default install choice when available. Existing mise tools, including custom
+default install choice when it can install that CLI on your computer; otherwise
+(Cursor on Windows, or a CLI mise installs with npm when npm is missing) the
+official installer or npm is. When Chat is your default view, installing a CLI
+here also installs the Ghostex hooks its chat needs. Existing mise tools, including custom
 backends, update through mise with their version pins bumped to the latest
 release; older versions remain available for running sessions. For example,
 ZCode can also be installed with `mise use --global 'npm:zcode-app-cli[prerelease=true]@latest'`.

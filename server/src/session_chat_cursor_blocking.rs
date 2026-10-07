@@ -101,6 +101,15 @@ fn has_parameter_editor_controls(lines: &[String]) -> bool {
     has_editor_title && has_sections && has_navigation
 }
 
+/// Cursor is running a turn: its composer shows "ctrl+c to stop" beside the input.
+pub fn cursor_is_processing(text: &str) -> bool {
+    let lines = scan_lines(text);
+    let Some(frame_foot) = latest_frame_foot(&lines) else {
+        return false;
+    };
+    lines[frame_foot - 1].contains("ctrl+c to stop")
+}
+
 pub fn detect_cursor_blocking_screen(text: &str) -> Option<CursorBlockingScreen> {
     let lines = scan_lines(text);
     let frame_foot = latest_frame_foot(&lines)?;

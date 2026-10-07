@@ -12,6 +12,8 @@ pub enum SessionChatSendStep {
     GuardCodexInterrupt,
     /// Stop this interrupt job if its Escape would be Claude's double-tap rewind.
     GuardClaudeInterrupt,
+    /// Wait for Cursor to show "ctrl+c to stop", and stop this interrupt job if it never does.
+    GuardCursorInterrupt,
     /// Recheck the transcript pager and cross-client visibility at the front of the queue.
     CloseUnwatchedCodexTranscriptPager,
     /// Scroll Claude's `/btw` panel end to end and keep its whole answer (session_chat_claude_panel.rs).
@@ -385,6 +387,12 @@ pub(crate) fn session_chat_interrupt_escape_steps(agent: Option<&str>) -> Vec<Se
     match agent {
         Some("codex") => steps.push(SessionChatSendStep::GuardCodexInterrupt),
         Some("claude") => steps.push(SessionChatSendStep::GuardClaudeInterrupt),
+        // CDXC:SessionChat 2026-10-07 WHY: Cursor CLI stops a running turn on Ctrl+C ("ctrl+c to stop") and ignores Escape while it works, so chat Stop answered "interrupted" while the turn kept running. Ctrl+C stops the turn only once Cursor shows it is processing (about 5 s after a send on Windows); before that it only arms "Press Ctrl+C again to exit", so the guard waits for that state and sends nothing if it never comes.
+        Some("cursor" | "cursor-agent") => {
+            steps.push(SessionChatSendStep::GuardCursorInterrupt);
+            steps.push(SessionChatSendStep::Write("\u{3}".to_string()));
+            return steps;
+        }
         _ => {}
     }
     steps.push(SessionChatSendStep::Write(

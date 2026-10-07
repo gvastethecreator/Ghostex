@@ -327,13 +327,21 @@ fn restore_windows_shared_source_links() -> Res {
             continue;
         };
         let file = root().join(relative);
-        if fs::symlink_metadata(&file)
+        /*
+        CDXC:WebGpui 2026-10-07 WHY: Windows does not resolve a relative symlink whose target is written with forward slashes, so the links this step made from git's `../../…` text existed but could not be read, and the web build failed with "file not found for module". Targets are written with backslashes, and a link an earlier run wrote with forward slashes is made again.
+        */
+        let existing_link = fs::symlink_metadata(&file)
             .map(|m| m.file_type().is_symlink())
-            .unwrap_or(false)
-        {
-            continue;
-        }
-        let contents = fs::read_to_string(&file)?;
+            .unwrap_or(false);
+        let contents = if existing_link {
+            let current = fs::read_link(&file)?.to_string_lossy().into_owned();
+            if !current.contains('/') {
+                continue;
+            }
+            current
+        } else {
+            fs::read_to_string(&file)?
+        };
         let target = contents.trim();
         let resolved = file
             .parent()
@@ -348,13 +356,18 @@ fn restore_windows_shared_source_links() -> Res {
                 file.display()
             );
         }
-        fs::remove_file(&file)?;
+        if existing_link && resolved.is_dir() {
+            fs::remove_dir(&file)?;
+        } else {
+            fs::remove_file(&file)?;
+        }
         #[cfg(windows)]
         {
+            let native_target = target.replace('/', "\\");
             let linked = if resolved.is_dir() {
-                std::os::windows::fs::symlink_dir(target, &file)
+                std::os::windows::fs::symlink_dir(&native_target, &file)
             } else {
-                std::os::windows::fs::symlink_file(target, &file)
+                std::os::windows::fs::symlink_file(&native_target, &file)
             };
             if let Err(error) = linked {
                 fs::write(&file, &contents)?;

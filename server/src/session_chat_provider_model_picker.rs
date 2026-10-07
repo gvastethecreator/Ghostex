@@ -42,6 +42,45 @@ fn applied(screen: &str, plan: &CodexPickerPlan) -> bool {
     })
 }
 
+/// CDXC:SessionChat 2026-10-07 WHY: Cursor's picker names Claude models "Claude Fable 5" where the catalog says "Fable 5", and its fuzzy filter can highlight a longer name first ("Claude Fable 5.1" for "Fable 5"), so waiting for the highlighted row to be the catalog label timed out ("did not confirm the model picker's Cursor model row step"). A row matches with or without the "Claude " prefix, and the highlight is moved onto the matching row before it is confirmed.
+fn cursor_row_name_matches(row: &str, label: &str) -> bool {
+    let matches = |name: &str| {
+        name == label
+            || name
+                .strip_prefix(label)
+                .is_some_and(|rest| rest.starts_with(' '))
+    };
+    matches(row) || row.strip_prefix("Claude ").is_some_and(matches)
+}
+
+/// The rows of Cursor's picker filtered by `label`, in screen order, with the highlighted one marked.
+fn cursor_filtered_rows(screen: &str, label: &str) -> Option<Vec<(String, bool)>> {
+    let lines = screen_lines(screen);
+    let title = lines
+        .iter()
+        .rposition(|line| line.starts_with(&format!("Models matching \"{label}\"")))?;
+    let rows: Vec<(String, bool)> = lines[title + 1..]
+        .iter()
+        .take_while(|line| !line.starts_with("Edit prompt to filter"))
+        .filter(|line| !line.is_empty())
+        .map(|line| match line.strip_prefix('→') {
+            Some(row) => (row.trim().to_string(), true),
+            None => (line.trim().to_string(), false),
+        })
+        .collect();
+    (!rows.is_empty()).then_some(rows)
+}
+
+/// How far the highlight has to move to reach the row for `label`: rows down when positive.
+fn cursor_row_distance(screen: &str, label: &str) -> Option<isize> {
+    let rows = cursor_filtered_rows(screen, label)?;
+    let target = rows
+        .iter()
+        .position(|(row, _)| cursor_row_name_matches(row, label))?;
+    let current = rows.iter().position(|(_, highlighted)| *highlighted)?;
+    Some(target as isize - current as isize)
+}
+
 fn cursor_model_row(screen: &str, label: &str) -> Option<String> {
     let lines = screen_lines(screen);
     let title = lines.iter().rposition(|line| {
@@ -50,11 +89,7 @@ fn cursor_model_row(screen: &str, label: &str) -> Option<String> {
     let row = lines[title + 1..]
         .iter()
         .find_map(|line| line.strip_prefix('→').map(str::trim))?;
-    (row == label
-        || row
-            .strip_prefix(label)
-            .is_some_and(|rest| rest.starts_with(' ')))
-    .then(|| row.to_string())
+    cursor_row_name_matches(row, label).then(|| row.to_string())
 }
 
 #[derive(PartialEq)]
@@ -67,9 +102,9 @@ struct ParameterRow {
 
 fn cursor_parameters(screen: &str, label: &str) -> Option<Vec<ParameterRow>> {
     let lines = screen_lines(screen);
-    let title = lines
-        .iter()
-        .rposition(|line| line.starts_with(label) && line.contains("Edit Parameters"))?;
+    let title = lines.iter().rposition(|line| {
+        line.contains("Edit Parameters") && cursor_row_name_matches(line, label)
+    })?;
     let mut section = String::new();
     let mut rows = Vec::new();
     for line in &lines[title + 1..] {
@@ -683,9 +718,18 @@ impl PickerDriver<'_> {
             self.write(&build_session_chat_paste_bytes(&command))
                 .await?;
             if plan.provider == "cursor" {
-                self.wait_for("Cursor model row", |screen| cursor_model_row(screen, label))
+                let distance = self
+                    .wait_for("Cursor model rows", |screen| {
+                        cursor_row_distance(screen, label)
+                    })
                     .await?;
                 opened_cursor = true;
+                let arrow = if distance > 0 { "\x1b[B" } else { "\x1b[A" };
+                for _ in 0..distance.unsigned_abs() {
+                    self.write(arrow).await?;
+                }
+                self.wait_for("Cursor model row", |screen| cursor_model_row(screen, label))
+                    .await?;
                 if !plan.effort.is_empty() {
                     self.write("\t").await?;
                     let mut rows = self

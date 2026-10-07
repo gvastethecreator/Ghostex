@@ -31,6 +31,8 @@ pub fn terminal_dialog_copy(dialog: &TerminalDialog) -> Option<Value> {
         guest_passes_copy(left, &lines)?
     } else if title == CODEX_WELCOME_TITLE {
         codex_device_code_copy(&lines)?
+    } else if title == CURSOR_BROWSER_OPENED_TITLE || title == CURSOR_BROWSER_OFF_TITLE {
+        cursor_sign_in_copy(title == CURSOR_BROWSER_OPENED_TITLE, &lines)?
     } else {
         return None;
     };
@@ -140,6 +142,36 @@ fn codex_device_code_copy(lines: &[&str]) -> Option<(String, Vec<String>)> {
     ];
     paragraphs.extend(warning);
     Some((CODEX_DEVICE_CODE_TITLE.to_string(), paragraphs))
+}
+
+/// Cursor's heading over its sign-in link when it opened the browser, and when opening it is turned off.
+pub const CURSOR_BROWSER_OPENED_TITLE: &str = "Signing in with the browser...";
+pub const CURSOR_BROWSER_OFF_TITLE: &str = "Signing in";
+
+/// CDXC:AgentProviders 2026-10-07 WHY: Cursor's browser step prints its sign-in link on one unwrapped terminal line, which a chat card cannot click; the card links it instead. The browser opens on the computer running Cursor, so the link is also how a phone or another computer signs in.
+/// SEE-ALSO: server/src/session_chat_cursor_login.rs, which sends this step as a dialog.
+fn cursor_sign_in_copy(browser_opened: bool, lines: &[&str]) -> Option<(String, Vec<String>)> {
+    let [instruction, link] = lines else {
+        return None;
+    };
+    if *instruction != "If your browser didn't open, click this link to log in:"
+        || !link.starts_with("https://")
+        || link.contains(char::is_whitespace)
+    {
+        return None;
+    }
+    let paragraphs = if browser_opened {
+        vec![
+            "Finish signing in on the Cursor page that opened in your browser. The chat continues on its own once you're signed in.".to_string(),
+            format!("Browser didn't open, or signing in from another device? [Open Cursor's sign-in page]({link})"),
+        ]
+    } else {
+        vec![
+            format!("[Open Cursor's sign-in page]({link}) in any browser and sign in."),
+            "The chat continues on its own once you're signed in.".to_string(),
+        ]
+    };
+    Some(("Sign in to Cursor".to_string(), paragraphs))
 }
 
 /// The title of Claude's first-run sign-in step, where its browser sign-in hands back a code.

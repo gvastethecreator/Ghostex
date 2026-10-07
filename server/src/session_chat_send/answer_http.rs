@@ -618,10 +618,22 @@ pub(crate) async fn handle_answer_session_chat_prompt_http(
                     .await
                     .as_deref()
                     .and_then(|text| {
-                        if crate::session_chat_options::session_chat_option_agent(agent.as_deref())
+                        let option_agent = crate::session_chat_options::session_chat_option_agent(
+                            agent.as_deref(),
+                        );
+                        if option_agent
                             == Some(crate::session_chat_options::SessionChatOptionAgent::Pi)
                         {
                             crate::session_chat_pi_blocking::pi_trust_answer_key(text, choice_index)
+                        } else if option_agent
+                            == Some(crate::session_chat_options::SessionChatOptionAgent::Cursor)
+                            && crate::session_chat_cursor_decision::detect_cursor_decision(text)
+                                .is_some()
+                        {
+                            crate::session_chat_cursor_decision::cursor_decision_answer_key(
+                                text,
+                                choice_index,
+                            )
                         } else {
                             crate::session_chat_workspace_trust::workspace_trust_answer_key(
                         agent.as_deref(),

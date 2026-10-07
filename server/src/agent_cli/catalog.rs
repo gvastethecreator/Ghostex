@@ -169,6 +169,11 @@ pub(crate) fn methods(
         }
         plan
     };
+    // A package published for bun only (omp's starts with `#!/usr/bin/env bun`) does not run from mise's npm install.
+    let npm_runnable = definition
+        .package_managers
+        .as_ref()
+        .is_none_or(|managers| managers.iter().any(|manager| manager == "npm"));
     let mise_tool = mise_installation
         .and_then(|installation| installation.tool.clone())
         .or_else(|| definition.mise_tool.clone())
@@ -176,20 +181,23 @@ pub(crate) fn methods(
             definition
                 .npm_package
                 .as_ref()
+                .filter(|_| npm_runnable)
                 .map(|package| format!("npm:{package}"))
         });
     if let Some(tool) = mise_tool {
-        let command = super::mise::command(
-            &tool,
-            mise_installation.is_some_and(|installation| installation.tool.is_some()),
-        );
+        let managed = mise_installation.is_some_and(|installation| installation.tool.is_some());
+        let command = super::mise::command(&tool, managed);
         let mut method = Method::new(
             "mise",
             "mise",
             command.clone(),
             note(format!("Runs {command} with your mise.")),
         );
-        method.unavailable_reason = missing_command("mise", home);
+        method.unavailable_reason = missing_command("mise", home).or_else(|| {
+            (!managed)
+                .then(|| super::mise::unavailable_reason(&tool, home))
+                .flatten()
+        });
         methods.push(method);
     }
     if let Some(native) = &definition.native {

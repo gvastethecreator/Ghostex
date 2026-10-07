@@ -678,32 +678,59 @@ const CLAUDE_RULES: &[NoticeRule] = &[
 
 /// CDXC:AgentScreenDetection 2026-09-07 DECISION:
 /// User: show Cursor's workspace trust notice in chat so it can be accepted without switching to the terminal.
-const CURSOR_RULES: &[NoticeRule] = &[NoticeRule {
-    kind: SESSION_CHAT_NOTICE_TRUST_PROMPT,
-    severity: SessionChatTerminalNoticeSeverity::Warning,
-    title: "Cursor is waiting for workspace trust",
-    detail: "Cursor Agent can execute code and access files in this directory. Trust this workspace to continue.",
-    blocks_input: true,
-    signatures: &[NoticeSignature {
-        scope: NoticeScope::Dialog,
-        parts: &[NoticePart::Text("Workspace Trust Required")],
-        corroborators: &[
-            "Do you trust the contents of this directory?",
-            "[a] Trust this workspace",
-            "[q] Quit",
+const CURSOR_RULES: &[NoticeRule] = &[
+    NoticeRule {
+        kind: SESSION_CHAT_NOTICE_TRUST_PROMPT,
+        severity: SessionChatTerminalNoticeSeverity::Warning,
+        title: "Cursor is waiting for workspace trust",
+        detail: "Cursor Agent can execute code and access files in this directory. Trust this workspace to continue.",
+        blocks_input: true,
+        signatures: &[NoticeSignature {
+            scope: NoticeScope::Dialog,
+            parts: &[NoticePart::Text("Workspace Trust Required")],
+            corroborators: &[
+                "Do you trust the contents of this directory?",
+                "[a] Trust this workspace",
+                "[q] Quit",
+            ],
+        }],
+        actions: &[
+            NoticeActionSpec {
+                id: "trustDirectory",
+                label: "Trust this workspace",
+                kind: SessionChatTerminalNoticeActionKind::SendKeys,
+                send: Some("a"),
+            },
+            OPEN_TERMINAL,
         ],
-    }],
-    actions: &[
-        NoticeActionSpec {
-            id: "trustDirectory",
-            label: "Trust this workspace",
-            kind: SessionChatTerminalNoticeActionKind::SendKeys,
-            send: Some("a"),
-        },
-        OPEN_TERMINAL,
-    ],
-    quote_evidence: false,
-}];
+        quote_evidence: false,
+    },
+    // A cancelled or failed sign-in exits to the shell (session_chat_cursor_login.rs reads the live sign-in screens).
+    NoticeRule {
+        kind: SESSION_CHAT_NOTICE_AGENT_EXITED,
+        severity: SessionChatTerminalNoticeSeverity::Warning,
+        title: "Cursor isn't signed in",
+        detail: "Cursor closed because it isn't signed in on this computer. Choose Sign in to start it again and sign in.",
+        blocks_input: true,
+        signatures: &[NoticeSignature {
+            scope: NoticeScope::Exit,
+            parts: &[NoticePart::Text(
+                "Authentication required to use Cursor Agent",
+            )],
+            corroborators: &[],
+        }],
+        actions: &[
+            NoticeActionSpec {
+                id: "restartAgent",
+                label: "Sign in",
+                kind: SessionChatTerminalNoticeActionKind::RestartAgent,
+                send: None,
+            },
+            OPEN_TERMINAL,
+        ],
+        quote_evidence: false,
+    },
+];
 
 // --- zcode ------------------------------------------------------------------
 

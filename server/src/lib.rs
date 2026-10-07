@@ -84,6 +84,8 @@ pub(crate) mod session_chat_codex_stats;
 pub mod session_chat_compacting;
 pub mod session_chat_composer;
 pub mod session_chat_cursor_blocking;
+pub mod session_chat_cursor_decision;
+pub mod session_chat_cursor_login;
 pub mod session_chat_cursor_mirror;
 pub mod session_chat_cursor_status;
 pub mod session_chat_decode_antigravity;

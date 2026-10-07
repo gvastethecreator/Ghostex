@@ -305,6 +305,11 @@ pub fn classify_session_chat_terminal_notice(
             crate::session_chat_codex_lock::notice().with_screen_tail(screen.screen_tail()),
         );
     }
+    if agent == SessionChatOptionAgent::Cursor {
+        if let Some(notice) = crate::session_chat_cursor_login::detect_cursor_sign_in(screen_text) {
+            return Some(notice);
+        }
+    }
     if let Some(notice) =
         crate::session_chat_workspace_trust::detect_workspace_trust_prompt(agent, screen_text)
     {
@@ -428,6 +433,11 @@ pub fn classify_session_chat_terminal_notice(
         }
     }
     if agent == SessionChatOptionAgent::Cursor {
+        if let Some(notice) =
+            crate::session_chat_cursor_decision::detect_cursor_decision_notice(screen_text)
+        {
+            return Some(notice);
+        }
         if let Some(blocking) =
             crate::session_chat_cursor_blocking::detect_cursor_blocking_screen(screen_text)
         {
