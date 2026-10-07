@@ -149,11 +149,7 @@ pub(crate) fn gpui_remote_managed_gxserver_package_needs_update(
     else {
         return false;
     };
-    let Some(package_dir) = gpui_bundled_remote_gxserver_package_dir(&target) else {
-        return false;
-    };
-    let Some(expected_identity) =
-        gpui_bundled_remote_gxserver_build_identity(package_dir.as_path())
+    let Some(expected_identity) = gpui_bundled_remote_gxserver_package_build_identity(&target)
     else {
         return false;
     };
@@ -168,6 +164,21 @@ pub(crate) fn gpui_remote_managed_gxserver_package_needs_update(
     }
     gpui_extract_remote_managed_gxserver_build_identity(installed_identity.stdout.as_str())
         .is_some_and(|identity| identity != expected_identity)
+}
+
+/// The build identity of the package this app itself carries for `target`, in the order the install picks it.
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+fn gpui_bundled_remote_gxserver_package_build_identity(
+    target: &GpuiRemoteInstallTarget,
+) -> Option<String> {
+    if let Some(package_dir) = gpui_bundled_remote_gxserver_package_dir(target) {
+        return gpui_bundled_remote_gxserver_build_identity(package_dir.as_path());
+    }
+    #[cfg(target_os = "windows")]
+    if let Some(archive_path) = gpui_bundled_remote_gxserver_archive(target) {
+        return gpui_bundled_remote_gxserver_archive_build_identity(archive_path.as_path());
+    }
+    None
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
@@ -199,6 +210,14 @@ pub(crate) fn gpui_install_bundled_remote_gxserver_and_read_token(
             config,
             execution_target,
             package_dir.as_path(),
+        ));
+    }
+    #[cfg(target_os = "windows")]
+    if let Some(archive_path) = gpui_bundled_remote_gxserver_archive(&target) {
+        return Ok(gpui_install_gxserver_archive_and_read_token(
+            config,
+            execution_target,
+            archive_path.as_path(),
         ));
     }
     match gpui_on_demand_gxserver_archive(&target, progress_tx) {
