@@ -8582,6 +8582,10 @@
           "value": "ghostex-help"
         },
         {
+          "label": "Ghostex Visuals",
+          "value": "ghostex-visuals"
+        },
+        {
           "label": "Ghostex Computer Use",
           "value": "ghostex-computer-use"
         },

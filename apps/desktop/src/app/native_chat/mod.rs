@@ -86,6 +86,7 @@ mod transcript_host;
 mod transcript_layout;
 mod transcript_menu;
 mod transcript_reveal;
+mod visual;
 
 mod terminal_dialog;
 

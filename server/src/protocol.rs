@@ -832,6 +832,11 @@ pub fn endpoint_for(path: &str) -> Option<EndpointDescriptor> {
         */
         "/api/draftFeedback" | "/api/sendFeedback" => full_local(path),
         /*
+        CDXC:ServerApi 2026-10-06 WHY:
+        `ghostex show` publishes a page an agent on this computer wrote, so only the loopback listener accepts it; the remote listener must not let another machine store pages that this gxserver then serves.
+        */
+        "/api/publishVisualPage" => full_local(path),
+        /*
         CDXC:RemotePairing 2026-09-03:
         The only unauthenticated write endpoint. A phone registers its SSH key
         through the Easy Connect tunnel before it holds any gxserver credential,

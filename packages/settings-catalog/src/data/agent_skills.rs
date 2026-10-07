@@ -10,6 +10,9 @@ use crate::json::J;
 /// Bundle the Codex session-move guidance as its own installable skill so first
 /// launch and Settings can install it with the app's other agent-facing skills.
 ///
+/// CDXC:AgentSkills 2026-10-06 DECISION:
+/// User: agents make chat visuals "only when I mention the skill that can be installed to do this", so Ghostex Visuals is a bundled skill installed from Settings like the others and invoked by name ($ghostex-visuals), never on the agent's own initiative.
+///
 /// CDXC:ProjectBoard 2026-08-24:
 /// The Project Board beads skill shipped in the bundle with no way to install it,
 /// so agents never learned to put the session they are working in on the card.
@@ -29,6 +32,14 @@ pub const BUNDLED_GHOSTEX_AGENT_SKILLS: J = J::Arr(&[
         ("id", J::Str("help")),
         ("name", J::Str("Ghostex Help")),
         ("skillName", J::Str("ghostex-help")),
+        ("tier", J::Str("recommended")),
+    ]),
+    J::Obj(&[
+        ("command", J::Str("ghostex visual install-skill")),
+        ("description", J::Str("Let agents show charts, stats and tables right in the chat, and open HTML mockups from a card. Agents use it only when you call $ghostex-visuals.")),
+        ("id", J::Str("visuals")),
+        ("name", J::Str("Ghostex Visuals")),
+        ("skillName", J::Str("ghostex-visuals")),
         ("tier", J::Str("recommended")),
     ]),
     J::Obj(&[
@@ -133,6 +144,14 @@ pub const VISIBLE_BUNDLED_GHOSTEX_AGENT_SKILLS: J = J::Arr(&[
         ("id", J::Str("help")),
         ("name", J::Str("Ghostex Help")),
         ("skillName", J::Str("ghostex-help")),
+        ("tier", J::Str("recommended")),
+    ]),
+    J::Obj(&[
+        ("command", J::Str("ghostex visual install-skill")),
+        ("description", J::Str("Let agents show charts, stats and tables right in the chat, and open HTML mockups from a card. Agents use it only when you call $ghostex-visuals.")),
+        ("id", J::Str("visuals")),
+        ("name", J::Str("Ghostex Visuals")),
+        ("skillName", J::Str("ghostex-visuals")),
         ("tier", J::Str("recommended")),
     ]),
     J::Obj(&[

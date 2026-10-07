@@ -780,6 +780,19 @@ the desktop and mobile chats once the block is complete. Source switches to the
 diagram's text and Copy copies it. On desktop, the expand button opens a larger
 view you can zoom and pan. The web chat shows the diagram's source.
 
+Agents can show charts, tables, stat tiles, and short text layouts right in the
+chat, drawn in the chat's own colors on desktop, web, and mobile. For things a
+chart can't show, such as a UI mockup or a small interactive tool, the agent
+writes an HTML page and the chat shows a card whose Open button opens the page
+in the browser. Agents do this when you ask for `$ghostex-visuals` in your
+prompt; they never use it on their own. Install the skill from Settings >
+Integrations (Ghostex Visuals) or with `ghostex visual install-skill`. Pages
+open in a sandbox and can't reach your computer's files or Ghostex. Commands:
+`ghostex show <file.html>`
+publishes a page and prints the block that shows its card, and
+`ghostex visual check <file.json>` draws a chart block to an image so the agent
+can check it before replying.
+
 Use Cmd+P (Recent Sessions) to jump between chats across projects, or
 Cmd+[ and Cmd+] to go back and forward through visited sessions, the same keys
 Chrome uses (Ctrl+Alt+Shift+[ and Ctrl+Alt+Shift+] on Windows and Linux).
@@ -2068,7 +2081,8 @@ docs directory), `hideProjectHeaderDiffStats`,
   on (`openInTitlebarButtonHidden`).
 - Settings > Integrations installs the bundled agent skills (Ghostex CLI,
   Ghostex Help, Computer Use and Browser Use through Fast Computer & Browser
-  Use, SpaceO through SpaceO, Embedded Browser Use, Project Board Beads) and
+  Use, SpaceO through SpaceO, Embedded Browser Use, Project Board Beads,
+  Ghostex Visuals) and
   shows their install status; an installed skill's row shows the command you
   type to use it, such as `$ghostex-computer-use`. Skills are copied
   into the global skill folders every agent CLI reads. When the computer is

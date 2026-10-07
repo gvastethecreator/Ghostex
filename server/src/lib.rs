@@ -180,6 +180,7 @@ pub mod telemetry;
 pub mod terminal_ws;
 pub mod toolchain;
 pub mod typed_operations;
+pub(crate) mod visual_pages;
 pub mod workspace_groups;
 pub mod worktree_sessions;
 pub mod zmx;

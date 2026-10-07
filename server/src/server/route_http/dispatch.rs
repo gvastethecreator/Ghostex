@@ -53,6 +53,10 @@ pub(in crate::server) async fn route_http(
         return crate::file_links::serve(method, path, query, parts.headers, body).await;
     }
 
+    if method == Method::GET && path.starts_with(crate::visual_pages::VISUAL_PAGE_ROUTE_PREFIX) {
+        return crate::visual_pages::serve(state.paths.root_dir.clone(), path).await;
+    }
+
     let endpoint = endpoint_for(&path);
 
     /*

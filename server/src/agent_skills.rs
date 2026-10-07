@@ -30,6 +30,11 @@ pub const GHOSTEX_AGENT_SKILL_NAMES: &[&str] = &[
     through the same allow-list as the other bundled skills.
     */
     "ghostex-manage-beads",
+    /*
+    CDXC:AgentSkills 2026-10-06 DECISION:
+    User: the visuals skill is used "only when I mention the skill". `$ghostex-visuals` teaches the chat's ```visual blocks and `ghostex show` pages, and ships with `disable-model-invocation: true` and `allow_implicit_invocation: false` so an agent never picks it up on its own.
+    */
+    "ghostex-visuals",
 ];
 
 pub const GHOSTEX_SKILLS_CLI_AGENT_IDS: &[&str] = &[

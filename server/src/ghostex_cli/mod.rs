@@ -34,6 +34,8 @@ pub mod sessions;
 mod sessions_brief;
 pub mod settings;
 mod settings_hotkeys;
+mod show;
+mod visual;
 pub mod skills;
 pub mod tailcat;
 pub mod tailcat_tunnel;
@@ -100,6 +102,7 @@ const HELP_GATE_EXCLUDED: &[&str] = &[
     "guide",
     "manage-beads",
     "notify",
+    "visual",
     "h",
     "history",
     "move-codex-session",
@@ -332,6 +335,8 @@ fn is_known_command(name: &str) -> bool {
         "guide",
         "agent-sync",
         "notify",
+        "show",
+        "visual",
         "install-help-skill",
         "settings",
         "toggle-sidebar",
@@ -807,6 +812,8 @@ fn run_command(name: &str, args: &[String]) -> CliResult<()> {
         "bd" | "beads" => launchers::beads_command(args),
         "board" => board::board_command(args),
         "notify" => notify::notify_command(args),
+        "show" => show::show_command(args),
+        "visual" => visual::visual_command(args),
         "server" => server_command(args),
         "tailcat" => tailcat::tailcat_command(args),
         "web" => web::web_command(args),

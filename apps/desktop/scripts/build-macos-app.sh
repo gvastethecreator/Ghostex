@@ -184,6 +184,7 @@ bundled_cli_skill_assets=(
 	ghostex-auto-rename-session
 	ghostex-move-codex-session
 	ghostex-manage-beads
+	ghostex-visuals
 )
 
 validate_completion_sound_assets() {

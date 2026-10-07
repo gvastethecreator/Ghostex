@@ -96,7 +96,8 @@ printf '%s\n' \
   "$(test -f "$skills_root/ghostex-manage-beads/SKILL.md" && printf 1 || printf 0)" \
   "$(test -f "$skills_root/ghostex-auto-rename-session/SKILL.md" && printf 1 || printf 0)" \
   "$(test -f "$skills_root/ghostex-move-codex-session/SKILL.md" && printf 1 || printf 0)" \
-  "$(test -f "$skills_root/ghostex-help/SKILL.md" && printf 1 || printf 0)"
+  "$(test -f "$skills_root/ghostex-help/SKILL.md" && printf 1 || printf 0)" \
+  "$(test -f "$skills_root/ghostex-visuals/SKILL.md" && printf 1 || printf 0)"
 "#,
         posix_single_quote(&package_dir),
     );
@@ -122,6 +123,7 @@ printf '%s\n' \
         "ghostex-auto-rename-session",
         "ghostex-move-codex-session",
         "ghostex-help",
+        "ghostex-visuals",
     ];
     let mut skill_paths = Vec::with_capacity(skill_names.len());
     for skill_name in skill_names {
@@ -142,6 +144,7 @@ printf '%s\n' \
         generate_title_skill_path: skill_paths.next().flatten(),
         move_codex_session_skill_path: skill_paths.next().flatten(),
         help_skill_path: skill_paths.next().flatten(),
+        visuals_skill_path: skill_paths.next().flatten(),
         ghostex_path,
         gx_blocked_by_existing_command,
         gx_path,

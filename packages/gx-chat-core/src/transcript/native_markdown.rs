@@ -10,7 +10,8 @@
 //!   * a fenced block that names a file gets its header's label, icon, and open-file target
 //!     appended to the fence's info string;
 //!   * a GitHub alert quote (`> [!NOTE]`) becomes a marked, unquoted section;
-//!   * a finished ```mermaid fence is wrapped in marks, so the renderer draws the diagram;
+//!   * a finished ```mermaid fence is wrapped in marks, so the renderer draws the diagram, and a
+//!     finished ```visual (or ```vega-lite) fence likewise, so it draws the chart or page card;
 //!   * a picture written into prose becomes a marked token carrying its image source;
 //!   * a file reference written as inline code, or a path somebody typed into a prompt, becomes a
 //!     real Markdown link, so the native reference pill and the React file chip point at the same
@@ -48,6 +49,10 @@ pub const NATIVE_TABLE_CLOSE: &str = "\u{e000}/table";
 pub const NATIVE_IMAGE_OPEN: &str = "\u{e000}image:";
 pub const NATIVE_MERMAID_OPEN: &str = "\u{e000}mermaid";
 pub const NATIVE_MERMAID_CLOSE: &str = "\u{e000}/mermaid";
+/// A finished ```visual (or ```vega-lite) fence: the chat draws the block's chart, stats, table or
+/// page card in place of the code.
+pub const NATIVE_VISUAL_OPEN: &str = "\u{e000}visual";
+pub const NATIVE_VISUAL_CLOSE: &str = "\u{e000}/visual";
 
 /// What the native code-block header shows, as JSON on the fence's info string.
 fn fence_header(info: &str) -> Option<String> {
@@ -393,26 +398,32 @@ fn is_table_delimiter(line: &str) -> bool {
     at == line.len()
 }
 
-/// The line that closes a ```mermaid fence opened at `open`, when the fence is finished.
+/// The line that closes a drawn fence (```mermaid, or a ```visual block) opened at `open`, when
+/// the fence is finished, with the marks that wrap it.
 ///
 /// CDXC:SessionChat 2026-09-30 WHY: A fence still streaming stays an ordinary code block until its closing run arrives, as the React chat kept an unclosed diagram pending, so the renderer never tries to draw half a diagram on every streamed token. The marked section keeps the fence lines verbatim: the renderer draws the diagram from the lines between them and shows them as its source.
-fn closed_mermaid_fence(
+/// CDXC:SessionChat 2026-10-06 DECISION: User: agents show charts, stats and tables inline in the chat as a ```visual block (charts in a strict Vega-Lite subset), drawn natively by every client from the block's JSON with no JavaScript engine. The block is marked exactly as a Mermaid diagram is, so a half-streamed block stays code.
+fn closed_drawn_fence(
     lines: &[&str],
     open: usize,
     character: u8,
     run: usize,
     info: &str,
-) -> Option<usize> {
+) -> Option<(usize, &'static str, &'static str)> {
     let language = js_trim(info).split(is_js_space).next().unwrap_or_default();
-    if !language.eq_ignore_ascii_case("mermaid") {
+    let (open_mark, close_mark) = if language.eq_ignore_ascii_case("mermaid") {
+        (NATIVE_MERMAID_OPEN, NATIVE_MERMAID_CLOSE)
+    } else if ghostex_gx_visual::is_visual_language(language) {
+        (NATIVE_VISUAL_OPEN, NATIVE_VISUAL_CLOSE)
+    } else {
         return None;
-    }
+    };
     lines[open + 1..]
         .iter()
         .position(|line| {
             fence_close(line).is_some_and(|(closing, length)| closing == character && length >= run)
         })
-        .map(|offset| open + 1 + offset)
+        .map(|offset| (open + 1 + offset, open_mark, close_mark))
 }
 
 /// One pass over the lines: annotate fenced blocks, mark the pictures written into prose, and lift
@@ -438,10 +449,12 @@ fn mark_blocks(markdown: &str) -> String {
             continue;
         }
         if let Some((character, run, info)) = fence_open(line) {
-            if let Some(close) = closed_mermaid_fence(&lines, index, character, run, info) {
-                result.push(NATIVE_MERMAID_OPEN.to_string());
+            if let Some((close, open_mark, close_mark)) =
+                closed_drawn_fence(&lines, index, character, run, info)
+            {
+                result.push(open_mark.to_string());
                 result.extend(lines[index..=close].iter().map(|line| (*line).to_string()));
-                result.push(NATIVE_MERMAID_CLOSE.to_string());
+                result.push(close_mark.to_string());
                 index = close + 1;
                 continue;
             }

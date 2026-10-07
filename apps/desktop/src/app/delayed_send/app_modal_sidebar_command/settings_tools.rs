@@ -115,6 +115,12 @@ impl GhostexGpuiApp {
                     cx,
                 );
             }
+            "installVisualsSkill" => {
+                self.run_gpui_ghostex_cli_settings_action(
+                    GpuiGhostexCliSettingsAction::InstallVisualsSkill,
+                    cx,
+                );
+            }
             "installCuaDriverSkill" => {
                 self.run_gpui_ghostex_cli_settings_action(
                     GpuiGhostexCliSettingsAction::InstallCuaDriverSkill,
