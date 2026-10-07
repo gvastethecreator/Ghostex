@@ -187,7 +187,7 @@ fn start(
         "Set-Location -LiteralPath {} -ErrorAction Stop; $env:GHOSTEX_PROMPT_EDITOR_MACHINE_VISUAL=$env:VISUAL; $env:GHOSTEX_PROMPT_EDITOR_MACHINE_EDITOR=$env:EDITOR; $env:VISUAL={}; $env:EDITOR=$env:VISUAL; $env:GHOSTEX_PROMPT_EDITING_ENABLED='1'; {}",
         quote(cwd),
         quote(&editor),
-        startup.unwrap_or_default().trim_end_matches(['\r', '\n'])
+        agent_without_powershell7_modules(startup.unwrap_or_default().trim_end_matches(['\r', '\n']))
     );
     let startup = startup_from_environment(&startup, &mut environment);
     let launch = json!({"name": name, "cwd": cwd,
@@ -196,6 +196,20 @@ fn start(
     let encoded =
         STANDARD.encode(serde_json::to_vec(&launch).expect("serialize native session launch"));
     invocation(program, vec!["start-encoded".into(), encoded], environment)
+}
+
+/// Runs the agent's startup command with PowerShell 7's own module folder out of `PSModulePath`, then puts the shell's value back.
+///
+/// CDXC:PlatformSupport 2026-10-08 WHY:
+/// pwsh 7 writes its `$PSHOME\Modules` folder into `PSModulePath` and every child inherits it. A Windows PowerShell 5.1 child (`powershell.exe`) started by the agent itself, for example Codex's "Update" running `powershell -c 'irm https://chatgpt.com/codex/install.ps1 | iex'`, then loads that folder's Core-only `Microsoft.PowerShell.Utility` 7.0 before its own 3.1 and loses cmdlets such as Get-FileHash ("iex : The term 'Get-FileHash' is not recognized"). pwsh repairs the value only for 5.1 processes it starts itself, so the same command typed at the prompt worked. Reproduced from a Node parent in a wmx session: only the `$PSHOME\Modules` entry breaks 5.1; `Documents\PowerShell\Modules` and `Program Files\PowerShell\Modules` are harmless.
+/// The value cannot be fixed for the shell itself: with the entry removed, or merely moved behind the Windows PowerShell folders, pwsh 7 resolves PSReadLine 2.0 and loads Microsoft.PowerShell.Archive through the 5.1 compatibility session. So only the agent's command line loses it, and the shell's value returns when the agent exits. A child `pwsh` re-adds its own folder at startup, so agents that run pwsh tools are unaffected. The guard on `PSEdition` keeps this a no-op when the session shell is Windows PowerShell 5.1, where `$PSHOME\Modules` is 5.1's own folder.
+fn agent_without_powershell7_modules(command: &str) -> String {
+    if command.is_empty() {
+        return String::new();
+    }
+    format!(
+        "if ($PSVersionTable.PSEdition -eq 'Core') {{ $ghostexPsModulePath=$env:PSModulePath; $ghostexPwshModules=(Join-Path $PSHOME 'Modules').TrimEnd('\\'); $env:PSModulePath=(($env:PSModulePath -split ';') | Where-Object {{ $_ -and $_.TrimEnd('\\') -ne $ghostexPwshModules }}) -join ';' }}; try {{ {command}\n}} finally {{ if ($null -ne $ghostexPsModulePath) {{ $env:PSModulePath=$ghostexPsModulePath; Remove-Variable ghostexPsModulePath, ghostexPwshModules }} }}"
+    )
 }
 
 /// CDXC:PlatformSupport 2026-09-25 WHY:
