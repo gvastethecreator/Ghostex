@@ -1,20 +1,21 @@
-//! A coordinator's Threads panel, above the composer: one list of its threads, the working ones
-//! first, then the latest others, with the rest a click away.
+//! A coordinator's Threads panel, above the composer: one list of its threads, the working and the
+//! recently active ones, with the rest a click away.
 //!
 //! CDXC:Coordinators 2026-09-30 WHY:
 //! The panel shows a coordinator's threads without opening the sidebar, which the phone does not have. Order, labels and the fold are decided here once for the desktop, web and phone renderers; gxserver only sends each thread's state, activity time and one line of detail (`coordinatorThreads`).
 //!
-//! CDXC:Coordinators 2026-10-06 DECISION:
-//! The user, on the panel grouped Working / Finished / Sleeping / Done: "We need to simplify the sections here. I don't like sleeping, done, finished. User doesn't care about 'sleeping' or 'awake'. Also done and finished mean the same thing." Then: "I don't think 'Needs you' is an actual case, since threads just talk to the main agent in a coordinator; they never actually directly 'need me'." And: "Don't hide them. We show the last active few like we do now and I can click to see more in the threads component in the chat view." So there are no group headings: working threads first, then the 3 most recently active other threads (kept from the 2026-10-05 "show latest 3" decision, which this supersedes otherwise), then a "N more" row that lists every thread in place and folds them again. Every row still opens its thread, resolved ones included. The header says only how many work and how many threads there are. The rare thread blocked on something only the user can grant (a permission or folder-trust prompt) stays in the list right after the working ones with an amber "Needs your approval" tag instead of a group.
+//! CDXC:Coordinators 2026-10-07 DECISION:
+//! The user: "When I open the chat on mobile or on desktop, we're always expanding the threads in the coordinator sessions. Let's not do this. Also, please let's change it so that we don't show the top three done unless they are in the last 2 hours. By default, we should only show working. On the phone, showing working plus three finished ones is a bit much; the vertical space is not that much." The option they picked: the panel stays open as before, but lists only the working threads and those active in the last 2 hours (no fixed "3 most recent"), then "N more" for every other thread, closed ones included, and "Show fewer" folds them back; the header stays "2 working · 96 threads". The panel's own fold is remembered (`threadsCollapsed`), so a chat opens the way the user last left it rather than expanded every time. Still standing from the 2026-10-06 decisions it supersedes: no Finished / Sleeping / Done groups ("done and finished mean the same thing"), no "Needs you" group, every thread reachable ("Don't actually 'hide' them please"), and the rare thread blocked on something only the user can grant (a permission or folder-trust prompt) listed right after the working ones with an amber "Needs your approval" tag. The sidebar applies the same two hours (packages/gx-core/src/sidebar_view/threads.rs).
 //!
-//! CDXC:Coordinators 2026-10-06 WHY:
-//! gxserver's frames carry only a summary (working, needs approval, the 3 most recent others, the total and a revision), because the whole list was ~30KB on every state frame. "N more" reads the full list once (`readCoordinatorThreads`), keeps it while the list is open, reads it again when a frame brings a new revision, and drops it when the list folds. Until the read answers, the summary rows stay listed.
+//! CDXC:Coordinators 2026-10-07 WHY:
+//! gxserver's frames carry only a summary (the rows listed by default, each `recent` one marked by gxserver, the total and a revision), because the whole list was ~30KB on every state frame. "N more" reads the full list once (`readCoordinatorThreads`), keeps it while the list is open, reads it again when a frame brings a new revision, and drops it when the list folds. Until the read answers, the summary rows stay listed.
 //! SEE-ALSO: server/src/coordinators/panel.rs (the field, the summary and the read), apps/desktop/src/app/native_chat/coordinator_threads.rs and apps/mobile/app/src/chat/native/cards/AgentPanels.tsx (the renderers), packages/gx-core/src/sidebar_view/threads.rs (the sidebar's two-hour rule).
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::effect::Effect;
+use crate::event::StorageKey;
 use crate::state::PanelsState;
 use crate::wire::ChatRpcMethod;
 
@@ -32,6 +33,9 @@ pub struct CoordinatorThreadRow {
     pub working: bool,
     /// Blocked on something only the user can grant; drawn with the amber tag.
     pub needs_approval: bool,
+    /// Active in the last two hours, as gxserver judged it; listed without "N more".
+    #[serde(skip)]
+    pub recent: bool,
     /// The worktree branch, when it has one.
     pub branch: String,
     pub lifecycle_state: String,
@@ -55,9 +59,23 @@ pub struct CoordinatorThreadsPanel {
 /// The tag a row blocked on the user carries.
 pub const NEEDS_APPROVAL_LABEL: &str = "Needs your approval";
 
-/// Threads that neither work nor need approval listed before the rest fold behind `more_label`.
-/// gxserver's summary carries exactly this many (`SUMMARY_OTHER_ROWS` in its `panel.rs`).
-const OTHER_ROWS_SHOWN: usize = 3;
+/// The store and key the panel's fold is remembered under: a preference like the task panel's,
+/// not per-session view state.
+pub fn threads_collapsed_key() -> StorageKey {
+    StorageKey {
+        store: "threadsCollapsed".to_string(),
+        suffix: String::new(),
+    }
+}
+
+/// `'1'` when folded, a delete when not.
+pub fn write_threads_collapsed(collapsed: bool) -> Effect {
+    Effect::WriteStorage {
+        key: threads_collapsed_key(),
+        value: collapsed.then(|| "1".to_string()),
+        durable: false,
+    }
+}
 
 fn text(value: &Value, key: &str) -> String {
     value
@@ -150,6 +168,7 @@ fn parse_rows(rows: Option<&Value>) -> Vec<(String, CoordinatorThreadRow)> {
                     detail: text(row, "detail"),
                     working,
                     needs_approval: !working && row.get("needsApproval") == Some(&Value::Bool(true)),
+                    recent: row.get("recent") == Some(&Value::Bool(true)),
                     branch: text(row, "branch"),
                     lifecycle_state: text(row, "lifecycleState"),
                 },
@@ -183,6 +202,7 @@ pub fn coordinator_threads_panel(
         return None;
     }
     // Working, then blocked on the user, then the rest; each newest first (ISO times sort as text).
+    // The summary holds exactly the rows listed by default; the full list holds every thread.
     let rank = |row: &CoordinatorThreadRow| match (row.working, row.needs_approval) {
         (true, _) => 0,
         (false, true) => 1,
@@ -195,8 +215,11 @@ pub fn coordinator_threads_panel(
     });
     let working = rows.iter().filter(|(_, row)| row.working).count();
     let approval = rows.iter().filter(|(_, row)| row.needs_approval).count();
-    let pinned = working + approval;
-    let hidden = total.saturating_sub(pinned + OTHER_ROWS_SHOWN);
+    let listed = rows
+        .iter()
+        .filter(|(_, row)| row.working || row.needs_approval || row.recent)
+        .count();
+    let hidden = total.saturating_sub(listed);
     let mut meta = Vec::new();
     if working > 0 {
         meta.push(format!("{working} working"));
@@ -208,7 +231,7 @@ pub fn coordinator_threads_panel(
     let rows: Vec<CoordinatorThreadRow> = rows
         .into_iter()
         .map(|(_, row)| row)
-        .take(if show_all { total } else { total - hidden })
+        .filter(|row| show_all || row.working || row.needs_approval || row.recent)
         .collect();
     Some(CoordinatorThreadsPanel {
         meta: meta.join(" \u{b7} "),

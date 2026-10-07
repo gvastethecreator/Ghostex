@@ -71,7 +71,8 @@ pub struct PanelsState {
     pub tasks_show_completed: bool,
     /// The task list length the fold was last reset against; `-1` before the first projection.
     pub task_signature: i64,
-    /// A coordinator's Threads panel is folded to its header.
+    /// A coordinator's Threads panel is folded to its header; remembered across chats
+    /// (`threadsCollapsed`).
     pub threads_collapsed: bool,
     /// Every thread is listed, not only the working ones and the latest few.
     pub threads_show_all: bool,

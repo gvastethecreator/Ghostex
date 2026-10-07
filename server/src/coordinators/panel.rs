@@ -5,9 +5,9 @@
 //! Claude puts an Overview of the threads beside the conversation; Ghostex puts a Threads panel above the coordinator's composer, next to the Subagents and Tasks panels, so it also reaches the web build and the phone (which has no sidebar tree). The supervisor refreshes this cache every tick and republishes the coordinator's chat state when it changed; the frame builders only read the cache, because they run under the stream's emit lock and must not touch the database. Absent on a frame means unchanged (like `appCommands`), so a builder that leaves it out can never blank the panel.
 //! SEE-ALSO: server/src/server/coordinator_runtime.rs (refresh and republish), server/src/session_chat_follower/frames.rs and session_chat_read.rs (carry it), packages/gx-chat-core/src/extras/coordinator_threads.rs (the panel).
 //!
-//! CDXC:Coordinators 2026-10-06 WHY:
-//! A frame carries only a summary: the working threads, the ones that need the user's approval, the 3 most recently active others, the total and a `revision` of the full list. With ~95 threads the whole list was ~30KB on every chat state frame. The full list, resolved threads included, is read once when the user opens the panel's "N more" row (`/api/readCoordinatorThreads`), and read again when the revision moves while it stays open, so every thread stays reachable (the user: "Don't actually 'hide' them please").
-//! SEE-ALSO: packages/gx-chat-core/src/extras/coordinator_threads.rs (`OTHER_ROWS_SHOWN`, which `SUMMARY_OTHER_ROWS` must match, and the read).
+//! CDXC:Coordinators 2026-10-07 WHY:
+//! A frame carries only a summary: the threads the panel lists by default (working, needing the user's approval, or `recent`: active in the last two hours, the user's 2026-10-07 decision in the core), the total and a `revision` of the full list. With ~95 threads the whole list was ~30KB on every chat state frame. The full list, resolved threads included, is read once when the user opens the panel's "N more" row (`/api/readCoordinatorThreads`), and read again when the revision moves while it stays open, so every thread stays reachable. The two-hour boundary is decided here on every tick, so a thread ageing out changes the summary and republishes it.
+//! SEE-ALSO: packages/gx-chat-core/src/extras/coordinator_threads.rs (the panel and the read), packages/gx-core/src/sidebar_view/threads.rs (`RECENT_THREAD_MS`, the sidebar's same two hours).
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
@@ -26,8 +26,14 @@ use super::state::{
 use crate::domain::DomainRepository;
 use crate::presentation::now_iso;
 
-/// Threads that neither work nor need approval a frame's summary carries, newest first.
-const SUMMARY_OTHER_ROWS: usize = 3;
+/// How long after its last activity a thread that neither works nor waits is still listed.
+const RECENT_THREAD_MS: i64 = 2 * 60 * 60 * 1000;
+
+fn is_recent(active_at: &str, now: chrono::DateTime<chrono::Utc>) -> bool {
+    chrono::DateTime::parse_from_rfc3339(active_at).is_ok_and(|at| {
+        now.signed_duration_since(at).num_milliseconds() < RECENT_THREAD_MS
+    })
+}
 
 /// One coordinator's cached panel: what frames carry, and what "N more" reads.
 #[derive(PartialEq)]
@@ -64,9 +70,11 @@ fn cached_panel(mut threads: Vec<Value>) -> CachedPanel {
     serde_json::to_string(&threads)
         .unwrap_or_default()
         .hash(&mut hasher);
-    let pinned = threads.iter().filter(|row| panel_rank(row) < 2).count();
     let summary = json!({
-        "threads": threads.iter().take(pinned + SUMMARY_OTHER_ROWS).collect::<Vec<_>>(),
+        "threads": threads
+            .iter()
+            .filter(|row| panel_rank(row) < 2 || row["recent"] == true)
+            .collect::<Vec<_>>(),
         "total": threads.len(),
         "revision": format!("{:016x}", hasher.finish()),
     });
@@ -112,6 +120,7 @@ pub fn refresh_coordinator_panels(
     };
     let threads = list_threads(db).unwrap_or_default();
     let generated_at = now_iso();
+    let now = chrono::Utc::now();
     let mut next: HashMap<SessionKey, CachedPanel> = HashMap::new();
     for coordinator in coordinators {
         let key = coordinator.key();
@@ -167,6 +176,9 @@ pub fn refresh_coordinator_panels(
                 "detail": detail,
                 "activeAt": active_at,
             });
+            if is_recent(&active_at, now) {
+                row["recent"] = json!(true);
+            }
             if state == ThreadState::Waiting
                 && session.as_ref().is_some_and(thread_needs_user_approval)
             {

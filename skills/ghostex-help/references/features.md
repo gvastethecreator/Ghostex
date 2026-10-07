@@ -1532,7 +1532,9 @@ version of the Projects features in Cursor and Claude Code.
   "N older threads" row at the end, which lists them all (and "Hide older
   threads" tucks them away again; both remembered across restarts). The chevron
   that replaces the crown when you hover the coordinator folds its threads away
-  and back, and a folded coordinator keeps its number and colour. Click a thread to watch it or
+  and back, and a folded coordinator keeps its number and colour. Opening a
+  coordinator's chat leaves both as you set them; opening one of its threads
+  unfolds the coordinator so the thread shows. Click a thread to watch it or
   talk to it directly; answer its questions and approvals there. A thread keeps
   the name its coordinator gave it, like the coordinator keeps its own (Rename in
   the sidebar still changes it). Pinning the
@@ -1548,13 +1550,15 @@ version of the Projects features in Cursor and Claude Code.
   everything it knew. Ask the coordinator to keep a thread open if you want to
   look at it.
 - **Threads panel in the chat**: above the coordinator's message box, the
-  Threads panel lists the working threads first, then the three most recently
-  active others, each with one line (what it is doing or how its last report
-  began) and its branch; "N more" lists every thread, closed ones included, and
-  "Show fewer" folds them again. Tap or click any thread to open it and talk to
-  it. A thread stuck on something only you can allow (a permission prompt or a
-  folder-trust question) carries an amber "Needs your approval" tag. It shows on
-  the phone and in the browser too.
+  Threads panel lists the working threads first, then the ones active in the
+  last 2 hours, each with one line (what it is doing or how its last report
+  began) and its branch; "N more" lists every other thread, closed ones
+  included, and "Show fewer" folds them again. Tap or click any thread to open
+  it and talk to it. A thread stuck on something only you can allow (a
+  permission prompt or a folder-trust question) carries an amber "Needs your
+  approval" tag. Fold the panel with its header and it stays folded the next
+  time you open a coordinator's chat. It shows on the phone and in the browser
+  too.
 - **Reports come back by themselves**: when a thread finishes a turn, Ghostex
   sends its final message to the coordinator (a "Message from" card in its
   chat); when a thread waits on a question, an approval, or a screen such as

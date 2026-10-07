@@ -39,8 +39,9 @@ pub fn handle_with_ids(
             Vec::new()
         }
         ActionKind::ToggleCoordinatorThreads => {
-            state.extras.panels.threads_collapsed = !flag(action, "open");
-            Vec::new()
+            let collapsed = !flag(action, "open");
+            state.extras.panels.threads_collapsed = collapsed;
+            vec![crate::extras::coordinator_threads::write_threads_collapsed(collapsed)]
         }
         ActionKind::ToggleCoordinatorThreadsMore => {
             let panels = &mut state.extras.panels;

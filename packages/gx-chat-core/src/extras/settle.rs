@@ -106,6 +106,13 @@ fn settle_with_ids(
                 state.core.request_render();
             }
         }
+        // The Threads panel's remembered fold, read once when the chat starts.
+        Event::Start(_) => effects.push(Effect::ReadStorage {
+            key: coordinator_threads::threads_collapsed_key(),
+        }),
+        Event::StorageLoaded { key, value } if *key == coordinator_threads::threads_collapsed_key() => {
+            state.extras.panels.threads_collapsed = value.as_deref() == Some("1");
+        }
         _ => {}
     }
     // The open "N more" list follows the threads: a new revision on a frame reads it again.

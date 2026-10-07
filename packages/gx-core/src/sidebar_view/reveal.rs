@@ -68,8 +68,6 @@ pub struct SidebarRevealPlan {
     pub collapsed_group: bool,
     /// The folded coordinators above the row, by sidebar row id.
     pub collapsed_coordinators: Vec<String>,
-    /// The coordinators above the row whose older threads have to be listed, by sidebar row id.
-    pub older_threads_of: Vec<String>,
     /// The group or its collection is hidden and Show Hidden is off.
     pub show_hidden: bool,
     /// The ticked tag filters leave the row out.
@@ -134,17 +132,6 @@ impl SidebarRevealPlan {
             intents.push(SidebarUiIntent::ToggleCoordinatorCollapsed {
                 sidebar_session_id: sidebar_session_id.clone(),
             });
-        }
-        for sidebar_session_id in &self.older_threads_of {
-            if !ui
-                .collapse
-                .expanded_coordinator_older_threads
-                .contains(sidebar_session_id)
-            {
-                intents.push(SidebarUiIntent::ToggleCoordinatorOlderThreads {
-                    sidebar_session_id: sidebar_session_id.clone(),
-                });
-            }
         }
         if self.expand_list
             && !ui
@@ -228,7 +215,6 @@ pub fn reveal_plan(
             .collapsed_groups
             .contains(&found.group_id),
         collapsed_coordinators: found.folded_by.clone(),
-        older_threads_of: found.older_of.clone(),
         collapsed_collection_storage_id: collection_storage_id.clone().filter(|storage_id| {
             inputs
                 .ui
@@ -311,6 +297,7 @@ pub fn reveal_plan(
             .collapsed_coordinators
             .remove(sidebar_session_id);
     }
+    // CDXC:Coordinators 2026-10-07 WHY: a reveal never lists a coordinator's older threads; only the user's click on its "N older threads" row does (the user's 2026-10-07 decision in packages/gx-chat-core/src/extras/coordinator_threads.rs). The thread being opened is focused, and a focused thread is listed however old it is (`nest_threads`), so the probe only lists it to judge the compact cut the way the list will draw it.
     for sidebar_session_id in &found.older_of {
         probe
             .ui

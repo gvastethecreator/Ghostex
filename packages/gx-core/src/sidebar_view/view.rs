@@ -274,7 +274,7 @@ impl RowNesting {
     /// The coordinator row's badge.
     ///
     /// CDXC:Coordinators 2026-10-04 DECISION:
-    /// User: "in this state the main coordinator should show 2 working not 5" (5 threads, 2 working). The badge is the crew icon and one number: how many threads are working; when none work, how many wait on the user; when neither, how many threads the coordinator lists by default (working, waiting or active in the last two hours, worktree threads included; the 2026-10-06 rule in `sidebar_view/threads.rs`), so the number matches the rows under it. The tint follows the number: orange when it is the working count, light blue when it is the waiting count, neutral otherwise. Supersedes the 2026-10-01 decision ("make it just show the people icon and the total number of sessions that are part of this one"), which always showed the total.
+    /// User: "in this state the main coordinator should show 2 working not 5" (5 threads, 2 working). The badge is the crew icon and one number: how many threads are working; when none work, how many wait on the user; when neither, how many threads the coordinator lists by default (working, waiting or active in the last two hours, worktree threads included; the two-hour rule in `sidebar_view/threads.rs`), so the number matches the rows under it. The tint follows the number: orange when it is the working count, light blue when it is the waiting count, neutral otherwise. Supersedes the 2026-10-01 decision ("make it just show the people icon and the total number of sessions that are part of this one"), which always showed the total.
     pub fn coordinator_badge(&self) -> CoordinatorBadge {
         let threads = self.threads;
         CoordinatorBadge {
