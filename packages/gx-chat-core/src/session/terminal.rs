@@ -30,6 +30,8 @@ use crate::state::{ChatContext, ChatState, TerminalStream};
 const CLAUDE_TERMINAL_STATUS_KIND: &str = "claude-status";
 const CLAUDE_TERMINAL_TOOL_KIND: &str = "claude-tool";
 const AGENT_TERMINAL_STREAM_KIND: &str = "agent-stream";
+/// gxserver's `SESSION_CHAT_ACTIVITY_SHELL_COMMAND`: a `!` command still running.
+const SHELL_COMMAND_KIND: &str = "shell-command";
 const TERMINAL_STATUS_ID_PREFIX: &str = "terminal-status:";
 const TERMINAL_TOOL_ID_PREFIX: &str = "terminal-tool:";
 
@@ -422,6 +424,16 @@ pub fn apply_terminal_activity(
     activity: Option<&Value>,
     context: &ChatContext,
 ) {
+    // A running `!` command is drawn as its Shell card (`composition.rs`), not in the working strip.
+    let shell = activity.filter(|activity| kind(activity) == SHELL_COMMAND_KIND);
+    state.pending.terminal_shell = shell.cloned();
+    if shell.is_some() {
+        clear_tool_hold(state);
+        state.pending.terminal_tool = None;
+        hold_stream(state);
+        state.session.terminal_activity = None;
+        return;
+    }
     if let Some(activity) = activity {
         let summary_text = field(activity, "text").unwrap_or_else(|| label(activity));
         if matches!(

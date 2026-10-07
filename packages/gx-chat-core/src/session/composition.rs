@@ -192,6 +192,7 @@ pub struct ComposeKey {
     pub visible_tool: Option<ChatMessage>,
     pub queue: Option<Vec<serde_json::Value>>,
     pub app_commands: Vec<serde_json::Value>,
+    pub shell: Option<serde_json::Value>,
 }
 
 /// Rebuilds `state.messages.boundaried` when the transcript or the markers changed, and keeps it
@@ -230,6 +231,7 @@ pub fn compose_cached(
         visible_tool: visible_terminal_tool(state, working).cloned(),
         queue: state.session.queue_prompts.clone(),
         app_commands: state.session.app_commands.clone(),
+        shell: state.pending.terminal_shell.clone(),
     };
     if state.messages.compose_key.as_ref() == Some(&key) {
         return;
@@ -277,8 +279,11 @@ pub fn compose(
     let startup_pending =
         pending_with_startup_sends(&state.pending.sends, &queue, state.session.agent.as_deref());
     let against = pending_transcript(state, &boundaried);
-    let pending_messages =
-        pending_sends_as_messages(&visible_pending_sends(&startup_pending, &against));
+    let pending_messages = crate::transcript::local_command::with_live_shell_output(
+        pending_sends_as_messages(&visible_pending_sends(&startup_pending, &against)),
+        state.pending.terminal_shell.as_ref(),
+        &boundaried,
+    );
     let transcript = reconcile_local_command_output(&boundaried, &state.session.app_commands);
 
     // A marker whose text an authoritative user row already carries is the same fact twice.

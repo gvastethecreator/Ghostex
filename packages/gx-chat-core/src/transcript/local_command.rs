@@ -204,3 +204,89 @@ pub fn fold_shell_commands(messages: &[ChatMessage]) -> Vec<ChatMessage> {
     }
     folded
 }
+
+/// How far before gxserver's estimate of a running command's start its recorded row may be stamped
+/// and still be the same run: the probe's clock and the CLI's clock disagree a little.
+const LIVE_SHELL_START_SLACK_MS: i64 = 10_000;
+
+/// The running Shell card, with what the terminal shows of the command's output so far.
+///
+/// `activity` is gxserver's `shell-command` screen activity. Claude runs one `!` command at a time,
+/// so the output belongs to the newest pending `!` echo; a command typed straight into the terminal
+/// has no echo and gets its own running card, until the transcript records a `!` row for that run.
+/// Either way the recorded card replaces it once the command ends, and the output never shows twice.
+pub fn with_live_shell_output(
+    mut pending: Vec<ChatMessage>,
+    activity: Option<&serde_json::Value>,
+    transcript: &[ChatMessage],
+) -> Vec<ChatMessage> {
+    let Some(activity) = activity else {
+        return pending;
+    };
+    let field = |key: &str| activity.get(key).and_then(serde_json::Value::as_str);
+    let command = field("label").unwrap_or_default().trim();
+    if command.is_empty() {
+        return pending;
+    }
+    let output = field("detail").unwrap_or_default().to_string();
+    if let Some(index) = pending.iter().rposition(is_shell_command_message) {
+        let echo_command = match pending[index].blocks.first() {
+            Some(ChatBlock::ToolCall { input, .. }) => input
+                .get("command")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(command)
+                .to_string(),
+            _ => command.to_string(),
+        };
+        pending[index] =
+            shell_command_message(&pending[index], &echo_command, Some((output, false)));
+        return pending;
+    }
+    let detected_at = field("detectedAt").unwrap_or_default();
+    let elapsed_ms = activity
+        .get("elapsedSeconds")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or(0)
+        * 1000;
+    let started_at = crate::session::startup_sends::parse_iso_ms(Some(detected_at))
+        .map(|detected| detected - elapsed_ms);
+    let recorded = transcript.iter().any(|message| {
+        shell_command_prompt_text(message).is_some()
+            && match (message.timestamp, started_at) {
+                (Some(stamp), Some(started)) => stamp >= started - LIVE_SHELL_START_SLACK_MS,
+                _ => false,
+            }
+    });
+    if recorded {
+        return pending;
+    }
+    let template = ChatMessage {
+        id: format!("terminal-shell:{detected_at}"),
+        role: ChatRole::User,
+        blocks: Vec::new(),
+        async_questions: None,
+        timestamp: started_at,
+        source: ChatSource::Hook,
+        turn_id: None,
+        byte_offset: None,
+        queued: false,
+        deferred_work: None,
+        startup_delivery: None,
+    };
+    pending.push(shell_command_message(
+        &template,
+        command,
+        Some((output, false)),
+    ));
+    pending
+}
+
+/// A `!` card still running with output to show: its detail stays open while the output arrives.
+pub fn is_live_shell_command_message(message: &ChatMessage) -> bool {
+    is_shell_command_message(message)
+        && message.source != ChatSource::Transcript
+        && message
+            .blocks
+            .iter()
+            .any(|block| matches!(block, ChatBlock::ToolResult { .. }))
+}

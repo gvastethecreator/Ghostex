@@ -279,6 +279,11 @@ pub fn project_message(
         "shellCommand".to_string(),
         crate::transcript::local_command::is_shell_command_message(message).into(),
     );
+    // Its output is still arriving from the terminal: the card stays open on it.
+    projected.insert(
+        "shellCommandLive".to_string(),
+        crate::transcript::local_command::is_live_shell_command_message(message).into(),
+    );
     Value::Object(projected)
 }
 

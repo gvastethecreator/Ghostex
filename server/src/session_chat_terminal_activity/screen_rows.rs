@@ -136,7 +136,7 @@ pub(super) const CLAUDE_STATUS_CONTINUATION_MAX_INDENT: usize = 8;
 
 /// Claude's tool-output gutter. It is indented like a continuation row but
 /// starts the tool block, so it ends the status text.
-const CLAUDE_TOOL_OUTPUT_MARKER: char = '⎿';
+pub(super) const CLAUDE_TOOL_OUTPUT_MARKER: char = '⎿';
 
 /// Rows of a tool block carried as the activity's detail. Claude itself
 /// collapses long blocks, so this only bounds a fully expanded one.
@@ -385,6 +385,9 @@ pub fn detect_session_chat_terminal_activity_styled(
     let lines: Vec<String> = rows.iter().map(|row| row.text.clone()).collect();
     if let Some(start) = crate::session_chat_agent_fleet::agent_fleet_block_start(&lines) {
         rows.truncate(start);
+    }
+    if let Some(activity) = claude_shell_command_activity(&rows) {
+        return Some(activity);
     }
     // Newest match wins: a screen can still hold the tail of a previous run.
     // The whole capture is scanned, not a bottom window: a message Claude is

@@ -178,8 +178,13 @@ impl NativeChatView {
         let tools = message["tools"].as_array().cloned().unwrap_or_default();
         let mut appearance = p.clone();
         appearance.simple = false;
-        let indices: Vec<usize> = (0..tools.len()).collect();
-        let rows = self.tool_row_list(&id, &tools, &indices, &appearance, cx);
+        // While the command runs, its output streams in from the terminal and the card stays open on it.
+        let live = message["shellCommandLive"] == true;
+        let rows: Vec<AnyElement> = tools
+            .iter()
+            .enumerate()
+            .map(|(index, tool)| self.tool_row(&id, index, tool, live, &appearance, cx))
+            .collect();
         div()
             .flex()
             .flex_col()
@@ -237,7 +242,7 @@ impl NativeChatView {
     ) -> Vec<AnyElement> {
         indices
             .iter()
-            .map(|index| self.tool_row(id, *index, &tools[*index], p, cx))
+            .map(|index| self.tool_row(id, *index, &tools[*index], false, p, cx))
             .collect()
     }
 
@@ -292,12 +297,13 @@ impl NativeChatView {
         message_id: &str,
         index: usize,
         tool: &Value,
+        always_open: bool,
         p: &ChatAppearance,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let s = p.scale;
         let key = format!("tool:{message_id}:{index}");
-        let expanded = self.expanded.contains(&key);
+        let expanded = always_open || self.expanded.contains(&key);
         let has_detail = tool["hasDetail"] == true;
         let motion = self.disclosure_frame(&key, expanded && has_detail, cx);
         let failed = tool["failed"] == true;

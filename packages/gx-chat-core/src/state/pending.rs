@@ -24,6 +24,9 @@ pub struct PendingState {
     pub terminal_tool: Option<ChatMessage>,
     /// When the hold expires, or `None` when no hold is armed.
     pub terminal_tool_hold_until_ms: Option<f64>,
+    /// gxserver's `shell-command` activity: a `!` command still running, with the output the
+    /// terminal shows so far. It feeds the running Shell card.
+    pub terminal_shell: Option<serde_json::Value>,
     /// The counter behind a pending send's id. Monotonic, never reused, so the ids are
     /// deterministic and the core needs no random source.
     pub send_counter: u64,
