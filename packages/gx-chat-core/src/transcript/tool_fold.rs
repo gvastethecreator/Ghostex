@@ -79,7 +79,9 @@ pub fn fold_tool_messages(
             continue;
         }
         let anchor_role = anchor_index.map(|index| output[index].role.clone());
+        // A `!` shell command is the user's own turn drawn as a tool card, never the agent's work.
         if is_tool_only_message(message)
+            && message.role != ChatRole::User
             && matches!(
                 anchor_role,
                 Some(ChatRole::Assistant) | Some(ChatRole::Reasoning)

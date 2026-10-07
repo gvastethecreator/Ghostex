@@ -52,6 +52,9 @@ pub struct PendingSend {
     /// The agent was already mid-response, so the prompt sits in the agent's own queue rather than
     /// starting a turn. The echo carries `queued` then, matching the server's own queued row.
     pub sent_while_working: bool,
+    /// A `!` shell command for an agent that records one as a shell row: the echo draws as that
+    /// row's tool card, still running, so the swap to the recorded card is invisible.
+    pub shell_command: bool,
 }
 
 /// A command Ghostex typed into the agent, shown as its own row until the transcript covers it.

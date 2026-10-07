@@ -349,6 +349,11 @@ impl NativeChatView {
                 .child(self.terminal_tool_row(&activity, p, cx))
                 .into_any_element();
         }
+        if message["shellCommand"] == true {
+            return row
+                .child(self.shell_command_card(message, p, cx))
+                .into_any_element();
+        }
         if message["role"] == "user" && message["suppressed"].is_null() {
             // The prompt renders as markdown like the React bubble, which also makes it a selectable TextView; a plain string child cannot be selected.
             let mut bubble_appearance = p.clone();

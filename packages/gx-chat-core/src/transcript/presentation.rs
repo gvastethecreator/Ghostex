@@ -274,6 +274,11 @@ pub fn project_message(
             Value::Null
         },
     );
+    // A `!` command the user ran: drawn as its tool card where the user's message sits.
+    projected.insert(
+        "shellCommand".to_string(),
+        crate::transcript::local_command::is_shell_command_message(message).into(),
+    );
     Value::Object(projected)
 }
 

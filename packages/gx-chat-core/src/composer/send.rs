@@ -509,6 +509,9 @@ fn draw_agent_send(
         SendClassification::Chat if !text.trim().is_empty() || !image_paths.is_empty() => {
             pending_id = Some(sends::begin_send(state, context, text, image_paths));
         }
+        SendClassification::LocalCommand if image_paths.is_empty() => {
+            pending_id = Some(sends::begin_shell_command_send(state, context, text));
+        }
         SendClassification::Command => {
             let sent_at = sends::begin_command_marker(state, context, text);
             marker = Some((

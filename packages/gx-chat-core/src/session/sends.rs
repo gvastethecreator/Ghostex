@@ -61,6 +61,7 @@ pub fn begin_send(
         matching_occurrence: None,
         matching_after_timestamp: None,
         sent_while_working: working,
+        shell_command: false,
     };
     let entry = assign_occurrence(&state.pending.sends, entry);
     state.pending.sends.push(entry);
@@ -69,6 +70,27 @@ pub fn begin_send(
             .pending
             .sends
             .split_off(state.pending.sends.len() - PENDING_SEND_LIMIT);
+    }
+    id
+}
+
+/// A `!` shell line's echo. Claude and Codex record the command as a shell row (folded into the
+/// tool card by `fold_shell_commands`), so their echo is drawn as that card, still running: Claude
+/// writes the row only once the command has finished, and an interactive `! aws login` would
+/// otherwise show nothing at all while it waits. Other agents record the line as a plain prompt,
+/// which the plain echo already matches.
+pub fn begin_shell_command_send(
+    state: &mut ChatState,
+    context: &ChatContext,
+    text: &str,
+) -> String {
+    let id = begin_send(state, context, text, &[]);
+    let records_shell_rows = matches!(
+        crate::extras::agents::transcript_agent([state.session.agent.as_deref(), None]),
+        Some("claude" | "codex")
+    );
+    if let Some(entry) = state.pending.sends.iter_mut().find(|entry| entry.id == id) {
+        entry.shell_command = records_shell_rows;
     }
     id
 }

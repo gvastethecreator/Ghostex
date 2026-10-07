@@ -13,7 +13,8 @@ use crate::app::native_chat::cursor::ChatCursor as _;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
     AnyElement, ClipboardItem, Context, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, StyleRefinement, Styled as _, div, px,
+    SharedString, StatefulInteractiveElement as _, StyleRefinement, Styled as _, StyledText, div,
+    px,
 };
 use gpui_component::text::{TextView, TextViewStyle};
 use serde_json::Value;
@@ -163,6 +164,69 @@ impl NativeChatView {
         rows
     }
 
+    /// A `!` command the user ran (`shellCommand`, gx-chat-core's `fold_shell_commands`): its one
+    /// tool row, opening onto the Command and Result blocks, in the user's bubble. The command
+    /// shows in simple mode too, since it is what the user typed.
+    pub(super) fn shell_command_card(
+        &mut self,
+        message: &Value,
+        p: &ChatAppearance,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let s = p.scale;
+        let id = text(message, "id");
+        let tools = message["tools"].as_array().cloned().unwrap_or_default();
+        let mut appearance = p.clone();
+        appearance.simple = false;
+        let indices: Vec<usize> = (0..tools.len()).collect();
+        let rows = self.tool_row_list(&id, &tools, &indices, &appearance, cx);
+        div()
+            .flex()
+            .flex_col()
+            .items_end()
+            .w_full()
+            .min_w_0()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(ROW_GAP * s))
+                    .max_w(gpui::relative(0.8))
+                    .min_w_0()
+                    .rounded(px(16.0 * s))
+                    .px(px(12.0 * s))
+                    .py(px(8.0 * s))
+                    .bg(p.input)
+                    .children(rows),
+            )
+            .into_any_element()
+    }
+
+    /// The tool's name and its mono preview as ONE line of text, two font runs.
+    ///
+    /// CDXC:SessionChat 2026-10-07 WHY: drawn as two text elements side by side on a centred row, the JetBrains Mono preview sat a pixel below the prose name ("Shell echo …"), at every row position and whatever the font metrics said, because each element places and snaps its own baseline. Runs of one line share one baseline, so the name and the command line up on every platform; the en space stands in for the old 6px gap.
+    fn name_and_preview(
+        name: String,
+        preview: String,
+        heading: gpui::Hsla,
+        p: &ChatAppearance,
+    ) -> StyledText {
+        let gap = "\u{2002}";
+        let run = |len: usize, family: String, color: gpui::Hsla| gpui::TextRun {
+            len,
+            font: gpui::font(family),
+            color,
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        };
+        let runs = vec![
+            run(name.len() + gap.len(), p.font.clone(), heading),
+            run(preview.len(), CHAT_MONO.to_string(), p.muted),
+        ];
+        StyledText::new(format!("{name}{gap}{preview}")).with_runs(runs)
+    }
+
     fn tool_row_list(
         &mut self,
         id: &str,
@@ -280,22 +344,21 @@ impl NativeChatView {
                             .size(px(14.0 * s))
                             .text_color(p.muted),
                     ),
-            )
-            .child(div().flex_shrink_0().text_color(heading).child(name));
+            );
         // The preview is the tool's argument; a subagent row shows the agent instead, and simple mode shows neither.
         // It takes only the width it needs and shrinks with an ellipsis when it cannot have that,
         // so the chevron follows the text instead of being pushed to the pane's right edge
         // (React's `.ghostex-chat-work-preview`, which never grows either).
-        if !preview.is_empty() && subagent.is_empty() && !p.simple {
-            trigger = trigger.child(
+        trigger = if !preview.is_empty() && subagent.is_empty() && !p.simple {
+            trigger.child(
                 div()
                     .min_w_0()
                     .truncate()
-                    .font_family(CHAT_MONO)
-                    .text_color(p.muted)
-                    .child(preview),
-            );
-        }
+                    .child(Self::name_and_preview(name, preview, heading, p)),
+            )
+        } else {
+            trigger.child(div().flex_shrink_0().text_color(heading).child(name))
+        };
         if has_detail {
             trigger = trigger.child(
                 gpui::svg()

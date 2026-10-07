@@ -106,6 +106,7 @@ pub fn pending_with_startup_sends(
                 matching_occurrence: None,
                 matching_after_timestamp: None,
                 sent_while_working: false,
+                shell_command: false,
             }),
         }
     }
