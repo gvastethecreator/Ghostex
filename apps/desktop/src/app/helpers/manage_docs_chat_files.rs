@@ -40,12 +40,76 @@ impl ManageChatFileAuthorization {
 
     /// The grant a file at `address` (its real absolute path) would have in `project_id`.
     fn for_address(project_id: &str, address: &Path) -> Option<Self> {
+        let address = simplified_path(address);
         Some(Self {
             file_name: address.file_name()?.to_str()?.to_string(),
             project_id: project_id.to_string(),
             root: address.parent()?.to_path_buf(),
         })
     }
+
+    /// The same grant as `for_address` saved it before 2026-10-08, when the root still carried the
+    /// Windows `\\?\` prefix `fs::canonicalize` adds; `None` where that prefix cannot apply.
+    fn legacy_verbatim(&self) -> Option<Self> {
+        let root = verbatim_windows_path(self.root.to_str()?)?;
+        Some(Self {
+            file_name: self.file_name.clone(),
+            project_id: self.project_id.clone(),
+            root: PathBuf::from(root),
+        })
+    }
+}
+
+/// `path` without the Windows verbatim prefix (`\\?\C:\x` becomes `C:\x`, `\\?\UNC\host\share`
+/// becomes `\\host\share`) when it is representable without it; every other path comes back as is.
+///
+/// CDXC:Docs 2026-10-08 WHY: `fs::canonicalize` on Windows returns the verbatim form, which leaked
+/// into the Open Files list as `\\?\C:\…` and made the same file addressable under two keys. Every
+/// outside-file address is produced here without it. `\\?\` is dropped only for a drive or UNC path
+/// shorter than MAX_PATH (the cases `dunce` also accepts), where Win32 treats both forms alike.
+pub(crate) fn strip_verbatim_prefix(path: &str) -> String {
+    const MAX_PATH: usize = 260;
+    if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
+        let simple = format!(r"\\{rest}");
+        if simple.len() < MAX_PATH {
+            return simple;
+        }
+    } else if let Some(rest) = path.strip_prefix(r"\\?\") {
+        let bytes = rest.as_bytes();
+        let drive_path = bytes.len() >= 2
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && bytes.get(2).is_none_or(|byte| *byte == b'\\');
+        if drive_path && rest.len() < MAX_PATH {
+            return rest.to_string();
+        }
+    }
+    path.to_string()
+}
+
+fn simplified_path(path: &Path) -> PathBuf {
+    match path.to_str() {
+        Some(text) => PathBuf::from(strip_verbatim_prefix(text)),
+        None => path.to_path_buf(),
+    }
+}
+
+/// The verbatim spelling of a drive or UNC path, `None` for any other (or an already verbatim) one.
+fn verbatim_windows_path(path: &str) -> Option<String> {
+    if path.starts_with(r"\\?\") {
+        return None;
+    }
+    if let Some(rest) = path.strip_prefix(r"\\") {
+        return Some(format!(r"\\?\UNC\{rest}"));
+    }
+    let bytes = path.as_bytes();
+    (bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\')
+        .then(|| format!(r"\\?\{path}"))
+}
+
+/// `fs::canonicalize` with the Windows verbatim prefix removed (see `strip_verbatim_prefix`).
+pub(crate) fn canonicalize_simplified(path: &Path) -> std::io::Result<PathBuf> {
+    fs::canonicalize(path).map(|resolved| simplified_path(&resolved))
 }
 
 /// Grants `file`, which lies outside the project, to the project's Files view and returns its
@@ -54,8 +118,8 @@ impl ManageChatFileAuthorization {
 /// CDXC:Docs 2026-09-30 DECISION:
 /// User: Files never hands out the `.ghostex-chat-file/<id>/` routing address. A file outside the project is addressed, shown, copied and sent by its real absolute path; the hashed mount survives only inside the resource URLs its page and images load from (`manage_chat_file_resource_address`). Files from other projects may still open in the current project.
 pub(crate) fn authorize_manage_chat_file(project_id: &str, file: &Path) -> Result<String, String> {
-    let file =
-        fs::canonicalize(file).map_err(|_| "That document is no longer available.".to_string())?;
+    let file = canonicalize_simplified(file)
+        .map_err(|_| "That document is no longer available.".to_string())?;
     let address = file
         .to_str()
         .ok_or_else(|| "That document has no valid file path.".to_string())?
@@ -97,9 +161,19 @@ pub(crate) fn manage_chat_file_is_address(path: &str) -> bool {
 /// so sibling stylesheets and images resolve inside its granted folder. Never shown to anyone.
 pub(crate) fn manage_chat_file_resource_address(project_id: &str, address: &str) -> Option<String> {
     let authorization = ManageChatFileAuthorization::for_address(project_id, Path::new(address))?;
+    let record_exists = |id: &str| authorization_directory().join(format!("{id}.json")).is_file();
+    // A file opened before 2026-10-08 keeps the mount it was granted under (its `\\?\` root).
+    let id = Some(authorization.id())
+        .filter(|id| record_exists(id))
+        .or_else(|| {
+            authorization
+                .legacy_verbatim()
+                .map(|legacy| legacy.id())
+                .filter(|id| record_exists(id))
+        })
+        .unwrap_or_else(|| authorization.id());
     Some(format!(
-        "{MANAGE_DOCS_CHAT_FILE_MOUNT_SEGMENT}/{}/{}",
-        authorization.id(),
+        "{MANAGE_DOCS_CHAT_FILE_MOUNT_SEGMENT}/{id}/{}",
         authorization.file_name
     ))
 }
@@ -123,14 +197,21 @@ pub(crate) fn resolve_manage_chat_file(
     project_id: &str,
     path: &str,
 ) -> Option<ManageChatFileAuthorization> {
-    let id = match manage_chat_file_address(path) {
-        Some((id, _)) => id.to_string(),
+    let ids = match manage_chat_file_address(path) {
+        Some((id, _)) => vec![id.to_string()],
         None if manage_chat_file_is_address(path) => {
-            ManageChatFileAuthorization::for_address(project_id, Path::new(path))?.id()
+            let authorization =
+                ManageChatFileAuthorization::for_address(project_id, Path::new(path))?;
+            // A file opened before 2026-10-08 was granted under its `\\?\` root.
+            let legacy = authorization.legacy_verbatim().map(|legacy| legacy.id());
+            std::iter::once(authorization.id()).chain(legacy).collect()
         }
         None => return None,
     };
-    let bytes = fs::read(authorization_directory().join(format!("{id}.json"))).ok()?;
+    let (id, bytes) = ids.into_iter().find_map(|id| {
+        let bytes = fs::read(authorization_directory().join(format!("{id}.json"))).ok()?;
+        Some((id, bytes))
+    })?;
     let record: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
     let authorization = ManageChatFileAuthorization {
         file_name: record.get("fileName")?.as_str()?.to_string(),
@@ -149,5 +230,5 @@ pub(crate) fn manage_chat_file_real_path(project_id: &str, path: &str) -> Option
         .split('/')
         .fold(authorization.root, |path, component| path.join(component))
         .to_str()
-        .map(str::to_string)
+        .map(strip_verbatim_prefix)
 }

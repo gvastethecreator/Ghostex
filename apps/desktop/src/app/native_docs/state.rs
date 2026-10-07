@@ -142,7 +142,7 @@ impl DocsFileKind {
 
     /// The gpui-component highlighter language for a text file, from its name or extension.
     pub(crate) fn editor_language(path: &str) -> &'static str {
-        let name = path.rsplit('/').next().unwrap_or(path);
+        let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
         match name {
             "Makefile" | "makefile" | "GNUmakefile" => return "make",
             "CMakeLists.txt" => return "cmake",
@@ -279,8 +279,9 @@ pub(crate) struct DocsDocument {
 
 impl DocsDocument {
     pub(crate) fn new(path: String, display_path: String) -> Self {
+        // An outside file's path is a Windows path with backslashes, so split on both.
         let name = display_path
-            .rsplit('/')
+            .rsplit(['/', '\\'])
             .find(|part| !part.is_empty())
             .unwrap_or(&display_path)
             .to_string();

@@ -75,23 +75,33 @@ fn read_raw(store: RecordStore, key: &str) -> Option<String> {
 
 /// A stored file path as Files addresses it now: an outside file saved under its old
 /// `.ghostex-chat-file/<id>/` address becomes its real path, or `None` once its grant is gone.
+///
+/// An outside file saved with the Windows `\\?\` prefix (before 2026-10-08) loses it here, so it
+/// keeps one key and one label.
 fn stored_address(project_id: &str, path: String) -> Option<String> {
     if crate::app::helpers::manage_chat_file_address(&path).is_none() {
-        return Some(path);
+        return Some(crate::app::helpers::strip_verbatim_prefix(&path));
     }
     crate::app::helpers::manage_chat_file_real_path(project_id, &path)
 }
 
 /// `readStoredManageOpenFiles`: the stored list, without review documents (which have no file).
 pub(crate) fn read_open_files(project_id: &str) -> Vec<String> {
-    read_raw(OPEN_FILES, &format!("{OPEN_FILES_PREFIX}{project_id}"))
+    let mut open: Vec<String> = Vec::new();
+    for path in read_raw(OPEN_FILES, &format!("{OPEN_FILES_PREFIX}{project_id}"))
         .and_then(|raw| serde_json::from_str::<Vec<Value>>(&raw).ok())
         .unwrap_or_default()
         .into_iter()
         .filter_map(|path| path.as_str().map(str::to_string))
         .filter_map(|path| stored_address(project_id, path))
         .filter(|path| !path.is_empty() && !path.starts_with(".ghostex-review"))
-        .collect()
+    {
+        // A file saved under both spellings of its path is one open file.
+        if !open.contains(&path) {
+            open.push(path);
+        }
+    }
+    open
 }
 
 /// `readStoredManageActiveFile`: the selected file, if it is still in the stored open list.
