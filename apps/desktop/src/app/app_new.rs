@@ -295,6 +295,8 @@ impl GhostexGpuiApp {
                     .local_workspace_session_mappings,
                 local_workspace_attach_pending: HashSet::new(),
                 agents_chat_mode_sessions: shell_layout_state.agents_chat_mode_sessions,
+                agents_chat_notice_admitted_sessions: HashSet::new(),
+                agents_chat_notice_probe_in_flight: HashSet::new(),
                 terminal_agent_bar_sessions: HashSet::new(),
                 agents_terminal_action_bar_menu_session: None,
                 agents_terminal_action_bar_account_submenu_open: false,

@@ -427,6 +427,12 @@ pub enum SessionChatOptionAgent {
     Hermes,
     Omp,
     Pi,
+    // CDXC:AgentScreenDetection 2026-10-06 WHY:
+    // ZCode has no statusline/options grammar — every options arm below treats
+    // it as "parse nothing" — but `session_chat_option_agent` is also the gate
+    // of the terminal-notice classifier, and without an arm a dead ZCode's
+    // exit screen can never classify, so chat shows Ready over a corpse.
+    Zcode,
 }
 
 pub fn session_chat_option_agent(agent: Option<&str>) -> Option<SessionChatOptionAgent> {
@@ -439,6 +445,7 @@ pub fn session_chat_option_agent(agent: Option<&str>) -> Option<SessionChatOptio
         "hermes" | "hermes-agent" => Some(SessionChatOptionAgent::Hermes),
         "omp" => Some(SessionChatOptionAgent::Omp),
         "pi" => Some(SessionChatOptionAgent::Pi),
+        "zcode" | "zcode-cli" => Some(SessionChatOptionAgent::Zcode),
         _ => None,
     }
 }

@@ -442,6 +442,19 @@ pub struct GhostexGpuiApp {
     last-used view after an app restart. The CEF surfaces stay runtime-only.
     */
     pub(crate) agents_chat_mode_sessions: HashSet<TerminalSessionId>,
+    /*
+    CDXC:AgentScreenDetection 2026-10-06 WHY:
+    Chat View admission is normally earned by a bound conversation (the agent's
+    hook reporting its session id), but an agent that dies before ever reporting
+    can never earn it, and its chat has exactly one thing to show: the terminal
+    notice saying it died. A blocked Chat View toggle probes the session once and
+    fills this set when that read carries a notice, so every dead-agent session
+    opens in chat instead of telling the user to install hooks. Runtime-only.
+    */
+    pub(crate) agents_chat_notice_admitted_sessions: HashSet<TerminalSessionId>,
+    /// Sessions with a notice-admission probe in flight, so a double click on
+    /// the blocked Chat View toggle pays one probe. Runtime-only.
+    pub(crate) agents_chat_notice_probe_in_flight: HashSet<TerminalSessionId>,
     /// Sessions of the current project that have rendered the terminal agent
     /// action bar. While a running session's bar data lags a switch, its bar
     /// height stays reserved so the terminal body keeps its row count

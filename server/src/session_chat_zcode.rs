@@ -3,6 +3,7 @@
 //! ZCode uses Pi's TUI but stores messages and mutable parts in SQLite, not Pi JSONL.
 //! Its hook transcript_path is a temporary Claude-compatible export, so chat must follow the database instead.
 
+use crate::domain::DomainRepository;
 use rusqlite::{Connection, OpenFlags};
 use serde_json::{json, Value};
 use std::{
@@ -184,6 +185,101 @@ fn sync_mirror(db: &Path, id: &str, path: &Path) -> Option<()> {
         }
     }
     Some(())
+}
+
+/// The `sess_…` conversation id a dead ZCode names in its exit screen's
+/// resume hint ("To continue this session, run zcode --resume sess_…"), or
+/// `None` when the tail shows no hint (a death before any conversation) or
+/// the last hint's argument is not a valid id. Only the argument of the last
+/// hint counts: an older hint or any other `sess_…` token on screen may name
+/// a different conversation.
+pub(crate) fn zcode_resume_session_id_from_screen_tail(tail: &str) -> Option<&str> {
+    const HINT: &str = "zcode --resume ";
+    let at = tail.rfind(HINT)?;
+    tail[at + HINT.len()..]
+        .split_whitespace()
+        .next()
+        .filter(|token| is_safe_zcode_session_id(token))
+}
+
+/*
+CDXC:AgentScreenDetection 2026-10-06 WHY:
+A ZCode session whose hooks never reported its conversation (hooks not
+installed or not approved, or the hook write missed) stays unbound after the
+agent dies, and Chat View keeps telling the user to install hooks for an agent
+that can no longer report anything. The exit screen itself names
+the conversation in its resume hint, and that hint is inside every classified
+notice's screen tail, so the read path binds the conversation from the same
+capture that classified the death — through the same identity pipeline a
+hook-reported id takes. Returns whether the row changed.
+*/
+pub(crate) fn bind_zcode_conversation_from_exit_screen(
+    repository: &DomainRepository<'_>,
+    project_id: &str,
+    session_id: &str,
+    screen_tail: &str,
+) -> bool {
+    let Ok(Some(session)) = repository.get_session(project_id, session_id) else {
+        return false;
+    };
+    let already_bound = session
+        .pointer("/runtimeSettings/agentSessionId")
+        .and_then(Value::as_str)
+        .is_some_and(|id| !id.trim().is_empty());
+    if already_bound {
+        return false;
+    }
+    let Some(agent_session_id) = zcode_resume_session_id_from_screen_tail(screen_tail) else {
+        return false;
+    };
+    let mut params = serde_json::Map::new();
+    params.insert("agentName".to_string(), json!("zcode"));
+    params.insert(
+        "agentSessionId".to_string(),
+        json!(agent_session_id.to_string()),
+    );
+    params.insert(
+        "agentSessionPath".to_string(),
+        json!(zcode_database_path(None).to_string_lossy().to_string()),
+    );
+    let lifecycle = crate::agents::LifecycleParams {
+        project_id: project_id.to_string(),
+        session_id: session_id.to_string(),
+    };
+    crate::agents::identity::apply_session_state_update(
+        repository,
+        &lifecycle,
+        &params,
+        crate::agents::identity::SessionIdentityUpdateSource::Passive,
+    )
+    .map(|(result, _)| result.get("changed").and_then(Value::as_bool) == Some(true))
+    .unwrap_or(false)
+}
+
+/// One call for the read path: bind the conversation the exit screen names,
+/// and when the row changed, publish the presentation delta that reopens the
+/// sidebar's Chat View gate for this session.
+pub(crate) fn bind_zcode_conversation_from_exit_screen_tail(
+    state: &crate::server::AppState,
+    screen_tail: &str,
+    project_id: &str,
+    session_id: &str,
+) -> bool {
+    let Ok(db) = crate::storage::open_gxserver_database(&state.paths) else {
+        return false;
+    };
+    let repository = DomainRepository::new(&db, state.metadata.server_id.as_str());
+    if !bind_zcode_conversation_from_exit_screen(&repository, project_id, session_id, screen_tail) {
+        return false;
+    }
+    let _ = crate::server::presentation_delta::schedule_presentation_session_delta(
+        state,
+        &db,
+        &repository,
+        project_id,
+        session_id,
+    );
+    true
 }
 
 #[cfg(test)]

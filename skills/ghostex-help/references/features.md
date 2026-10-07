@@ -754,6 +754,8 @@ ZCode supports chat messages, thinking, tool results, attachments, and imported
 conversation history. Install its hooks in Settings > Agents to connect new
 conversations and keep activity in sync. ZCode runs in the same terminal, so
 you can switch to Terminal for its setup, model menus, and permission prompts.
+When ZCode exits, its chat says so and offers Restart ZCode and Open terminal;
+Chat View opens for such a session even if ZCode never connected its hooks.
 Freebuff supports chat messages, its replies and thinking, tool results, and its
 questions: when Freebuff asks a question, it appears as a card in the chat, one
 question at a time, and the answer goes to Freebuff as if you had picked it in

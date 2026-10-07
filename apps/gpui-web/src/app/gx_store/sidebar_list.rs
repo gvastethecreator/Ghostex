@@ -57,6 +57,9 @@ impl SidebarList {
     /// The page rebuilds on every update, so there is nothing to mark.
     pub(crate) fn mark_dirty(&mut self) {}
 
+    /// The page has no settings file and caches no settings read, so there is nothing to forget.
+    pub(crate) fn forget_settings(&mut self) {}
+
     pub(crate) fn update(
         &mut self,
         core: &Core,

@@ -606,6 +606,27 @@ pub(crate) async fn handle_read_session_chat_http(
             &session_id,
             detection.notice,
         ) {
+            /*
+            CDXC:AgentScreenDetection 2026-10-06 WHY:
+            A zcode exit screen names its conversation in the resume hint, so
+            the same capture that classified the death can bind the session's
+            identity — without it, a session whose hooks never reported an id
+            keeps the "hasn't reported its session" Chat View gate forever.
+            */
+            if notice.kind == crate::session_chat_notice::SESSION_CHAT_NOTICE_AGENT_EXITED
+                && crate::session_chat::resolve_session_chat_transcript_agent(
+                    terminal_agent.as_deref(),
+                ) == Some(crate::session_chat::SessionChatTranscriptAgent::Zcode)
+            {
+                if let Some(tail) = notice.screen_tail.as_deref() {
+                    crate::session_chat_zcode::bind_zcode_conversation_from_exit_screen_tail(
+                        state,
+                        tail,
+                        &project_id,
+                        &session_id,
+                    );
+                }
+            }
             result.insert("terminalNotice".to_string(), notice.to_value());
         }
         /*
