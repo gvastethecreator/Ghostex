@@ -23,7 +23,6 @@ pub(super) struct AsyncAnswerEcho {
     pub(super) pending: usize,
     pub(super) error: Option<String>,
     pub(super) hovered_image: Option<String>,
-    pub(super) reference_retry: Option<gpui::Task<()>>,
     caret: Option<usize>,
     _observer: Option<gpui::Subscription>,
 }
