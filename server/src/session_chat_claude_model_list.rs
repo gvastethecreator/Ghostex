@@ -37,7 +37,7 @@ const CLAUDE_SCROLL_HINTS: [char; 2] = ['\u{2191}', '\u{2193}'];
 const CLAUDE_HIDDEN_ROWS_PREFIX: &str = "… +";
 /// Marks the model the session is on now, inside the label column.
 const CLAUDE_CURRENT_MARKER: char = '\u{2714}';
-/// The rail line of a model without effort levels: `○ Effort not supported for Haiku 4.5`.
+/// The rail line of a model without effort levels: `○ Effort not supported for <model>`.
 const CLAUDE_EFFORT_UNSUPPORTED: &str = "Effort not supported";
 const CLAUDE_ARROW_UP: &str = "\u{1b}[A";
 const CLAUDE_ARROW_DOWN: &str = "\u{1b}[B";

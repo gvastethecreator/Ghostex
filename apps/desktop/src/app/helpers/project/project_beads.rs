@@ -340,7 +340,7 @@ pub(crate) fn gpui_project_beads_prompt_generation_command(
                 "{command} --print --mode ask --trust --model cursor-grok-4.5-low --output-format text"
             ),
             "claude" => format!(
-                "{} -p --model haiku --effort low",
+                "{} -p --model claude-haiku-5-5 --effort low",
                 gpui_project_beads_permission_command(command, "claude")
             ),
             "gemini" => format!("{command} -p"),
@@ -350,7 +350,7 @@ pub(crate) fn gpui_project_beads_prompt_generation_command(
     match normalized_agent_id.as_str() {
         "codex" => Ok(format!("codex --yolo {CODEX_EXEC_ARGS}")),
         "claude" => Ok(
-            "claude --dangerously-skip-permissions -p --model haiku --effort low".to_string(),
+            "claude --dangerously-skip-permissions -p --model claude-haiku-5-5 --effort low".to_string(),
         ),
         "cursor" => Ok(
             "cursor-agent --print --mode ask --trust --model cursor-grok-4.5-low --output-format text"

@@ -137,8 +137,9 @@ pub(crate) fn build_title_generation_command(
         ),
         "claude" => {
             let command = enforce_required_agent_permission_flag(command, "claude");
+            // CDXC:SessionTitles 2026-10-08 DECISION: User: "I want you to switch from haiku 4.5 to 5.5 for anything we used haiku for in this app (auto title etc)". The explicit id keeps an older CLI, whose `haiku` alias still means 4.5, from titling with 4.5.
             create_here_doc_command(
-                &format!("{command} -p --model haiku --effort low"),
+                &format!("{command} -p --model claude-haiku-5-5 --effort low"),
                 delimiter,
                 prompt,
             )

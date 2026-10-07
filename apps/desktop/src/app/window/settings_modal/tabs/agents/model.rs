@@ -360,7 +360,7 @@ pub(super) fn title_generation_preview(agent: &str, command: Option<&str>) -> St
             "{command} --print --yolo --trust --model cursor-grok-4.5-low --output-format text '{prompt}'"
         ),
         "claude" => here_doc(
-            &format!("{permission} -p --model haiku --effort low"),
+            &format!("{permission} -p --model claude-haiku-5-5 --effort low"),
             &prompt,
         ),
         "grok" => format!(
