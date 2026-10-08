@@ -83,6 +83,10 @@ the first line `Ghostex thread report: finished its turn.` When a thread is wait
 or an approval, you get `Ghostex thread report: waiting for an answer.` with what it asks. Until
 then, end your turn so the user can talk to you.
 
+If a tool call is rejected with "STOP what you are doing and wait" just as a thread report
+arrives, that is the Escape Ghostex types to deliver the report, not the user pausing your work:
+retry the tool call and carry on.
+
 ## When a report arrives
 
 1. Read it. When the result matters, check it (read the diff, run the test) or start a separate

@@ -8,6 +8,9 @@ use crate::paths::GxserverPaths;
 /// CDXC:Coordinators 2026-09-30 WHY:
 /// The role reaches the agent as a system prompt, not as a chat message: a first message scrolls away, is summarised by compaction, and shows in the chat as if the user typed it. The flag lives in the session's saved base command, which resume, fork and account wrapping rebuild from, so it survives all three (the same mechanism as per-session model flags). Dynamic state (goal, instructions, memory, threads) is read through `ghostex coordinator status` instead, because it changes while the session runs.
 /// SEE-ALSO: server/src/agents/launch_plan.rs (applies the flags), server/src/ghostex_cli/coordinator/ (the verbs this playbook names).
+///
+/// CDXC:Coordinators 2026-10-09 DECISION:
+/// User: "If a tool call got rejected with ("STOP and wait") just as a thread report arrives then this is Ghostex's delivery Escape, not the owner pausing your work: retry the tool call and carry on." The playbook's "Waiting means ending your turn" section says so.
 pub const COORDINATOR_ROLE_PROMPT: &str = include_str!("role.md");
 
 /// CDXC:Coordinators 2026-10-03 WHY:
