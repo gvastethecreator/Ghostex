@@ -43,6 +43,10 @@ pub(crate) fn account_inset(content: AnyElement) -> AnyElement {
         .into_any_element()
 }
 
+/// The side inset of the account management rows and of the New session defaults panel's
+/// controls; the Auto-redeem rows below them use it so every control shares one right edge.
+const ACCOUNT_ROW_INSET_X: f32 = 16.0;
+
 /// The hover fill of a management row and the ghost fill of an expanded button.
 fn ghost_fill(p: &SettingsPalette) -> gpui::Rgba {
     if p.light {
@@ -250,9 +254,11 @@ impl AccountsTab {
             setting_row(
                 p,
                 SharedString::from(format!("accounts-{provider}-auto-redeem")),
-                RowSpec::new("Auto-redeem expiring resets").description(
-                    "Ghostex automatically uses a banked reset 5 minutes before it expires, so it isn't lost.",
-                ),
+                RowSpec::new("Auto-redeem expiring resets")
+                    .description(
+                        "Ghostex automatically uses a banked reset 5 minutes before it expires, so it isn't lost.",
+                    )
+                    .inset_x(ACCOUNT_ROW_INSET_X),
                 None,
                 switch_control(
                     p,
@@ -268,9 +274,11 @@ impl AccountsTab {
             setting_row(
                 p,
                 SharedString::from(format!("accounts-{provider}-auto-redeem-at-limit")),
-                RowSpec::new("Also use it when I hit a limit").description(
-                    "When you hit a usage limit and a banked reset expires within 24 hours, Ghostex automatically uses it right away instead of waiting for its last 5 minutes.",
-                ),
+                RowSpec::new("Also use it when I hit a limit")
+                    .description(
+                        "When you hit a usage limit and a banked reset expires within 24 hours, Ghostex automatically uses it right away instead of waiting for its last 5 minutes.",
+                    )
+                    .inset_x(ACCOUNT_ROW_INSET_X),
                 None,
                 switch_control(
                     p,

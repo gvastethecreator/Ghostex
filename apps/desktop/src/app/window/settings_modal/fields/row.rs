@@ -55,6 +55,9 @@ pub(crate) struct RowSpec {
     pub(crate) readout: Option<SharedString>,
     /// The setting differs from its default: the asterisk shows and resets it.
     pub(crate) modified: bool,
+    /// Side padding when the row sits directly in a list whose neighbours use a narrower inset
+    /// than `ROW_PADDING_X` (the Accounts list: its rows and expanded panel use 16px).
+    pub(crate) inset_x: Option<f32>,
 }
 
 impl RowSpec {
@@ -87,6 +90,11 @@ impl RowSpec {
 
     pub(crate) fn wide(mut self) -> Self {
         self.wide = true;
+        self
+    }
+
+    pub(crate) fn inset_x(mut self, inset: f32) -> Self {
+        self.inset_x = Some(inset);
         self
     }
 
@@ -497,7 +505,7 @@ pub(crate) fn setting_row<V: SettingsPage>(
         .group(group)
         .w_full()
         .min_h(px(ROW_MIN_HEIGHT))
-        .px(px(ROW_PADDING_X))
+        .px(px(spec.inset_x.unwrap_or(ROW_PADDING_X)))
         .py(px(ROW_PADDING_Y))
         .flex();
     if spec.wide {
