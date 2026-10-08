@@ -274,18 +274,29 @@ impl NativeChatView {
                         },
                     )),
             );
-        let mut bubble = div()
-            .group(GROUP)
+        let bubble = |content: AnyElement| {
+            div()
+                .max_w(gpui::relative(0.8))
+                .min_w_0()
+                .rounded(px(16.0 * s))
+                .bg(p.input)
+                .child(content)
+        };
+        let mut column = div()
             .flex()
             .flex_col()
-            .gap(px(4.0 * s))
-            .max_w(gpui::relative(0.8))
+            .gap(px(6.0 * s))
+            .items_end()
+            .w_full()
             .min_w_0()
-            .rounded(px(16.0 * s))
-            .px(px(12.0 * s))
-            .py(px(8.0 * s))
-            .bg(p.input)
-            .child(header);
+            .child(
+                bubble(header.into_any_element())
+                    .group(GROUP)
+                    .px(px(12.0 * s))
+                    .py(px(8.0 * s)),
+            );
+        // The output opens in a bubble of its own below the header, which keeps its collapsed size;
+        // the header is its toggle, so it carries no rail.
         if (open || motion.is_some()) && has_body {
             let mut blocks: Vec<AnyElement> = Vec::new();
             for (part, error) in [("commandBody", false), ("stdout", false), ("stderr", true)] {
@@ -301,25 +312,29 @@ impl NativeChatView {
                     ));
                 }
             }
-            let body = disclosure_body(
-                p,
-                DisclosureRail::ToolDetail,
-                8.0,
-                key.clone(),
-                "Collapse shell command",
-                blocks,
-                cx,
-            );
-            bubble = bubble.child(self.disclosure_body_motion(&key, motion, 4.0 * s, body));
+            let output = div()
+                .flex()
+                .flex_col()
+                .items_end()
+                .w_full()
+                .min_w_0()
+                .child(
+                    bubble(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .min_w_0()
+                            .gap(px(4.0 * s))
+                            .children(blocks)
+                            .into_any_element(),
+                    )
+                    .px(px(2.0 * s))
+                    .py(px(2.0 * s)),
+                )
+                .into_any_element();
+            column = column.child(self.disclosure_body_motion(&key, motion, 6.0 * s, output));
         }
-        div()
-            .flex()
-            .flex_col()
-            .items_end()
-            .w_full()
-            .min_w_0()
-            .child(bubble)
-            .into_any_element()
+        column.into_any_element()
     }
 
     /// The tool's name and its mono preview as ONE line of text, two font runs.

@@ -354,7 +354,7 @@ pub fn with_live_shell_output(
 
 /*
 CDXC:SessionChat 2026-10-08 DECISION:
-User: "clicking on the header or line doesn't collapse this … I don't like that at the top we're showing the same command twice once in the header and again in the "Command" area". Then: "I dont like the word Shell also. Prefer if we can remove that and just have the icon instead there". The Shell card is its own card rather than a tool row with Command / Result blocks: the header is the terminal icon (labelled "Shell command" for assistive tech) followed by the command, with no "Shell" word, the command kept to one line (the full text in a tooltip and on the copy button), and a status on the right ("Running" while it runs, "Failed" when only stderr printed); the body is only the output, stdout then stderr in the error tone, with the command repeated at its top only when the header had to cut a multi-line command. The card opens by default while its output streams in and folds like every other disclosure (header or rail), so a reader can close it mid-run.
+User: "clicking on the header or line doesn't collapse this … I don't like that at the top we're showing the same command twice once in the header and again in the "Command" area". Then: "I dont like the word Shell also. Prefer if we can remove that and just have the icon instead there". The Shell card is its own card rather than a tool row with Command / Result blocks: the header is the terminal icon (labelled "Shell command" for assistive tech) followed by the command, with no "Shell" word; then "please show "! " start of the command not just the command directly", so the header reads `! aws login`, the line kept to one line (the full text in a tooltip and on the copy button), and a status on the right ("Running" while it runs, "Failed" when only stderr printed); the body is only the output, stdout then stderr in the error tone, with the command repeated at its top only when the header had to cut a multi-line command. Then: "expanding the shell card looks ugly please keep the chat bubble as it is and expand a new bubble below it that has the rest of the content (with some gap between them)", so the header bubble keeps its collapsed size and the output opens as a second bubble below it, toggled by the header. The card opens by default while its output streams in and folds like every other disclosure, so a reader can close it mid-run.
 SEE-ALSO: `shell_command_card` in apps/desktop/src/app/native_chat/tool_run.rs, `ShellCommandCard` in apps/mobile/app/src/chat/native/transcript/ToolRows.tsx.
 */
 /// What the renderers draw for a `!` command's card, or `Value::Null` for any other row.
@@ -411,7 +411,9 @@ pub fn shell_card(message: &ChatMessage) -> serde_json::Value {
     } else {
         ""
     };
-    let headline = command.lines().next().unwrap_or_default().to_string();
+    // The header reads as the line the user typed; the tooltip and the copy button keep the bare
+    // command, which is what pastes into a shell.
+    let headline = format!("! {}", command.lines().next().unwrap_or_default());
     let multiline = command.trim_end().contains('\n');
     let stdout = crate::transcript::tool_rows::clip_tool_body(&stdout);
     let stderr = crate::transcript::tool_rows::clip_tool_body(&stderr);
