@@ -60,6 +60,11 @@ use child_lifecycle::TerminalChild;
 mod viewer_detach;
 pub(crate) use viewer_detach::ViewerDetachPreparation;
 use viewer_detach::{ViewerDetachParser, ViewerDetachState};
+#[cfg(windows)]
+#[path = "terminal_model/zmx_control.rs"]
+pub(crate) mod zmx_control;
+#[cfg(windows)]
+pub(crate) use zmx_control::WMX_ATTACH_CONTROL_ENV;
 
 use crate::ghostty_vt::{
     self, VtCellWide, VtClearScreen, VtDirty, VtError, VtHostCallbacks, VtKeyEncoder, VtKeyInput,
@@ -313,6 +318,10 @@ pub fn zmx_client_chat_sequence(rows: u16, cols: u16) -> String {
     format!("\x1b]1337;ZMX_CHAT={rows},{cols}\x07")
 }
 
+/// The prefix every Ghostex attach-client control sequence starts with.
+#[cfg(windows)]
+const ZMX_CONTROL_PREFIX: &[u8] = b"\x1b]1337;ZMX_";
+
 /// In-band parked claim: retain the daemon grid unless another client needs it.
 pub fn zmx_client_hidden_sequence(rows: u16, cols: u16) -> String {
     format!("\x1b]1337;ZMX_HIDDEN={rows},{cols}\x07")
@@ -329,6 +338,9 @@ pub struct TerminalModel {
     wakeup_tx: mpsc::Sender<Option<()>>,
     pending_input: Arc<AtomicU64>,
     viewer_detach: Arc<Mutex<ViewerDetachState>>,
+    /// Windows: the control pipe of a local `wmx attach` viewer (`zmx_control.rs`).
+    #[cfg(windows)]
+    zmx_control: Option<zmx_control::ZmxControl>,
     event_sink: Arc<Mutex<Option<TerminalEventSink>>>,
     master: Box<dyn MasterPty + Send>,
     child: TerminalChild,
@@ -403,6 +415,19 @@ impl TerminalModel {
         let (write_tx, write_rx) = mpsc::channel::<Option<PtyWriteRequest>>();
         let pending_input = Arc::new(AtomicU64::new(0));
         let viewer_detach = Arc::new(Mutex::new(ViewerDetachState::default()));
+        #[cfg(windows)]
+        let zmx_control = config
+            .env
+            .iter()
+            .find(|(key, _)| key == WMX_ATTACH_CONTROL_ENV)
+            .and_then(|(_, name)| {
+                zmx_control::ZmxControl::start(
+                    name.clone(),
+                    Arc::clone(&viewer_detach),
+                    Arc::clone(&events),
+                )
+                .ok()
+            });
         let writer_pending_input = Arc::clone(&pending_input);
         let writer_events = Arc::clone(&events);
         thread::Builder::new()
@@ -553,6 +578,8 @@ impl TerminalModel {
             wakeup_tx: model_wakeup_tx,
             pending_input,
             viewer_detach,
+            #[cfg(windows)]
+            zmx_control,
             event_sink,
             master: pair.master,
             child,
@@ -589,9 +616,18 @@ impl TerminalModel {
         self.pending_input.load(Ordering::Acquire) != 0
     }
 
+    /// Whether a detach handshake can reach this viewer's attach client: its PTY on Unix, the
+    /// wmx control pipe on Windows (ConPTY drops `ZMX_DETACH`).
+    fn viewer_detach_has_route(&self) -> bool {
+        #[cfg(windows)]
+        return self.zmx_control.is_some();
+        #[cfg(not(windows))]
+        return cfg!(unix);
+    }
+
     /// Read-only preflight before creating a replacement display claim.
     pub fn viewer_detach_supported(&self) -> bool {
-        if !cfg!(unix) {
+        if !self.viewer_detach_has_route() {
             return false;
         }
         let detach = self
@@ -606,8 +642,9 @@ impl TerminalModel {
 
     /// Begin ordered retirement after a replacement display claim is ready.
     pub fn prepare_viewer_detach(&mut self) -> ViewerDetachPreparation {
-        #[cfg(not(unix))]
-        return ViewerDetachPreparation::Unsupported;
+        if !self.viewer_detach_has_route() {
+            return ViewerDetachPreparation::Unsupported;
+        }
         if self.has_pending_input() {
             return if self
                 .viewer_detach
@@ -641,6 +678,17 @@ impl TerminalModel {
             return ViewerDetachPreparation::Unsupported;
         };
         detach.retiring = true;
+        // The request travels on the control pipe; wmx answers once the console input before it
+        // has gone to the daemon (`DETACH_QUIET` in wmx attachment.rs).
+        #[cfg(windows)]
+        if let Some(control) = &self.zmx_control {
+            if !control.send(&bytes) {
+                detach.nonce = None;
+                detach.retiring = false;
+                return ViewerDetachPreparation::Unsupported;
+            }
+            return ViewerDetachPreparation::Pending;
+        }
         self.pending_input.fetch_add(1, Ordering::AcqRel);
         if self.write_tx.send(Some(PtyWriteRequest { bytes })).is_err() {
             self.pending_input.fetch_sub(1, Ordering::AcqRel);
@@ -673,7 +721,7 @@ impl TerminalModel {
         if self.child.is_detached() {
             return Ok(());
         }
-        if !cfg!(unix) {
+        if !self.viewer_detach_has_route() {
             return Err(std::io::ErrorKind::Unsupported.into());
         }
         let detach = self
@@ -714,6 +762,17 @@ impl TerminalModel {
     /// actual write happens on the pty-write thread, so callers (main-thread
     /// input handlers) never block on a stalled PTY.
     pub fn write_input(&self, bytes: &[u8]) -> std::io::Result<()> {
+        // A whole Ghostex claim (`zmx_client_*_sequence`) goes around ConPTY, which would drop it.
+        #[cfg(windows)]
+        if let Some(control) = &self.zmx_control
+            && bytes.starts_with(ZMX_CONTROL_PREFIX)
+        {
+            return if control.send(bytes) {
+                Ok(())
+            } else {
+                Err(std::io::ErrorKind::BrokenPipe.into())
+            };
+        }
         self.queue_input(PtyWriteRequest {
             bytes: bytes.to_vec(),
         })

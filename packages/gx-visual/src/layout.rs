@@ -30,6 +30,7 @@ pub(crate) fn layout(
         title,
         items: block.items,
         regions: block.regions,
+        motions: block.motions,
     })
 }
 

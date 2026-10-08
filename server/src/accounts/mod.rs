@@ -3,6 +3,7 @@ mod claude_resets;
 mod codex_blockers;
 pub(crate) mod continuation;
 pub(crate) mod default_account;
+pub(crate) mod disabled;
 pub(crate) mod drafts;
 pub(crate) mod endpoint;
 pub(crate) mod exit;

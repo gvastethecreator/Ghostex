@@ -189,6 +189,7 @@ pub(crate) struct GxStoreHost {
     /// store's now and the publish would not know about it.
     pub(super) pending_collection_rename: Option<(String, u64)>,
     pub(crate) shown_sessions: super::terminal_lifecycle::shown_sessions::ShownSessionsHost,
+    pub(crate) chat_grid_claims: super::terminal_lifecycle::chat_grid_claims::ChatGridClaimsHost,
     /// F4's creates and opens: counters and the browser open waiting for its project switch.
     pub(crate) create: super::create::CreateHost,
     /// The custom session tag catalog's debounced push to this computer's gxserver.

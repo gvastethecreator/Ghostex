@@ -1492,7 +1492,9 @@ cat >"$APP_PATH/Contents/Info.plist" <<EOF_PLIST
 	descriptions must exist or macOS terminates the app at that boundary
 	instead of showing its prompt. -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Ghostex uses the microphone only when you allow a website in a Chromium browser pane to use it, for features such as voice input or calls.</string>
+	<string>Ghostex uses the microphone when you dictate a message in the chat, and when you allow a website in a browser pane to use it, for features such as voice input or calls.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ghostex turns what you dictate in the chat into text.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Ghostex uses the camera only when you allow a website in a Chromium browser pane to use it, for features such as video calls.</string>
 	<key>SUEnableDownloaderService</key>

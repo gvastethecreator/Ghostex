@@ -204,6 +204,10 @@ pub(crate) fn render(spec: &ChartSpec, width: f32, theme: &Theme) -> Result<Bloc
             .iter()
             .map(|p| [x_pos(p.slot), y_scale.pos_clamped(p.v1)])
             .collect();
+        let reveal = crate::Motion::Reveal {
+            from: top_points.first().map_or(0.0, |p| p[0]),
+            to: top_points.last().map_or(0.0, |p| p[0]),
+        };
         if area && top_points.len() > 1 {
             let mut polygon = top_points.clone();
             polygon.extend(
@@ -220,6 +224,7 @@ pub(crate) fn render(spec: &ChartSpec, width: f32, theme: &Theme) -> Result<Bloc
                 stroke_width: 0.0,
                 dashed: false,
             });
+            block.animate(block.last_item(), reveal);
         }
         if top_points.len() > 1 {
             block.push(Item::Path {
@@ -230,10 +235,12 @@ pub(crate) fn render(spec: &ChartSpec, width: f32, theme: &Theme) -> Result<Bloc
                 stroke_width: if area { 1.5 } else { 2.0 },
                 dashed: false,
             });
+            block.animate(block.last_item(), reveal);
         }
         if spec.mark.point || top_points.len() <= 1 {
             for [px, py] in &top_points {
                 block.circle(*px, *py, 3.0, color);
+                block.animate(block.last_item(), crate::Motion::Pop);
             }
         }
     }

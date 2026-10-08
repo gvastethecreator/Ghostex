@@ -195,6 +195,7 @@ impl GhostexGpuiApp {
                     continue;
                 };
                 if !self.agents_terminal_viewer_is_visible(slot_id.session_id)
+                    && self.agents_terminal_viewer_may_wait(slot_id.session_id)
                     && !self.terminal_bell_notifications_enabled()
                     && self.terminal_viewer_target_is_daemon_backed(
                         GpuiEngineTerminalEventTarget::Agents(slot_id.session_id),
@@ -306,6 +307,7 @@ impl GhostexGpuiApp {
             if self.terminal_viewer_target_is_daemon_backed(GpuiEngineTerminalEventTarget::Agents(
                 plan.shell_session_id,
             )) && !self.agents_terminal_viewer_is_visible(plan.shell_session_id)
+                && self.agents_terminal_viewer_may_wait(plan.shell_session_id)
                 && !self.terminal_bell_notifications_enabled()
                 && initial_input.as_deref().is_none_or(str::is_empty)
                 && command.is_some()
@@ -666,6 +668,19 @@ impl GhostexGpuiApp {
             command: command.clone(),
             env_vars: env_vars.clone(),
             wait_after_command,
+        };
+        // A local wmx viewer gets its own control pipe for the claims ConPTY would drop
+        // (terminal_model/zmx_control.rs); the recipe keeps no pipe name, each spawn mints one.
+        #[cfg(windows)]
+        let env_vars = {
+            let mut env_vars = env_vars;
+            if self.agents_terminal_is_local_wmx_viewer(target) && command.is_some() {
+                env_vars.push((
+                    terminal_model::WMX_ATTACH_CONTROL_ENV.to_string(),
+                    terminal_model::zmx_control::new_wmx_attach_control_pipe_name(),
+                ));
+            }
+            env_vars
         };
         let spawn_config = terminal_gpui_engine::gpui_engine_terminal_spawn_config(
             working_directory,

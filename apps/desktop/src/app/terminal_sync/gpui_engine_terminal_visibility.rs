@@ -170,6 +170,9 @@ impl GhostexGpuiApp {
                 GpuiEngineTerminalZmxVisibility::Visible
             };
             let is_displayed = visibility == GpuiEngineTerminalZmxVisibility::Visible;
+            if is_displayed {
+                self.note_agents_terminal_viewer_shown(session_id);
+            }
             view.update(cx, |view, _cx| {
                 view.set_displayed(is_displayed);
                 // The selection has settled (or never moved): the prepaint may resize and claim.

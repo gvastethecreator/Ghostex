@@ -58,9 +58,10 @@ pub fn answer_query(
     })
 }
 
-/// `renderVisual(source, width, theme, fontFamily)`: one ```visual block laid out at `width` for
-/// the phone, which paints the returned SVG (the GPUI renderers paint the same scene directly).
-/// `theme` is the theme object (or its JSON text) `Theme::from_json` reads.
+/// `renderVisual(source, width, theme, fontFamily, progress?)`: one ```visual block laid out at
+/// `width` for the phone, which paints the returned SVG (the GPUI renderers paint the same scene
+/// directly). `theme` is the theme object (or its JSON text) `Theme::from_json` reads; `progress`
+/// (0 to 1) asks for the chart that far through drawing in, and its absence for the finished one.
 fn render_visual(arguments: &[Value]) -> Option<String> {
     let source = arguments.first()?.as_str()?;
     let width = arguments.get(1)?.as_f64()? as f32;
@@ -73,11 +74,13 @@ fn render_visual(arguments: &[Value]) -> Option<String> {
         .get(3)
         .and_then(Value::as_str)
         .unwrap_or("system-ui, sans-serif");
-    Some(ghostex_gx_visual::render_json(
+    let progress = arguments.get(4).and_then(Value::as_f64).map(|p| p as f32);
+    Some(ghostex_gx_visual::render_json_at(
         source,
         width,
         &theme,
         font_family,
+        progress,
     ))
 }
 

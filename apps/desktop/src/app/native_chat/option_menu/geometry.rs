@@ -51,6 +51,31 @@ impl MenuMetrics {
 
 /// The narrowest width from the sidebar menu's 178px floor, up to `max`, that shows every row of a pointer menu unclipped.
 pub(super) fn fit_width(rows: &[Value], max: f32, appearance: &ChatAppearance, cx: &App) -> f32 {
+    natural_width(rows, appearance, cx).clamp(178.0_f32.min(max), max)
+}
+
+/// The width a panel needs for its rows' hotkeys (`detail`): a fixed panel width was sized for the
+/// macOS glyphs, and Windows spells a chord out (`Ctrl+Alt+Shift+F`), which ran into the labels.
+/// Never narrower than `width`.
+pub(super) fn width_for_details(
+    rows: &[Value],
+    width: f32,
+    appearance: &ChatAppearance,
+    cx: &App,
+) -> f32 {
+    let detailed: Vec<Value> = rows
+        .iter()
+        .filter(|row| row["detail"].is_string())
+        .cloned()
+        .collect();
+    if detailed.is_empty() {
+        return width;
+    }
+    width.max(natural_width(&detailed, appearance, cx))
+}
+
+/// The width that shows every row of `rows` unclipped, with no floor or ceiling.
+fn natural_width(rows: &[Value], appearance: &ChatAppearance, cx: &App) -> f32 {
     let m = MenuMetrics::CONTEXT;
     let text_system = WindowTextSystem::new(cx.text_system().clone());
     let font = gpui::font(appearance.font.clone());
@@ -92,7 +117,7 @@ pub(super) fn fit_width(rows: &[Value], max: f32, appearance: &ChatAppearance, c
         })
         .fold(0.0, f32::max);
     // Room for a trailing glyph's rounding, so the label never ellipsizes at its own width.
-    (widest.ceil() + 2.0 + m.chrome()).clamp(178.0_f32.min(max), max)
+    widest.ceil() + 2.0 + m.chrome()
 }
 
 pub(super) fn measure_rows(

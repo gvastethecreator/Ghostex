@@ -107,6 +107,14 @@ uuid = { version = "1", features = ["v4"] }
 web-time = "1"
 instant = "0.1"
 
+# CDXC:SessionChat 2026-10-08 WHY: the composer's Dictate control
+# (src/app/native_chat/dictation.rs) uses GPUI Kit's `speech` feature, the
+# microphone and the system speech recognizer, which macOS and Windows have.
+# Linux has no system recognizer and the feature would need the ALSA headers to
+# build there, so Linux builds leave it off and draw no Dictate control.
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+gpui-component = { path = "../../.dependencies/gpui-component/crates/component", features = ["tree-sitter-languages", "speech"] }
+
 # CDXC:CefRuntime 2026-07-04: the Linux CEF adapter (src/cef/linux_x11.rs)
 # positions/maps/focuses CEF child X11 windows through x11rb, pinned to the same
 # major as gpui's own X11 backend dependency so both speak the protocol from one
@@ -141,6 +149,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_Security_Credentials",
     "Win32_Storage_FileSystem",
     "Win32_System_LibraryLoader",
+    # The attach control pipe of a Windows terminal viewer (terminal_model/zmx_control.rs).
+    "Win32_System_Pipes",
     "Win32_System_Registry",
     "Win32_System_Threading",
     # The native Settings colour swatch opens the system colour dialog (ChooseColorW), as the React `<input type="color">` did through CEF.

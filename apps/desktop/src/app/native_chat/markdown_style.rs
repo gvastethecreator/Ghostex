@@ -13,6 +13,18 @@ struct MarkdownVisual {
     heading_gap_before: f32,
     heading_line_height: f32,
     heading_font_sizes: [f32; 6],
+    code_block: CodeBlockVisual,
+}
+
+/// How tall a fenced block's code may grow before it scrolls under its header.
+///
+/// CDXC:SessionChat 2026-10-08 DECISION: User asked for long code blocks to scroll inside a height cap (GPUI Kit #3322), on the desktop and the phone, with a header button that shows the whole block. A block longer than `collapseAfterLines` shows `collapsedLines` lines and scrolls the rest; one only a few lines over the cap stays whole.
+/// CDXC:SessionChat 2026-10-08 SEE-ALSO: `apps/mobile/app/src/chat/native/transcript/markdown/Markdown.tsx` caps the phone's blocks with the same numbers.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CodeBlockVisual {
+    collapsed_lines: f32,
+    collapse_after_lines: usize,
 }
 
 #[derive(Deserialize)]
@@ -126,7 +138,10 @@ pub(crate) fn text_style(p: &ChatAppearance) -> TextViewStyle {
         .text_color(p.foreground);
     // A list keeps React's 1.25rem marker gutter and the 0.25rem between items.
     style.list = StyleRefinement::default().gap(px(LIST_ITEM_GAP * p.scale));
-    style.list_marker = StyleRefinement::default().min_w(px(LIST_GUTTER * p.scale));
+    // CDXC:SessionChat 2026-10-08 DECISION: User took two pieces of GPUI Kit's typography update (#3371) for the chat on the desktop and the phone: list markers in the muted colour, and a finished task's text dimmed (the Kit fork draws a done item muted) so open items stand out. The rest of that update stays out to keep the chat's look.
+    style.list_marker = StyleRefinement::default()
+        .min_w(px(LIST_GUTTER * p.scale))
+        .text_color(p.muted);
     style.heading_base_font_size = px(14.0 * p.scale);
     // A heading is louder than the paragraph before it, so React gives it more
     // room above (`--chat-heading-gap-before`) than between paragraphs; the
@@ -187,4 +202,15 @@ fn prose_swatch(p: &ChatAppearance) -> InlineCodeStyle {
         prose: true,
         ..inline_code(p)
     }
+}
+
+/// Whether a fenced block of `lines` lines is long enough to be capped.
+pub(super) fn code_block_collapses(lines: usize) -> bool {
+    lines > VISUAL.code_block.collapse_after_lines
+}
+
+/// The height a capped block's code scrolls inside: `collapsedLines` lines at the transcript's
+/// line height, plus the code's own padding above and below.
+pub(super) fn code_block_cap(line_height: f32, padding: f32, scale: f32) -> gpui::Pixels {
+    gpui::px((VISUAL.code_block.collapsed_lines * line_height + padding * 2.0) * scale)
 }

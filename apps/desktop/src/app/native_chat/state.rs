@@ -177,6 +177,10 @@ pub(crate) struct NativeChatView {
     /// React's remembered last choice (session-chat-code-wrap.ts (deleted 2026-10-01)): the blocks that
     /// scroll into view after a toggle start the way the reader last asked for.
     pub(super) code_wrap_default: bool,
+    /// The long fenced blocks the reader expanded to their full height (keyed like `code_wrap`).
+    pub(super) code_expanded: HashSet<String>,
+    /// The composer's dictation session, made the first time the reader presses Dictate.
+    pub(crate) dictation: super::dictation::Dictation,
     pub(crate) list: gpui::ListState,
     /// The transcript's own cached view, created on the first draw (transcript_host.rs).
     pub(super) transcript_host: Option<Entity<super::transcript_host::TranscriptHost>>,
@@ -395,6 +399,8 @@ impl NativeChatView {
             collapsed: HashSet::new(),
             code_wrap: HashMap::new(),
             code_wrap_default: false,
+            code_expanded: HashSet::new(),
+            dictation: None,
             list,
             transcript_host: None,
             composer_host: None,
