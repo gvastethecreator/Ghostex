@@ -27,7 +27,7 @@ pub(crate) const SETTINGS_MODAL_HEIGHT: f32 = 663.0;
 /// The hidden title row above the body (`.ghostex-modal-heading-bar` with an sr-only title).
 const HEADING_HEIGHT: f32 = 20.0;
 /// `.settings-modal-body-layout { padding: 0 1rem 1rem; gap: 1rem }`.
-const BODY_PADDING: f32 = 16.0;
+pub(crate) const BODY_PADDING: f32 = 16.0;
 
 pub(crate) struct SettingsModalConfig {
     pub(crate) palette: ModalPalette,
@@ -308,6 +308,7 @@ impl GpuiSettingsModalWindow {
         h_flex()
             .w_full()
             .justify_center()
+            .pr(px(BODY_PADDING))
             .mb(px(12.0))
             .child(
                 div()
@@ -426,7 +427,10 @@ impl Render for GpuiSettingsModalWindow {
                         .min_h_0()
                         .w_full()
                         .items_stretch()
-                        .px(px(BODY_PADDING))
+                        // No right padding: the page's scroll area reaches the window's right
+                        // edge so its scrollbar sits flush there (CDXC:AppModal 2026-10-08 on
+                        // `modal_edge_scrollbar`); the search row and the page column pad it back.
+                        .pl(px(BODY_PADDING))
                         .pb(px(BODY_PADDING))
                         .gap(px(BODY_PADDING))
                         .child(rail)

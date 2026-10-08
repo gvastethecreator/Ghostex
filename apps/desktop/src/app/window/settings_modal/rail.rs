@@ -16,7 +16,7 @@ use gpui::{
     AnyElement, ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement,
     ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, div, px,
 };
-use gpui_component::scroll::ScrollableElement as _;
+use gpui_component::scroll::Scrollbar;
 use gpui_component::{h_flex, v_flex};
 use std::collections::HashMap;
 
@@ -537,16 +537,22 @@ pub(crate) fn render_rail(
         .border_color(hsla(p.hairline))
         .bg(hsla(p.raised))
         .overflow_hidden()
+        // The bar sits beside the scroll area, as on the page (CDXC:Settings 2026-10-08 in page.rs).
         .child(
             div()
-                .id("settings-rail-list")
+                .relative()
                 .flex_1()
                 .min_h_0()
                 .w_full()
-                .overflow_y_scroll()
-                .track_scroll(&list_scroll)
-                .vertical_scrollbar(&list_scroll)
-                .child(v_flex().w_full().min_h_full().gap(px(4.0)).children(groups)),
+                .child(
+                    div()
+                        .id("settings-rail-list")
+                        .size_full()
+                        .overflow_y_scroll()
+                        .track_scroll(&list_scroll)
+                        .child(v_flex().w_full().min_h_full().gap(px(4.0)).children(groups)),
+                )
+                .child(Scrollbar::vertical(&list_scroll)),
         )
         .child(footer)
         .into_any_element()

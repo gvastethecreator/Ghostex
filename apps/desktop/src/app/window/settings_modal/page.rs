@@ -4,6 +4,7 @@
 //! anchors the rail and deep links use.
 use super::super::native_modal_kit::*;
 use super::model::SettingsTabId;
+use super::shell::BODY_PADDING;
 use super::palette::SettingsPalette;
 use super::store::{SettingsStore, SmoothScroll, scroll_top_for_child};
 use gpui::prelude::FluentBuilder as _;
@@ -11,7 +12,6 @@ use gpui::{
     AnyElement, App, Bounds, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
     Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, point, px,
 };
-use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::v_flex;
 
 /// `--settings-content-max-width`.
@@ -80,6 +80,9 @@ fn mostly_visible(
 /// The page body: registers `blocks`' anchors with the store, restores the page's remembered
 /// scroll position on its first frame, applies a pending section scroll once the sections are
 /// laid out, and after each scroll reports it and the section mostly in view.
+///
+/// CDXC:Settings 2026-10-08 WHY:
+/// The scrollbar is the scroll area's sibling, never its child. GPUI offsets every child of a scrolling element by the scroll offset, so the bar `.vertical_scrollbar` mounted inside the scrolling div moved its own track with the content: a thumb drag fed that shift back into the offset and lost the pointer, and once scrolled the bar drew outside the viewport. Every other modal already mounts it beside the scroll area.
 pub(crate) fn settings_page(
     store: &Entity<SettingsStore>,
     tab: SettingsTabId,
@@ -106,7 +109,9 @@ pub(crate) fn settings_page(
     let column = v_flex()
         .w_full()
         .items_center()
-        .px(px(CONTENT_GUTTER))
+        .pl(px(CONTENT_GUTTER))
+        // The scroll area reaches over the window's right padding (see `modal_edge_scrollbar`).
+        .pr(px(CONTENT_GUTTER + BODY_PADDING))
         .pb(px(80.0))
         .gap(px(24.0))
         .on_children_prepainted(
@@ -175,12 +180,17 @@ pub(crate) fn settings_page(
         )
         .children(children);
     div()
-        .id(SharedString::from(format!("settings-page-{}", tab.id())))
+        .relative()
         .size_full()
-        .overflow_y_scroll()
-        .track_scroll(&handle)
-        .vertical_scrollbar(&handle)
-        .child(column)
+        .child(
+            div()
+                .id(SharedString::from(format!("settings-page-{}", tab.id())))
+                .size_full()
+                .overflow_y_scroll()
+                .track_scroll(&handle)
+                .child(column),
+        )
+        .child(modal_edge_scrollbar(&handle))
         .into_any_element()
 }
 

@@ -152,6 +152,23 @@ pub(crate) fn modal_switch(p: &ModalPalette, checked: bool, disabled: bool) -> A
         .into_any_element()
 }
 
+/// The vertical scrollbar of a scroll area that runs along the modal window's right edge: mount it
+/// beside the scroll area (never inside it) and let that area reach the window's edge, keeping the
+/// text gutter as padding inside it.
+///
+/// CDXC:AppModal 2026-10-08 DECISION:
+/// User: "please stick the scrollbar to the right side more without gap if possible". The thumb
+/// sits flush against the modal's right edge: no inset inside its track (gpui-component's default
+/// is 4px) and no window padding beside it; the content keeps its own gutter so text never sits
+/// under the thumb. Settings' page body is the modal scroll area that runs along that edge.
+#[track_caller]
+pub(crate) fn modal_edge_scrollbar<H: gpui_component::scroll::ScrollbarHandle + Clone>(
+    handle: &H,
+) -> gpui_component::scroll::Scrollbar {
+    gpui_component::scroll::Scrollbar::vertical(handle)
+        .styles(|styles| styles.thumb(|thumb| thumb.inset(px(0.0))))
+}
+
 /// A rotating loader icon for busy primary buttons.
 pub(crate) fn modal_spinner(color: Rgba) -> AnyElement {
     modal_icon(ICON_LOADER, 15.0, color)
