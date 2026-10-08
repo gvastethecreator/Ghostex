@@ -706,13 +706,9 @@ command, and `$skill-name` for Codex.
 Use the paperclip to attach images, files, or folders. On Linux, choose
 **Images or files…** or **Folders…** before selecting items in the system picker;
 the terminal's attachment action offers the same choices.
-Press the microphone beside Terminal View to dictate: speak, then press it again
-to stop, and what you said is typed into your message without sending it. It uses
-your computer's speech recognition on macOS and Windows (on Windows, turn on
-Online speech recognition in Windows Settings > Privacy & security > Speech) and
-the phone's on the mobile app; Linux has no microphone button. In a session's
-terminal view the same microphone sits left of Chat View on the bar below the
-terminal, and what you say is typed into the terminal without pressing Enter.
+Dictation (a microphone button in the chat box and on the terminal bar) is turned
+off in this version on every platform while it is being fixed, so there is no
+microphone button yet.
 A long code block shows its first lines and scrolls inside the block; the arrows
 button in the block's header shows the whole block, and again collapses it.
 Hover a message to show its actions and the time it was sent in a row below
@@ -1069,7 +1065,7 @@ The button highlights when Summary mode is on; its tooltip shows the Toggle Summ
 Mode shortcut (Option+Ctrl+S on macOS, Ctrl+Alt+Shift+S on Windows and Linux), which
 switches it from anywhere in that chat and can be changed in Settings > Hotkeys.
 As space gets tighter, toolbar buttons move into More actions one at a time:
-Summary mode (under View), Session note, Stash prompt, Attach, Maximize, Dictate, then
+Summary mode (under View), Session note, Stash prompt, Attach, Maximize, then
 Terminal View.
 If the context ring still does not fit beside the model, it moves into Model
 settings at the top of More actions; the model pill shortens instead of moving.

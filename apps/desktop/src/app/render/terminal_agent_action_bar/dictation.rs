@@ -14,8 +14,9 @@ use gpui::{AppContext as _, Entity, Subscription, Window};
 use gpui_component::speech::{SpeechEvent, SpeechState};
 
 /// Whether this build can dictate. macOS and Windows have a system recognizer; Linux has none, so
-/// the bar draws no Dictate button there.
-pub(super) const TERMINAL_DICTATION: bool = cfg!(any(target_os = "macos", target_os = "windows"));
+/// the bar draws no Dictate button there. Off everywhere while `DICTATION_ENABLED` is.
+pub(super) const TERMINAL_DICTATION: bool = crate::app::native_chat::dictation::DICTATION_ENABLED
+    && cfg!(any(target_os = "macos", target_os = "windows"));
 
 /// The session the microphone is listening for, and the subscription that pastes its result.
 pub(crate) struct TerminalDictation {

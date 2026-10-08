@@ -9,9 +9,16 @@ use gpui::{App, AppContext as _, Context, Entity, EntityInputHandler as _, Subsc
 use gpui_component::speech::{SpeechError, SpeechEvent, SpeechState};
 use serde_json::json;
 
+/// The one switch for both Dictate buttons, the chat box's and the terminal bar's.
+///
+/// CDXC:SessionChat 2026-10-09 DECISION: User: "if we can't fix this np release with mic button hidden on all os for now i'll test it later". On Windows the recognizer starts and the microphone hears speech, yet no words ever come back (no partial result, and no completion after stopping), so both Dictate buttons are hidden on every OS until dictation is fixed and tested. Set this to `true` to bring them back; the dictation code stays in place.
+/// CDXC:SessionChat 2026-10-09 SEE-ALSO: the phone's switch is `DICTATION_ENABLED` in `apps/mobile/app/src/chat/native/composer/useDictation.ts`.
+pub(crate) const DICTATION_ENABLED: bool = false;
+
 /// Whether this build can dictate. macOS and Windows have a system recognizer; Linux has none and
 /// the web build has no microphone, so the control is not drawn there.
-pub(super) const DICTATION: bool = cfg!(any(target_os = "macos", target_os = "windows"));
+pub(super) const DICTATION: bool =
+    DICTATION_ENABLED && cfg!(any(target_os = "macos", target_os = "windows"));
 
 /// Where to allow the microphone when the system refused it.
 const MICROPHONE_ACCESS_HINT: &str = if cfg!(target_os = "windows") {
