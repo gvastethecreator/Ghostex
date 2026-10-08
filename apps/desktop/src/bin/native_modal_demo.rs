@@ -355,3 +355,11 @@ fn main() {
             cx.activate(true);
         });
 }
+
+/// CDXC:AppModal 2026-10-08 WHY:
+/// The demo compiles the app's modals without the app's AppKit glue. `popup_dismissal`'s click-away check calls `GhostexGpuiApplicationIsActive`, and the only definitions live in Objective-C objects that also reference symbols defined in the main app, so linking them into the demo failed the 10.15.5 macOS build. The demo answers "active" itself: clicking another app never closes a demo modal.
+#[cfg(target_os = "macos")]
+#[unsafe(no_mangle)]
+pub extern "C" fn GhostexGpuiApplicationIsActive() -> bool {
+    true
+}
