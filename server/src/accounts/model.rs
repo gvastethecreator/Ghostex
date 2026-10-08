@@ -94,6 +94,15 @@ pub(crate) struct SavedAccount {
     pub show_in_titlebar: bool,
     pub eligible: bool,
     pub shared_history: bool,
+    /// Set when the login stopped working for good (see `disabled.rs`); cleared when the user sets the account back to Automatic or reconnects it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disabled: Option<DisabledAccount>,
+}
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DisabledAccount {
+    pub reason: String,
+    pub at: String,
 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

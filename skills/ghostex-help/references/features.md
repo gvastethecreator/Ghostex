@@ -1272,6 +1272,13 @@ instead, such as "The saved login expired. Reconnect this account."
 A newly added account starts with Available for automatic switching on; turn it
 off in the account's editor in Settings > Accounts to keep that account out of
 automatic switching.
+When Claude says "Your organization has disabled Claude subscription access",
+that account cannot be used any more: Ghostex turns its Available for automatic
+switching off, and the next message you send to a session on it first moves the
+session to the best account set to Automatic, resuming the same conversation.
+With Continue automatically on, Ghostex moves the session by itself and
+continues the message that failed. Turn the option back on, reconnect the
+account, or pick it for a session when its access works again.
 Reconnecting a Codex account works while that account's sessions keep running.
 When Codex still has to stop first, Settings lists the sessions in the way and
 offers Sleep sessions and continue; sleeping keeps them in the sidebar and they

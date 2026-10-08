@@ -6,6 +6,10 @@ use super::*;
 
 /// The agent cannot talk to its provider until the user signs in again.
 pub const SESSION_CHAT_NOTICE_LOGIN_EXPIRED: &str = "loginExpired";
+/// The title of the `loginExpired` notice for a Claude login whose organization disabled
+/// subscription access: the account itself is unusable, so the fix is another account.
+pub const CLAUDE_ACCOUNT_DISABLED_TITLE: &str =
+    "This Claude account's subscription access is disabled";
 /// A workspace/directory trust dialog is blocking the composer.
 pub const SESSION_CHAT_NOTICE_TRUST_PROMPT: &str = "trustPrompt";
 /// A sibling blocking dialog about settings/permissions.
@@ -354,6 +358,13 @@ impl SessionChatTerminalNotice {
     /// This extends the earlier Claude quota-warning decision; automatic delivery separately holds on unresolved quota, authentication, and agent-error evidence so it cannot consume queued prompts in failed attempts.
     pub fn blocks_input(&self) -> bool {
         self.blocks_input
+    }
+
+    /// The session's login can never answer again (its organization disabled Claude
+    /// subscription access); only another account fixes it. See `accounts/disabled.rs`.
+    pub fn account_disabled(&self) -> bool {
+        self.kind == SESSION_CHAT_NOTICE_LOGIN_EXPIRED
+            && self.title == CLAUDE_ACCOUNT_DISABLED_TITLE
     }
 
     pub fn blocks_queued_delivery(&self) -> bool {

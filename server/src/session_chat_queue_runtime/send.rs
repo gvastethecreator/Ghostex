@@ -135,6 +135,18 @@ pub(crate) async fn send_session_chat_message_with_draft(
     if source == SessionChatMessageSource::Composer {
         crate::accounts::recovery::user_action(state, project_id, session_id, false)?;
     }
+    // A session whose Claude login was disabled moves to another account before anything is typed (accounts/disabled.rs); the continuation and recovery sends are that switch's own.
+    let switch_owned = matches!(
+        source,
+        SessionChatMessageSource::AutomaticRecovery | SessionChatMessageSource::AccountSwitch(_)
+    );
+    let target = if !switch_owned
+        && crate::accounts::disabled::switch_before_send(state, project_id, session_id).await?
+    {
+        resolve_session_chat_send_target(state, &params, "sendSessionChatMessage")?
+    } else {
+        target
+    };
     // A draft whose Run on row picked a box has no agent to type into yet: its first message
     // creates the box (agents/draft_run_location.rs).
     if let Some(sent) = super::box_first_send::send_pending_box_first_message(
