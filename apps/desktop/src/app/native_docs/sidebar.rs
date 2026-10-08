@@ -12,10 +12,6 @@ use crate::GhostexGpuiApp;
 /// User: hovering the corner button peeks the files list; a short open delay stops the list flashing open when the cursor merely crosses the corner, and a short close grace stops a slight overshoot from collapsing it.
 pub(crate) const PEEK_OPEN_DELAY: Duration = Duration::from_millis(150);
 pub(crate) const PEEK_CLOSE_GRACE: Duration = Duration::from_millis(200);
-/// CDXC:Docs 2026-09-12 DECISION:
-/// User: the last 10px at the sidebar's edge of the Docs view reveal the files list, the same width as the app sidebar's reveal band while it is unpinned.
-pub(crate) const EDGE_BAND_WIDTH: f32 =
-    crate::app::floating_reveal::model::FLOATING_REVEAL_EDGE_WIDTH;
 
 /// Where the files list is this frame.
 #[derive(Clone, Copy, Debug)]
@@ -150,7 +146,6 @@ impl GhostexGpuiApp {
         self.native_docs.sidebar_pinned = false;
         self.native_docs.transient = None;
         self.native_docs.peek_timer = None;
-        self.native_docs.edge_band_armed = false;
         if was_visible && !self.native_docs_sidebar_layout().visible() {
             self.native_docs_start_slide(false);
         }
@@ -164,7 +159,6 @@ impl GhostexGpuiApp {
             return;
         }
         self.native_docs.peek_timer = None;
-        self.native_docs.edge_band_armed = false;
         if !self.native_docs_sidebar_layout().visible() {
             self.native_docs_start_slide(false);
         }
@@ -215,28 +209,17 @@ impl GhostexGpuiApp {
         }
     }
 
-    /// The pointer moved over the Docs view. Arms and fires the edge band, and keeps a peek open
-    /// while the pointer is over the list, closing it after the grace once the pointer leaves.
+    /// The pointer moved over the Docs view: a peek stays open while the pointer is over the list
+    /// and closes after the grace once it leaves.
     ///
-    /// CDXC:Docs 2026-09-12 DECISION:
-    /// User: the last 10px at the sidebar's edge of the Docs view reveal the files list, the same band the app sidebar uses while it is unpinned. The band reads the pointer's movement instead of laying an invisible strip over the document, so it observes the pointer without owning any layout and without intercepting a click, a drag, or a scroll. Closing the sidebar disarms the band until the pointer leaves it, because the button that hides the sidebar sits inside the band and would otherwise reveal it again under a cursor that never left.
+    /// CDXC:Docs 2026-10-09 DECISION:
+    /// User: "pls disable hovering on the right side of files making the floating files appear its annoying only hovering on the button should do that". Only hovering (or clicking) the Show files button peeks the floating files list; the Docs view's right edge reveals nothing. This supersedes the 2026-09-12 decisions that the last 10px along that edge revealed the list.
     pub(crate) fn native_docs_pointer_moved(
         &mut self,
         position: Point<Pixels>,
-        buttons_pressed: bool,
-        view_right: Pixels,
         sidebar_left: Option<Pixels>,
-        over_restore_button: bool,
         cx: &mut Context<Self>,
     ) {
-        let in_band = f32::from(view_right - position.x) <= EDGE_BAND_WIDTH
-            && f32::from(view_right - position.x) >= 0.0;
-        if !in_band && !over_restore_button {
-            self.native_docs.edge_band_armed = true;
-        }
-        if in_band && !buttons_pressed && self.native_docs.edge_band_armed {
-            self.native_docs_schedule_peek(cx);
-        }
         if self.native_docs.transient == Some(DocsTransient::Peek) {
             let inside = sidebar_left.is_some_and(|left| position.x >= left);
             if inside {

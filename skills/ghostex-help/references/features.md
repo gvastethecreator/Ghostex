@@ -242,8 +242,7 @@ view from the strip.
   marker means its contents have not been confirmed yet. Use Refresh in the Files
   sidebar menu to check for changes immediately. The button at the sidebar's
   window edge hides the files list; the same button in the corner brings it
-  back, and hovering it, or the last few pixels along that edge, peeks the list
-  without pinning it. Hidden or pinned is remembered. When the Files view is narrower than 800px the list opens as a
+  back, and hovering that button peeks the list without pinning it. Hidden or pinned is remembered. When the Files view is narrower than 800px the list opens as a
   temporary drawer over the document and closes when you open a file, press
   Escape, or click outside it. Cmd+F, or Ctrl+F on Windows and Linux, opens the
   search: inside a Markdown document it shows Find and Replace with the caret

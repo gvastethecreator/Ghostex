@@ -354,8 +354,6 @@ pub(crate) struct NativeDocsState {
     pub(crate) transient: Option<DocsTransient>,
     /// The panel's slide, running or last run.
     pub(crate) slide: Option<DocsSlide>,
-    /// The 10px edge band is disarmed after the list hides until the pointer leaves the band.
-    pub(crate) edge_band_armed: bool,
     /// A pending peek open or peek close.
     pub(crate) peek_timer: Option<Task<()>>,
     /// Folders open because of Expand All rather than one by one.
@@ -525,7 +523,6 @@ impl NativeDocsState {
         self.git_changes = from.git_changes;
         self.constrain_width = from.constrain_width;
         self.find = from.find.take();
-        self.edge_band_armed = true;
         self.tree_scroll = from.tree_scroll.clone();
         self.pending_open = from.pending_open.take();
         self.open_file_prompt = std::mem::take(&mut from.open_file_prompt);

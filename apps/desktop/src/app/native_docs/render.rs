@@ -23,10 +23,8 @@ pub(crate) const FLOATING_SIDEBAR_MAX_WIDTH: f32 = 800.0;
 
 thread_local! {
     /// The Docs view's bounds as last laid out, read by the next draw to pick docked or
-    /// floating and by the pointer handlers for the edge band.
+    /// floating and by the pointer handler that holds a peek open.
     static VIEW_BOUNDS: Cell<Bounds<Pixels>> = Cell::new(Bounds::default());
-    /// The corner restore button, so leaving it re-arms the edge band.
-    pub(crate) static RESTORE_BOUNDS: Cell<Bounds<Pixels>> = Cell::new(Bounds::default());
 }
 
 /// The Docs view's width as last laid out; wide until the first layout.
@@ -177,17 +175,7 @@ impl GhostexGpuiApp {
                         .native_docs_sidebar_layout()
                         .overlay
                         .then(|| bounds.right() - px(SIDEBAR_WIDTH));
-                    let over_restore = RESTORE_BOUNDS
-                        .with(|cell| cell.get())
-                        .contains(&event.position);
-                    this.native_docs_pointer_moved(
-                        event.position,
-                        event.pressed_button.is_some(),
-                        bounds.right(),
-                        sidebar_left,
-                        over_restore,
-                        cx,
-                    );
+                    this.native_docs_pointer_moved(event.position, sidebar_left, cx);
                 }))
                 .relative()
                 .size_full()
@@ -316,14 +304,6 @@ impl GhostexGpuiApp {
                 16.0,
                 p.toolbar_icon,
             ))
-            .child(
-                gpui::canvas(
-                    |bounds, _, _| RESTORE_BOUNDS.with(|cell| cell.set(bounds)),
-                    |_, _, _, _| {},
-                )
-                .absolute()
-                .size_full(),
-            )
             .tooltip(|window, cx| crate::app::helpers::titlebar_tooltip("Show files", window, cx))
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                 if *hovered {
