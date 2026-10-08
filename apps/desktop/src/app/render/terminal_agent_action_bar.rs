@@ -16,6 +16,8 @@
 // and it occludes only its own visible rectangle.
 
 mod account_flyout;
+mod dictation;
+pub(crate) use dictation::TerminalDictation;
 mod menu_width;
 mod model_pill;
 mod palette;
@@ -138,6 +140,8 @@ const TERMINAL_AGENT_BAR_FORK_ICON: &str = "titlebar/git-branch.svg";
 const TERMINAL_AGENT_BAR_FULL_RELOAD_ICON: &str = "titlebar/refresh.svg";
 const TERMINAL_AGENT_BAR_STASHED_PROMPTS_ICON: &str = "titlebar/stack-push.svg";
 const TERMINAL_AGENT_BAR_CHAT_VIEW_ICON: &str = "titlebar/message-circle.svg";
+const TERMINAL_AGENT_BAR_DICTATE_ICON: &str = "titlebar/microphone.svg";
+const TERMINAL_AGENT_BAR_STOP_DICTATING_ICON: &str = "titlebar/player-stop.svg";
 const TERMINAL_AGENT_BAR_EXPORT_TRANSCRIPT_ICON: &str = "titlebar/file-export.svg";
 const TERMINAL_AGENT_BAR_SWITCH_ACCOUNT_ICON: &str = "titlebar/user-circle.svg";
 const TERMINAL_AGENT_BAR_SUBMENU_CHEVRON_ICON: &str = "titlebar/chevron-left.svg";
@@ -177,6 +181,7 @@ pub(crate) enum TerminalAgentBarAction {
     StashedPrompts,
     AttachPath,
     Maximize,
+    Dictate,
     ToggleChatView,
     PromptEditor,
     VerboseMode,
@@ -203,6 +208,7 @@ impl TerminalAgentBarAction {
             Self::StashedPrompts => "stashed-prompts",
             Self::AttachPath => "attach-path",
             Self::Maximize => "maximize",
+            Self::Dictate => "dictate",
             Self::ToggleChatView => "chat-view",
             Self::PromptEditor => "prompt-editor",
             Self::VerboseMode => "verbose-mode",
@@ -230,6 +236,7 @@ impl TerminalAgentBarAction {
                 "Maximize pane",
                 terminal_element::TERMINAL_OVERLAY_FOCUS_MODE_HOTKEY_ACTION_ID,
             ),
+            Self::Dictate => ("Dictate", ""),
             Self::ToggleChatView => ("Chat View", "toggleChatView"),
             Self::PromptEditor => ("Prompt editor", "promptEditor"),
             Self::VerboseMode => ("Verbose mode", ""),
@@ -252,6 +259,7 @@ impl TerminalAgentBarAction {
             Self::StashedPrompts => TERMINAL_AGENT_BAR_STASHED_PROMPTS_ICON,
             Self::AttachPath => TERMINAL_AGENT_BAR_ATTACH_PATH_ICON,
             Self::Maximize => TERMINAL_AGENT_BAR_MAXIMIZE_ICON,
+            Self::Dictate => TERMINAL_AGENT_BAR_DICTATE_ICON,
             Self::ToggleChatView => TERMINAL_AGENT_BAR_CHAT_VIEW_ICON,
             Self::PromptEditor => TERMINAL_AGENT_BAR_PROMPT_EDITOR_ICON,
             Self::VerboseMode => TERMINAL_AGENT_BAR_VERBOSE_MODE_ICON,
@@ -292,6 +300,7 @@ impl TerminalAgentBarAction {
             Self::ToggleMenu
             | Self::AttachPath
             | Self::Maximize
+            | Self::Dictate
             | Self::PromptEditor
             | Self::SwitchAccount
             | Self::VerboseMode => None,
@@ -486,6 +495,18 @@ impl GhostexGpuiApp {
                             None,
                             cx,
                         ))
+                        .when(dictation::TERMINAL_DICTATION, |this| {
+                            this.child(self.render_terminal_agent_bar_icon_button(
+                                surface,
+                                session_id,
+                                TerminalAgentBarAction::Dictate,
+                                false,
+                                0,
+                                &suffix,
+                                None,
+                                cx,
+                            ))
+                        })
                         .child(self.render_terminal_agent_bar_icon_button(
                             surface,
                             session_id,
@@ -577,6 +598,12 @@ impl GhostexGpuiApp {
                     state.tooltip_override = Some(format!(
                         "{agent_name} hasn't reported its session to Ghostex yet\nChat View needs the {agent_name} hooks installed and running\nClick to check them in Settings > Agents"
                     ));
+                }
+            }
+            TerminalAgentBarAction::Dictate => {
+                if self.terminal_dictating(session_id) {
+                    state.icon_path = TERMINAL_AGENT_BAR_STOP_DICTATING_ICON;
+                    state.label = "Stop dictating";
                 }
             }
             TerminalAgentBarAction::Maximize => {
@@ -946,6 +973,13 @@ impl GhostexGpuiApp {
             return;
         }
         if !self.terminal_agent_bar_action_enabled(surface, session_id, action) {
+            return;
+        }
+
+        // Dictation listens in the app and pastes into the terminal when it ends
+        // (`dictation.rs`), so it is not a `TerminalViewEvent` either.
+        if action == TerminalAgentBarAction::Dictate {
+            self.toggle_terminal_dictation(session_id, window, cx);
             return;
         }
 

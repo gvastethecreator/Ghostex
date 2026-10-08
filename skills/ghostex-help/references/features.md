@@ -708,7 +708,9 @@ Press the microphone beside Terminal View to dictate: speak, then press it again
 to stop, and what you said is typed into your message without sending it. It uses
 your computer's speech recognition on macOS and Windows (on Windows, turn on
 Online speech recognition in Windows Settings > Privacy & security > Speech) and
-the phone's on the mobile app; Linux has no microphone button.
+the phone's on the mobile app; Linux has no microphone button. In a session's
+terminal view the same microphone sits left of Chat View on the bar below the
+terminal, and what you say is typed into the terminal without pressing Enter.
 A long code block shows its first lines and scrolls inside the block; the arrows
 button in the block's header shows the whole block, and again collapses it.
 Hover a message to show its actions and the time it was sent in a row below
