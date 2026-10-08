@@ -30,7 +30,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use app::helpers::manage_docs_resources::{ManageDocsResourceRoot, ManageDocsResourceScope};
-use app::native_docs::{blocks, editor_style, gutter, markdown_body, palette::DocsPalette};
+use app::native_docs::{
+    blocks, editor_style, gutter, markdown_body, palette::DocsPalette, table_tools,
+};
 use gpui::{
     App, AppContext as _, Bounds, Context, Entity, IntoElement, ParentElement as _, Render,
     ScrollHandle, SharedString, Styled as _, Window, WindowBounds, WindowOptions, div, point, px,
@@ -95,6 +97,12 @@ impl Render for DocsDemo {
                 line_numbers: true,
                 constrain: false,
                 changes: self.changes.as_ref(),
+                table_actions: &table_tools::TableActionHost {
+                    copy: std::rc::Rc::new(|text, cx| {
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(text))
+                    }),
+                    open: Some(std::rc::Rc::new(|_, _| {})),
+                },
             },
             p,
             window,

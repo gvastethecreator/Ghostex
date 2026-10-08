@@ -972,7 +972,21 @@ impl Element for EditorElement {
                     let th_x = track + (avail - th_w) * frac;
                     let mut th_c = t.border;
                     th_c.a = (th_c.a * 1.5).min(0.8);
-                    let rect = Bounds::new(point(th_x, bottom - px(4.)), size(th_w, px(3.)));
+                    // Local change (Ghostex Docs): a 5px thumb over a faint track in the last
+                    // row's bottom padding (was a bare 3px line), so a wide table reads as
+                    // scrollable at a glance, as the chat's tables do. While the table runs on
+                    // below the visible area the bar stays at its bottom (above the host's
+                    // inset), so a tall table can be scrolled sideways without scrolling to its
+                    // end first.
+                    let visible_bottom =
+                        window.content_mask().bounds.bottom() - editor.table_scrollbar_inset;
+                    let bar_y = (bottom - px(7.))
+                        .min(visible_bottom - px(7.))
+                        .max(top + px(4.));
+                    let rect = Bounds::new(point(th_x, bar_y), size(th_w, px(5.)));
+                    let track_rect = Bounds::new(point(track, rect.origin.y), size(avail, px(5.)));
+                    let mut track_c = t.border;
+                    track_c.a *= 0.35;
                     let grab = Bounds::new(
                         rect.origin - point(px(4.), px(6.)),
                         rect.size + size(px(8.), px(12.)),
@@ -980,6 +994,8 @@ impl Element for EditorElement {
                     table_thumbs.push((
                         TableThumb {
                             rect,
+                            track: track_rect,
+                            track_color: track_c,
                             grab,
                             header: tbl_header,
                             // Negative on RTL: the thumb runs against the
@@ -1658,7 +1674,10 @@ impl Element for EditorElement {
                     bottom_right: if cb.bottom { r } else { z },
                 };
                 let box_origin = point(origin.x, origin.y - top_pad);
-                let box_size = size(cb.width, *lh + top_pad + bot_pad);
+                // Local change (Ghostex Docs): a code line that wraps fills the box behind every
+                // one of its rows (it was one row tall, so the page showed behind the rest).
+                let rows_h = *lh * prepaint.wrap_rows.get(i).copied().unwrap_or(1) as f32;
+                let box_size = size(cb.width, rows_h + top_pad + bot_pad);
                 // Local change (Ghostex Docs): the card's 1px border, drawn per row.
                 let one = px(1.);
                 window.paint_quad(PaintQuad {
@@ -2272,7 +2291,10 @@ impl Element for EditorElement {
         // wide table's last row, with a hand cursor over its grab band —
         // draggable (see `on_mouse_down`).
         for (thumb, hb) in &prepaint.table_thumbs {
-            window.paint_quad(fill(thumb.rect, thumb.color).corner_radii(Corners::all(px(1.5))));
+            window.paint_quad(
+                fill(thumb.track, thumb.track_color).corner_radii(Corners::all(px(2.5))),
+            );
+            window.paint_quad(fill(thumb.rect, thumb.color).corner_radii(Corners::all(px(2.5))));
             window.set_cursor_style(CursorStyle::PointingHand, hb);
         }
         // Gutter drag grip: six muted dots on the hovered line; while a drag

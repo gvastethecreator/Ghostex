@@ -219,9 +219,12 @@ view from the strip.
 - **Files**: Markdown, HTML, and Excalidraw files from the project's docs
   folders, with a markdown editor and an annotation system that sends notes
   back to the agent. Select text in a Markdown file to comment on it, mark it
-  Looks good, Clarify, or Needs tests, or mark it Remove this (the X button, or
-  press D), and add a global comment from the header. Unselect the text to
-  close the toolbar. In the comment box, Add (or Cmd+Enter, Ctrl+Enter
+  Looks good, Clarify, or Needs tests, or mark it Remove this (the X button),
+  and add a global comment from the header; typing over a selection replaces it,
+  as in any editor. Unselect the text (or press Escape) to close the toolbar.
+  Hover a table to open it in a window or copy it as Markdown or CSV; a table
+  wider than the pane wraps its cells to fit, and scrolls sideways with its
+  scrollbar when it still cannot. In the comment box, Add (or Cmd+Enter, Ctrl+Enter
   on Windows and Linux) adds the note to the list; the same chord outside the
   box is Send. Send (or Cmd+Enter) delivers the new notes as
   numbered feedback with line numbers to the session last clicked in the

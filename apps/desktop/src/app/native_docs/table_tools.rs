@@ -2,7 +2,8 @@
 //! caret is in a table, a six-button toolbar at the table's
 //! top left (Insert row above / below, Insert column left / right, Delete row / column) and a sort
 //! button on each header cell. Sorting rewrites the table's rows (one undo step); the Docs page
-//! sorted the view first and wrote it with "Apply Sort".
+//! sorted the view first and wrote it with "Apply Sort". While the pointer is over a table, its
+//! top right shows the chat's table actions (Open in window, copy as Markdown, copy as CSV).
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -19,6 +20,22 @@ use super::palette::DocsPalette;
 
 /// The active sort: (header row, column, descending).
 pub(crate) type TableSort = Rc<Cell<Option<(usize, usize, bool)>>>;
+
+/// What the hover actions do with a table's Markdown: copy it (with the app's copy feedback) and,
+/// when the host has one, open it in the Markdown table window.
+#[derive(Clone)]
+pub(crate) struct TableActionHost {
+    pub(crate) copy: Rc<dyn Fn(String, &mut App)>,
+    pub(crate) open: Option<Rc<dyn Fn(String, &mut App)>>,
+}
+
+thread_local! {
+    /// The header row of the table whose actions the pointer is on, which keeps them up after the
+    /// pointer leaves the table for them (one Markdown body draws at a time).
+    static ACTIONS_HOVERED: Cell<Option<usize>> = const { Cell::new(None) };
+}
+
+const ACTION_HEIGHT: f32 = 22.0;
 
 const TOOLBAR_BUTTON: f32 = 24.0;
 
@@ -196,6 +213,121 @@ pub(crate) fn render_table_tools(
             .size_full()
             .child(toolbar)
             .children(sort_buttons)
+            .into_any_element(),
+    )
+}
+
+/// The hovered table's actions at its top right, in the editor's own coordinates: Open in window,
+/// copy as Markdown and copy as CSV, the chat's table toolbar (`table_actions` in
+/// native_chat/rich_markdown.rs) with the same icons and labels.
+///
+/// CDXC:Docs 2026-10-09 DECISION:
+/// User: "add ability to copy as md/csv and button to show in a pop up window". Hovering a table in the Files editor shows the chat's table actions over its top right corner: the external-link button opens the table in the Markdown table window, and the MD and CSV buttons copy it as Markdown or as CSV (the chat's CSV conversion, `helpers/markdown_table_csv.rs`). Source mode shows no table, so no actions.
+pub(crate) fn render_table_actions(
+    live: &Entity<EditorState>,
+    host: &TableActionHost,
+    p: &DocsPalette,
+    cx: &App,
+) -> Option<AnyElement> {
+    let editor = live.read(cx);
+    let header = editor
+        .hovered_table()
+        .map(|(header, _)| header)
+        .or_else(|| ACTIONS_HOVERED.with(Cell::get))?;
+    let source = editor.table_markdown(header)?;
+    let cells = editor.table_header_cells(header);
+    let (first, last) = (cells.first()?, cells.last()?);
+    // The table's visible right edge: a wide table scrolled sideways still ends at the editor's.
+    let right = editor
+        .hovered_table()
+        .filter(|(row, _)| *row == header)
+        .map_or(last.right(), |(_, zone)| last.right().min(zone.right()));
+    let text = p.muted;
+    let hover = p.control_hover;
+    let action = |id: &'static str, label: &'static str, format: Option<&'static str>| {
+        div()
+            .id(id)
+            .h(px(ACTION_HEIGHT))
+            .flex()
+            .items_center()
+            .gap(px(3.0))
+            .px(px(if format.is_some() { 5.0 } else { 4.0 }))
+            .rounded(px(6.0))
+            .cursor_pointer()
+            .hover(move |style| style.bg(hover))
+            .tooltip(tooltip(label))
+            .on_mouse_down(MouseButton::Left, |_, window, cx| {
+                window.prevent_default();
+                cx.stop_propagation();
+            })
+            .child(
+                svg()
+                    .path(if format.is_some() {
+                        "titlebar/copy.svg"
+                    } else {
+                        "titlebar/external-link.svg"
+                    })
+                    .size(px(14.0))
+                    .text_color(text)
+                    .flex_shrink_0(),
+            )
+            .when_some(format, |this, format| {
+                this.child(
+                    div()
+                        .text_size(px(11.0))
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(text)
+                        .child(format),
+                )
+            })
+    };
+    let open = host.open.clone().map(|open| {
+        let source = source.clone();
+        action("docs-table-open", "Open in window", None)
+            .on_click(move |_, _, cx| open(source.clone(), cx))
+    });
+    let markdown = {
+        let (copy, source) = (host.copy.clone(), source.clone());
+        action("docs-table-copy-md", "Copy as Markdown", Some("MD"))
+            .on_click(move |_, _, cx| copy(source.clone(), cx))
+    };
+    let csv = {
+        let copy = host.copy.clone();
+        action("docs-table-copy-csv", "Copy as CSV", Some("CSV")).on_click(move |_, _, cx| {
+            copy(
+                crate::app::helpers::markdown_table_csv::table_csv(&source),
+                cx,
+            )
+        })
+    };
+    Some(
+        div()
+            .absolute()
+            // Clear of the column pill zorite draws on the header's top border.
+            .top(first.origin.y - px(ACTION_HEIGHT + 12.0))
+            .left_0()
+            .w(right)
+            .flex()
+            .justify_end()
+            .child(
+                div()
+                    .id("docs-table-actions")
+                    .flex()
+                    .items_center()
+                    .gap(px(2.0))
+                    .p(px(1.0))
+                    .rounded(px(7.0))
+                    .border_1()
+                    .border_color(p.border)
+                    .bg(p.raised)
+                    .on_hover(move |hovered, window, _| {
+                        ACTIONS_HOVERED.with(|cell| cell.set(hovered.then_some(header)));
+                        window.refresh();
+                    })
+                    .children(open)
+                    .child(markdown)
+                    .child(csv),
+            )
             .into_any_element(),
     )
 }

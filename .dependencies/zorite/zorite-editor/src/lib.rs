@@ -985,6 +985,8 @@ pub struct EditorState {
     table_thumbs: Vec<TableThumb>,
     /// A live thumb drag: `(header row, grab x, scroll offset at grab)`.
     table_thumb_drag: Option<(usize, Pixels, f32)>,
+    /// Local change (Ghostex Docs): see `set_table_scrollbar_inset`.
+    table_scrollbar_inset: Pixels,
     /// Extra left offset for the drag grip — the host sets its line-number
     /// gutter's width here so the grip sits beside the numbers, not on them.
     grip_inset: Pixels,
@@ -1166,6 +1168,7 @@ impl EditorState {
             table_scroll_x: std::collections::HashMap::new(),
             table_thumbs: Vec::new(),
             table_thumb_drag: None,
+            table_scrollbar_inset: px(0.),
             grip_inset: px(0.),
             content_gen: 0,
             utf16_anchor: std::cell::Cell::new((0, 0, 0)),

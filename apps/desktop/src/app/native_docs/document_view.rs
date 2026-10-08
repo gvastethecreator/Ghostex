@@ -664,6 +664,23 @@ impl GhostexGpuiApp {
                 let Some(live) = document.live.clone() else {
                     return notice("files-view/t-refresh-2.svg", "Loading file".to_string());
                 };
+                let table_actions = {
+                    let app = cx.weak_entity();
+                    super::table_tools::TableActionHost {
+                        copy: std::rc::Rc::new(|text, cx| {
+                            crate::app::helpers::gpui_copy_to_clipboard(
+                                gpui::ClipboardItem::new_string(text),
+                                cx,
+                            );
+                        }),
+                        open: Some(std::rc::Rc::new(move |source, cx| {
+                            let message = serde_json::json!({ "source": source });
+                            let _ = app.update(cx, |app, cx| {
+                                app.open_gpui_markdown_table_modal(&message, cx);
+                            });
+                        })),
+                    }
+                };
                 let body = super::markdown_body::render_markdown_body(
                     super::markdown_body::DocsMarkdownBody {
                         id: SharedString::from(format!("native-docs-scroll-{}", document.path)),
@@ -677,6 +694,7 @@ impl GhostexGpuiApp {
                             .git_changes
                             .then_some(document.changes.as_ref())
                             .flatten(),
+                        table_actions: &table_actions,
                     },
                     p,
                     window,

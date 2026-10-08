@@ -662,6 +662,32 @@ impl EditorState {
             .collect()
     }
 
+    /// Local change (Ghostex Docs): the table the pointer is over, for a host toolbar, as `(header
+    /// row, the table's visible frame)` in the editor's own coordinates; `None` off every table.
+    pub fn hovered_table(&self) -> Option<(usize, Bounds<Pixels>)> {
+        let (index, _) = self.table_hover_region?;
+        let (zone, header) = *self.table_hover_zones.get(index)?;
+        let origin = self.last_bounds?.origin;
+        Some((header, Bounds::new(zone.origin - origin, zone.size)))
+    }
+
+    /// Local change (Ghostex Docs): the Markdown source of the table headed at `header_row`.
+    pub fn table_markdown(&self, header_row: usize) -> Option<String> {
+        let scan = self.scan_data();
+        let region = scan
+            .tables
+            .iter()
+            .find(|region| region.lines.start == header_row)?;
+        let lines: Vec<&str> = self.content.split('\n').collect();
+        Some(lines.get(region.lines.clone())?.join("\n"))
+    }
+
+    /// Local change (Ghostex Docs): how far above the bottom of the visible area a wide table's
+    /// scroll thumb stays while the table runs on below it (the host's floating chrome there).
+    pub fn set_table_scrollbar_inset(&mut self, inset: Pixels) {
+        self.table_scrollbar_inset = inset;
+    }
+
     /// Local change (Ghostex Docs): rewrites the table headed at `header_row` with its body rows
     /// sorted by column `col` (the Docs page's comparator: empty cells last, then numbers, then
     /// ISO dates, then text, numeric-aware and case-insensitive). One undo step.
@@ -1141,9 +1167,10 @@ impl EditorState {
 
 /// Content-fit column widths for a table region (W4c): each column sized to its
 /// widest cell (header measured bold) + padding, with a minimum. Local change
-/// (Ghostex Docs): a content-measured table wider than `avail` narrows its widest
-/// columns to fit and their cells wrap; explicit `cols=` widths and a live drag
-/// still scroll horizontally in place.
+/// (Ghostex Docs): a content-measured table wider than `avail` fits it the way the
+/// chat's tables do (`fit_table_columns`) and its cells wrap; explicit `cols=`
+/// widths, a live drag, and floors that still do not fit scroll horizontally in
+/// place.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn table_column_widths(
     lines: &[&str],
@@ -1217,8 +1244,8 @@ pub(crate) fn table_column_widths(
         && let Some(avail) = avail
         && widths.iter().copied().sum::<Pixels>() > avail
     {
-        let floors = table_column_floors(lines, region, window, base_font, font_size, color, cols);
-        widths = fit_table_columns(&widths, &floors, avail);
+        let words = table_column_words(lines, region, window, base_font, font_size, color, cols);
+        widths = fit_table_columns(&widths, &words, font_size, avail);
     }
     // Explicit widths — the marker's `cols=` list (drag-to-resize persisted),
     // then the live drag — override the measurement (floored so a column can't
@@ -1239,11 +1266,11 @@ pub(crate) fn table_column_widths(
     widths
 }
 
-/// Local change (Ghostex Docs): the narrowest each column can wrap to — its
-/// longest word (header measured bold, with room for its sort button) plus
-/// padding, never under the 10ch minimum.
+/// Local change (Ghostex Docs): the widest single word in each column (header
+/// measured bold, with room for its sort button), the narrowest it can wrap to
+/// without breaking a word.
 #[allow(clippy::too_many_arguments)]
-fn table_column_floors(
+fn table_column_words(
     lines: &[&str],
     region: &markdown_syntax::TableRegion,
     window: &mut Window,
@@ -1252,8 +1279,7 @@ fn table_column_floors(
     color: Hsla,
     cols: usize,
 ) -> Vec<Pixels> {
-    let pad = px(TABLE_CELL_PAD);
-    let mut floors = vec![font_size * 6.; cols];
+    let mut words = vec![px(0.); cols];
     for li in region.lines.clone() {
         if li == region.lines.start + 1 {
             continue;
@@ -1287,57 +1313,70 @@ fn table_column_floors(
                         None,
                     )
                     .width();
-                floors[c] = floors[c].max(w + pad * 2. + px(2.) + sort);
+                words[c] = words[c].max(w + sort);
             }
         }
     }
-    floors
+    words
 }
 
-/// Local change (Ghostex Docs): fits natural column `widths` into `avail` by
-/// capping the widest columns at one shared width (never below their `floors`),
-/// so narrow columns keep their natural width and only the long ones wrap. When
-/// even the floors overflow, the table keeps them and scrolls horizontally.
-fn fit_table_columns(widths: &[Pixels], floors: &[Pixels], avail: Pixels) -> Vec<Pixels> {
-    let floors: Vec<Pixels> = widths
+/// Local change (Ghostex Docs): fits natural column `widths` into `avail` the way
+/// the chat's tables do (gpui-component's adaptive table, `render_scroll_table`
+/// in `text/node.rs`): a short column (one line of at most 8em) keeps its width;
+/// a longer one may narrow to its widest word, or to a quarter of its one-line
+/// width (at most 10em), but never below 6em nor above 12em, so a long path or
+/// code span breaks rather than forcing the table to scroll. Every column starts
+/// at that floor and the room left is shared in proportion to how much more each
+/// one wants. Only when even the floors do not fit does the table scroll.
+///
+/// CDXC:Docs 2026-10-09 DECISION:
+/// User: "in the gpui file editor i see the table is still overflowing when the width of files is small and i cant see the full width or scroll to see the rest of the table please fix this like it's fixed in the chat view when we have wide table there exactly". A wide table in the Files editor fits with the chat's column floors and sharing (this function), and a table that still cannot fit scrolls sideways with a visible bar that stays at the bottom of the visible area while the table runs on below it (`set_table_scrollbar_inset`). Supersedes the same day's longest-word floors, which let one long path push a column off the editor.
+fn fit_table_columns(
+    widths: &[Pixels],
+    words: &[Pixels],
+    font_size: Pixels,
+    avail: Pixels,
+) -> Vec<Pixels> {
+    const SHORT_COLUMN_EM: f32 = 8.0;
+    const WRAP_MIN_EM: f32 = 6.0;
+    const WORD_FLOOR_MAX_EM: f32 = 12.0;
+    const LONG_TEXT_FLOOR_SHARE: f32 = 0.25;
+    const LONG_TEXT_FLOOR_MAX_EM: f32 = 10.0;
+    let em = f32::from(font_size);
+    // The padding `table_column_widths` adds around a cell's text.
+    let inset = TABLE_CELL_PAD * 2. + 2.;
+    let floors: Vec<f32> = widths
         .iter()
-        .zip(floors)
-        .map(|(w, f)| (*f).min(*w))
+        .zip(words)
+        .map(|(width, word)| {
+            let max = f32::from(*width);
+            let text = max - inset;
+            if text <= SHORT_COLUMN_EM * em {
+                return max;
+            }
+            let floor = f32::from(*word)
+                .max((text * LONG_TEXT_FLOOR_SHARE).min(LONG_TEXT_FLOOR_MAX_EM * em))
+                .clamp(WRAP_MIN_EM * em, WORD_FLOOR_MAX_EM * em);
+            (floor + inset).min(max)
+        })
         .collect();
-    if floors.iter().copied().sum::<Pixels>() >= avail {
-        return floors;
+    let floor_total: f32 = floors.iter().sum();
+    let room = f32::from(avail) - floor_total;
+    let want: Vec<f32> = widths
+        .iter()
+        .zip(&floors)
+        .map(|(width, floor)| (f32::from(*width) - floor).max(0.))
+        .collect();
+    let want_total: f32 = want.iter().sum();
+    if room <= 0. || want_total < 1. {
+        return floors.into_iter().map(px).collect();
     }
-    // Water-fill: a column its natural width or its floor decides is fixed;
-    // the rest share what is left equally.
-    let mut fixed: Vec<Option<Pixels>> = vec![None; widths.len()];
-    loop {
-        let used: Pixels = fixed.iter().flatten().copied().sum();
-        let open = fixed.iter().filter(|f| f.is_none()).count();
-        if open == 0 {
-            break;
-        }
-        let share = (avail - used) / open as f32;
-        let mut changed = false;
-        for c in 0..widths.len() {
-            if fixed[c].is_some() {
-                continue;
-            }
-            if widths[c] <= share {
-                fixed[c] = Some(widths[c]);
-                changed = true;
-            } else if floors[c] >= share {
-                fixed[c] = Some(floors[c]);
-                changed = true;
-            }
-        }
-        if !changed {
-            for f in fixed.iter_mut().filter(|f| f.is_none()) {
-                *f = Some(share.floor());
-            }
-            break;
-        }
-    }
-    fixed.into_iter().map(Option::unwrap_or_default).collect()
+    let share = (room / want_total).min(1.);
+    floors
+        .iter()
+        .zip(&want)
+        .map(|(floor, want)| px((floor + want * share).floor()))
+        .collect()
 }
 
 /// Horizontal inset (px) of a table cell's text from its column's left edge.
@@ -1480,6 +1519,10 @@ fn shape_cell(
 #[derive(Clone, Copy)]
 pub(crate) struct TableThumb {
     pub(crate) rect: Bounds<Pixels>,
+    /// Local change (Ghostex Docs): the track the thumb runs in, painted under it so a table
+    /// that scrolls says so before it is hovered.
+    pub(crate) track: Bounds<Pixels>,
+    pub(crate) track_color: Hsla,
     pub(crate) grab: Bounds<Pixels>,
     /// Header row — the table's `table_scroll_x` key.
     pub(crate) header: usize,

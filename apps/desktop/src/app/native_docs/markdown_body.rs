@@ -37,6 +37,8 @@ pub(crate) struct DocsMarkdownBody<'a> {
     pub(crate) constrain: bool,
     /// The git stripe's per-line changes, when Git Changes is on and the file has a HEAD version.
     pub(crate) changes: Option<&'a (Vec<LineChange>, Vec<usize>)>,
+    /// What a hovered table's actions do (`table_tools::render_table_actions`).
+    pub(crate) table_actions: &'a super::table_tools::TableActionHost,
 }
 
 /// The scrolling body. The caller adds its key handling and puts the formatting bar and
@@ -90,6 +92,9 @@ pub(crate) fn render_markdown_body(
             super::table_tools::render_table_tools(body.live, &rows, &sort, p, window, cx)
         })
         .flatten();
+    let table_actions = (!body.source)
+        .then(|| super::table_tools::render_table_actions(body.live, body.table_actions, p, cx))
+        .flatten();
     // CDXC:Docs 2026-09-28 WHY: the gutter is drawn from the editor's row layout as of its last
     // paint, so when a diagram, formula or image finishes rendering (or a fold changes a row's
     // height) this frame's gutter still has the old rows. The editor also shapes only the rows near
@@ -108,6 +113,8 @@ pub(crate) fn render_markdown_body(
                     // its own fold lane (the gutter's).
                     editor.set_block_grip(false);
                     editor.set_heading_chevrons(false);
+                    // A wide table's scroll bar stays above the formatting bar.
+                    editor.set_table_scrollbar_inset(px(BODY_BOTTOM_PAD - 60.0));
                     editor.row_layout()
                 });
                 let offset = f32::from(scroll.offset().y);
@@ -159,6 +166,7 @@ pub(crate) fn render_markdown_body(
                             .child(body.live.clone())
                             .children(conflicts)
                             .children(table_tools)
+                            .children(table_actions)
                             .child(settle),
                     ),
             ),

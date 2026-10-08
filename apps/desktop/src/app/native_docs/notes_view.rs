@@ -539,70 +539,32 @@ impl GhostexGpuiApp {
         super::format_bar::wrap_inline(&editor, before, after, cx);
     }
 
-    /// The single-key shortcuts over a selection: D, Backspace or Delete add "Remove this", C
-    /// opens the composer, 1 to 3 add the quick labels, Escape drops the selection, and any other
-    /// letter opens the composer with that letter typed.
+    /// Escape over a selection drops it (and with it the selection toolbar).
+    ///
+    /// CDXC:Docs 2026-10-09 DECISION:
+    /// User: "in the gpui file view selecting some text then typing doesn't work to replace the text i selected like it usually does in any other text file pls fix". Typing, pasting, IME input, Backspace and Delete over a selection edit the text as in any editor. The single-key annotation shortcuts the React Docs page had over a selection (D, Backspace or Delete for Remove this, C and any other letter for the comment box, 1 to 3 for the quick labels) are gone; the selection toolbar's buttons add those notes.
     pub(crate) fn native_docs_selection_key(
         &mut self,
         event: &KeyDownEvent,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.native_docs.composer.is_some() || self.native_docs.toolbar_formatting {
+        if self.native_docs.composer.is_some() || event.keystroke.key != "escape" {
             return;
         }
-        let modifiers = event.keystroke.modifiers;
-        if modifiers.control || modifiers.platform || modifiers.alt || modifiers.function {
+        if event.keystroke.modifiers.modified() || self.native_docs_selection_quote(cx).is_none() {
             return;
         }
-        if self.native_docs_selection_quote(cx).is_none() {
-            return;
-        }
-        let key = event.keystroke.key.as_str();
-        match key {
-            "d" | "backspace" | "delete" => {
-                self.native_docs_quick_note(DocsAnnotationType::Redline, None, cx)
-            }
-            "c" => self.native_docs_open_composer(None, None, "", cx),
-            "1" => self.native_docs_quick_note(
-                DocsAnnotationType::Comment,
-                Some(DocsQuickLabelId::Clarify),
-                cx,
-            ),
-            "2" => self.native_docs_quick_note(
-                DocsAnnotationType::Comment,
-                Some(DocsQuickLabelId::NeedsTests),
-                cx,
-            ),
-            "3" => self.native_docs_quick_note(
-                DocsAnnotationType::Comment,
-                Some(DocsQuickLabelId::LooksGood),
-                cx,
-            ),
-            "escape" => {
-                // The selection lives in the Markdown document's live editor.
-                if let Some(editor) = self
-                    .native_docs
-                    .active_document()
-                    .and_then(|document| document.live.clone())
-                {
-                    editor.update(cx, |editor, cx| {
-                        let caret = editor.cursor();
-                        editor.set_cursor(caret, cx);
-                    });
-                }
-            }
-            _ => {
-                let Some(typed) = event
-                    .keystroke
-                    .key_char
-                    .clone()
-                    .filter(|text| !text.trim().is_empty())
-                else {
-                    return;
-                };
-                self.native_docs_open_composer(None, None, &typed, cx);
-            }
+        // The selection lives in the Markdown document's live editor.
+        if let Some(editor) = self
+            .native_docs
+            .active_document()
+            .and_then(|document| document.live.clone())
+        {
+            editor.update(cx, |editor, cx| {
+                let caret = editor.cursor();
+                editor.set_cursor(caret, cx);
+            });
         }
         cx.stop_propagation();
     }

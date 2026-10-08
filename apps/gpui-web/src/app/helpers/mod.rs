@@ -1,6 +1,7 @@
-//! Same module paths as the desktop's `helpers/`. `chrome_palette` and `indicator_animation` are the desktop files; the others hold only the items `build.rs` lifts out of the desktop files of the same name (see `extracted-items.txt`), because the rest of those files is native-only.
+//! Same module paths as the desktop's `helpers/`. `chrome_palette`, `indicator_animation` and `markdown_table_csv` are the desktop files; the others hold only the items `build.rs` lifts out of the desktop files of the same name (see `extracted-items.txt`), because the rest of those files is native-only.
 pub(crate) mod chrome_palette;
 pub(crate) mod indicator_animation;
+pub(crate) mod markdown_table_csv;
 #[allow(dead_code, unused_imports)]
 pub(crate) mod titlebar {
     use crate::app::helpers::*;
