@@ -33,6 +33,7 @@ pub fn send_gxserver_cli_action(action: &str, payload: &Value, flags: &Flags) ->
         "lookupRepository" => rpc::call_gxserver_rpc("/api/lookupRepository", payload, flags),
         "cloneRepository" => clone_repository_and_wait(payload, flags),
         "holdSessionsAwake" => rpc::call_gxserver_rpc("/api/holdSessionsAwake", payload, flags),
+        "holdSessionChatGrid" => rpc::call_gxserver_rpc("/api/holdSessionChatGrid", payload, flags),
         "recordClientEvent" => {
             rpc::call_gxserver_flat_body("/api/recordClientEvent", payload, flags)
         }

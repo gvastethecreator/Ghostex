@@ -915,6 +915,8 @@ pub struct GhostexGpuiApp {
     pub(crate) agents_gpui_engine_terminals:
         HashMap<TerminalSessionId, terminal_gpui_engine::GpuiEngineTerminalRecord>,
     pub(crate) agents_terminal_chat_claims: HashMap<TerminalSessionId, GpuiTerminalChatClaimState>,
+    /// Windows: the sessions whose terminal was shown most recently, newest first.
+    pub(crate) agents_terminal_warm_viewers: std::collections::VecDeque<TerminalSessionId>,
     pub(crate) terminal_viewer_reconcile_pending: bool,
     pub(crate) retiring_gpui_terminal_viewers:
         HashMap<GpuiTerminalViewerOwner, GpuiRetiringTerminalViewer>,
