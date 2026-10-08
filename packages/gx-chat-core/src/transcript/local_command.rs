@@ -114,8 +114,30 @@ pub fn shell_command_prompt_text(message: &ChatMessage) -> Option<String> {
     shell_command_input(&joined_text(message)).map(|command| format!("!{command}"))
 }
 
-/// What a `!` command printed, stdout then stderr, and whether only stderr had anything to say.
-fn shell_command_output(text: &str) -> Option<(String, bool)> {
+/// What a `!` command printed, stdout and stderr apart: the card tints stderr as error text.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ShellOutput {
+    pub stdout: String,
+    pub stderr: String,
+}
+
+impl ShellOutput {
+    fn merged(&self) -> String {
+        match (self.stdout.trim().is_empty(), self.stderr.trim().is_empty()) {
+            (_, true) => self.stdout.clone(),
+            (true, false) => self.stderr.clone(),
+            (false, false) => format!("{}\n{}", self.stdout, self.stderr),
+        }
+    }
+
+    /// Only stderr had anything to say. Neither transcript records an exit code, so this is the
+    /// only failure signal there is.
+    fn failed(&self) -> bool {
+        self.stdout.trim().is_empty() && !self.stderr.trim().is_empty()
+    }
+}
+
+fn shell_command_output(text: &str) -> Option<ShellOutput> {
     let trimmed = text.trim();
     if !trimmed.starts_with("<bash-stdout") && !trimmed.starts_with("<bash-stderr") {
         return None;
@@ -125,34 +147,38 @@ fn shell_command_output(text: &str) -> Option<(String, bool)> {
             .trim_end()
             .to_string()
     };
-    let stdout = clean(harness_tag_body(trimmed, "bash-stdout"));
-    let stderr = clean(harness_tag_body(trimmed, "bash-stderr"));
-    let failed = stdout.trim().is_empty() && !stderr.trim().is_empty();
-    let output = match (stdout.trim().is_empty(), stderr.trim().is_empty()) {
-        (_, true) => stdout,
-        (true, false) => stderr,
-        (false, false) => format!("{stdout}\n{stderr}"),
-    };
-    Some((output, failed))
+    Some(ShellOutput {
+        stdout: clean(harness_tag_body(trimmed, "bash-stdout")),
+        stderr: clean(harness_tag_body(trimmed, "bash-stderr")),
+    })
 }
 
 /// The card a `!` command renders as: a user turn holding the command as a shell tool call and its
-/// output as that call's result. `output` is `None` while the command still runs.
+/// output as that call's result. `output` is `None` while the command still runs and has printed
+/// nothing. The result keeps stdout and stderr merged for search and copy; the call input carries
+/// stderr on its own, which only the card reads ([`shell_card`]).
 pub fn shell_command_message(
     template: &ChatMessage,
     command: &str,
-    output: Option<(String, bool)>,
+    output: Option<ShellOutput>,
 ) -> ChatMessage {
     let call_id = Some(format!("shell-command:{}", template.id));
+    let mut input = serde_json::json!({ "command": command });
+    if let Some(output) = output
+        .as_ref()
+        .filter(|output| !output.stderr.trim().is_empty())
+    {
+        input["stderr"] = output.stderr.clone().into();
+    }
     let mut blocks = vec![ChatBlock::ToolCall {
         name: SHELL_COMMAND_TOOL_NAME.to_string(),
-        input: serde_json::json!({ "command": command }),
+        input,
         call_id: call_id.clone(),
     }];
-    if let Some((output, failed)) = output.filter(|(output, _)| !output.trim().is_empty()) {
+    if let Some(output) = output.filter(|output| !output.merged().trim().is_empty()) {
         blocks.push(ChatBlock::ToolResult {
-            output,
-            is_error: failed.then_some(true),
+            output: output.merged(),
+            is_error: output.failed().then_some(true),
             call_id,
         });
     }
@@ -275,7 +301,10 @@ pub fn with_live_shell_output(
     if command.is_empty() {
         return pending;
     }
-    let output = field("detail").unwrap_or_default().to_string();
+    let output = ShellOutput {
+        stdout: field("detail").unwrap_or_default().to_string(),
+        stderr: String::new(),
+    };
     if let Some(index) = pending.iter().rposition(is_shell_command_message) {
         let echo_command = match pending[index].blocks.first() {
             Some(ChatBlock::ToolCall { input, .. }) => input
@@ -285,8 +314,7 @@ pub fn with_live_shell_output(
                 .to_string(),
             _ => command.to_string(),
         };
-        pending[index] =
-            shell_command_message(&pending[index], &echo_command, Some((output, false)));
+        pending[index] = shell_command_message(&pending[index], &echo_command, Some(output));
         return pending;
     }
     let detected_at = field("detectedAt").unwrap_or_default();
@@ -320,20 +348,85 @@ pub fn with_live_shell_output(
         deferred_work: None,
         startup_delivery: None,
     };
-    pending.push(shell_command_message(
-        &template,
-        command,
-        Some((output, false)),
-    ));
+    pending.push(shell_command_message(&template, command, Some(output)));
     pending
 }
 
-/// A `!` card still running with output to show: its detail stays open while the output arrives.
-pub fn is_live_shell_command_message(message: &ChatMessage) -> bool {
-    is_shell_command_message(message)
-        && message.source != ChatSource::Transcript
-        && message
-            .blocks
-            .iter()
-            .any(|block| matches!(block, ChatBlock::ToolResult { .. }))
+/*
+CDXC:SessionChat 2026-10-08 DECISION:
+User: "clicking on the header or line doesn't collapse this … I don't like that at the top we're showing the same command twice once in the header and again in the "Command" area". Then: "I dont like the word Shell also. Prefer if we can remove that and just have the icon instead there". The Shell card is its own card rather than a tool row with Command / Result blocks: the header is the terminal icon (labelled "Shell command" for assistive tech) followed by the command, with no "Shell" word, the command kept to one line (the full text in a tooltip and on the copy button), and a status on the right ("Running" while it runs, "Failed" when only stderr printed); the body is only the output, stdout then stderr in the error tone, with the command repeated at its top only when the header had to cut a multi-line command. The card opens by default while its output streams in and folds like every other disclosure (header or rail), so a reader can close it mid-run.
+SEE-ALSO: `shell_command_card` in apps/desktop/src/app/native_chat/tool_run.rs, `ShellCommandCard` in apps/mobile/app/src/chat/native/transcript/ToolRows.tsx.
+*/
+/// What the renderers draw for a `!` command's card, or `Value::Null` for any other row.
+pub fn shell_card(message: &ChatMessage) -> serde_json::Value {
+    if !is_shell_command_message(message) {
+        return serde_json::Value::Null;
+    }
+    let mut input = None;
+    let mut output = String::new();
+    let mut failed = false;
+    for block in &message.blocks {
+        match block {
+            ChatBlock::ToolCall { input: call, .. } => input = Some(call),
+            ChatBlock::ToolResult {
+                output: result,
+                is_error,
+                ..
+            } => {
+                output = result.clone();
+                failed = is_error.unwrap_or(false);
+            }
+            _ => {}
+        }
+    }
+    let field = |key: &str| {
+        input
+            .and_then(|input| input.get(key))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let command = field("command");
+    let stderr = field("stderr");
+    // The result merged stderr after stdout; the card draws stderr apart in the error tone.
+    let stdout = if stderr.is_empty() {
+        output
+    } else if failed {
+        String::new()
+    } else {
+        output
+            .strip_suffix(stderr.as_str())
+            .map(|rest| rest.strip_suffix('\n').unwrap_or(rest).to_string())
+            .unwrap_or(output)
+    };
+    // The recorded rows land only once the command has finished; an echo or the terminal's live
+    // card is a command still running.
+    let running = message.source != ChatSource::Transcript;
+    // Neither transcript records how long a command took, and the terminal's clock is a sample the
+    // card would show stale, so a running card says only that it runs.
+    let status = if running {
+        "Running"
+    } else if failed {
+        "Failed"
+    } else {
+        ""
+    };
+    let headline = command.lines().next().unwrap_or_default().to_string();
+    let multiline = command.trim_end().contains('\n');
+    let stdout = crate::transcript::tool_rows::clip_tool_body(&stdout);
+    let stderr = crate::transcript::tool_rows::clip_tool_body(&stderr);
+    let has_body = !stdout.trim().is_empty() || !stderr.trim().is_empty() || multiline;
+    serde_json::json!({
+        "command": headline,
+        "fullCommand": command,
+        "commandBody": if multiline { command.as_str() } else { "" },
+        "running": running,
+        "status": status,
+        "failed": failed,
+        "stdout": stdout,
+        "stderr": stderr,
+        "hasBody": has_body,
+        // A live card opens on its output as it streams in; a recorded one opens on demand.
+        "openByDefault": running && has_body,
+    })
 }

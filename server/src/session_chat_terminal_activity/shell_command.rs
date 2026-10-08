@@ -79,10 +79,9 @@ pub(super) fn claude_shell_command_activity(
         .trim()
         .to_string();
     let mut elapsed_seconds = None;
-    if let Some(clock) = output_rows
-        .last()
-        .and_then(|row| parenthesized_elapsed_seconds(&row.text))
-    {
+    if let Some(clock) = output_rows.last().and_then(|row| {
+        hidden_lines_clock(&row.text).or_else(|| parenthesized_elapsed_seconds(&row.text))
+    }) {
         elapsed_seconds = Some(clock);
         output_rows.pop();
     }
@@ -105,6 +104,22 @@ pub(super) fn claude_shell_command_activity(
     activity.elapsed_seconds = elapsed_seconds;
     activity.detail = (!output.trim().is_empty()).then_some(output);
     Some(activity)
+}
+
+/// `… +1 lines (1m 5s)`: the row Claude paints instead of the bare clock once it has cut the top of
+/// a long output. The lines it hid are not on the screen, so the row is screen chrome, not output;
+/// the recorded card carries the whole output once the command ends.
+fn hidden_lines_clock(text: &str) -> Option<u64> {
+    let rest = text.trim_start_matches(['…', ' ']).strip_prefix('+')?;
+    let digits = rest.find(|c: char| !c.is_ascii_digit())?;
+    let rest = rest[digits..].trim_start();
+    if digits == 0 || !rest.starts_with("line") {
+        return None;
+    }
+    parenthesized_elapsed_seconds(
+        rest.trim_start_matches(|c: char| c.is_ascii_alphabetic())
+            .trim(),
+    )
 }
 
 /// `(18s)`, `(1m 5s)`: the clock Claude paints under a running command.

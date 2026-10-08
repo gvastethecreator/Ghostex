@@ -164,46 +164,161 @@ impl NativeChatView {
         rows
     }
 
-    /// A `!` command the user ran (`shellCommand`, gx-chat-core's `fold_shell_commands`): its one
-    /// tool row, opening onto the Command and Result blocks, in the user's bubble. The command
-    /// shows in simple mode too, since it is what the user typed.
+    /// A `!` command the user ran (`shellCard`, gx-chat-core's `shell_card`), in the user's bubble:
+    /// a header with the terminal glyph, the command, its status and a copy button, opening onto
+    /// the output alone. It shows in simple mode too, since it is what the user typed. It folds
+    /// like every disclosure: the header and the rail both flip it, and a running card that opened
+    /// on its own records the close against that default.
     pub(super) fn shell_command_card(
         &mut self,
         message: &Value,
         p: &ChatAppearance,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        const GROUP: &str = "native-chat-shell-card";
         let s = p.scale;
-        let id = text(message, "id");
-        let tools = message["tools"].as_array().cloned().unwrap_or_default();
-        let mut appearance = p.clone();
-        appearance.simple = false;
-        // While the command runs, its output streams in from the terminal and the card stays open on it.
-        let live = message["shellCommandLive"] == true;
-        let rows: Vec<AnyElement> = tools
-            .iter()
-            .enumerate()
-            .map(|(index, tool)| self.tool_row(&id, index, tool, live, &appearance, cx))
-            .collect();
+        let card = &message["shellCard"];
+        let key = format!("shell:{}", text(message, "id"));
+        let has_body = card["hasBody"] == true;
+        let open = has_body && self.is_expanded(&key, card["openByDefault"] == true);
+        let motion = self.disclosure_frame(&key, open, cx);
+        let failed = card["failed"] == true;
+        let command = text(card, "command");
+        let full_command = text(card, "fullCommand");
+        let status = text(card, "status");
+        let toggle_key = key.clone();
+        let tooltip = full_command.clone();
+        let header = div()
+            .id(SharedString::from(key.clone()))
+            .role(gpui::Role::Button)
+            .aria_label(format!("Shell command: {full_command}"))
+            .aria_expanded(open)
+            .when(failed, |this| this.aria_description("failed"))
+            .flex()
+            .items_center()
+            .min_w_0()
+            .gap(px(6.0 * s))
+            .rounded(px(4.0 * s))
+            .tooltip(move |window, cx| {
+                gpui_component::tooltip::Tooltip::new(tooltip.clone()).build(window, cx)
+            })
+            .when(has_body, |this| {
+                this.chat_cursor_pointer()
+                    .hover(|style| style.bg(p.border.opacity(0.4)))
+                    .on_click(cx.listener(move |view, _, _, cx| {
+                        view.toggle_marker_disclosure(toggle_key.clone(), open, cx)
+                    }))
+            })
+            .child(
+                div()
+                    .w(px(16.0 * s))
+                    .ml(px(2.0 * s))
+                    .h(px(22.75 * s))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .flex_shrink_0()
+                    .child(
+                        gpui::svg()
+                            .path(glyph_icon("terminal"))
+                            .size(px(14.0 * s))
+                            .text_color(p.muted),
+                    ),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .font_family(CHAT_MONO)
+                    .text_size(px(12.6 * s))
+                    .text_color(if failed { p.error() } else { p.primary })
+                    .child(command),
+            )
+            .when(has_body, |this| {
+                this.child(
+                    gpui::svg()
+                        .path(if open {
+                            "titlebar/chevron-down.svg"
+                        } else {
+                            "titlebar/chevron-right.svg"
+                        })
+                        .size(px(12.0 * s))
+                        .flex_shrink_0()
+                        .text_color(p.muted),
+                )
+            })
+            .child(div().flex_1())
+            .when(!status.is_empty(), |this| {
+                this.child(
+                    div()
+                        .flex_shrink_0()
+                        .text_size(px(12.25 * s))
+                        .text_color(if failed { p.error() } else { p.muted })
+                        .child(status),
+                )
+            })
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .invisible()
+                    .group_hover(GROUP, |style| style.visible())
+                    .child(super::code_block::action(
+                        SharedString::from(format!("copy:{key}")),
+                        "titlebar/copy.svg",
+                        p,
+                        move |cx| {
+                            crate::app::helpers::gpui_copy_to_clipboard(
+                                ClipboardItem::new_string(full_command.clone()),
+                                cx,
+                            )
+                        },
+                    )),
+            );
+        let mut bubble = div()
+            .group(GROUP)
+            .flex()
+            .flex_col()
+            .gap(px(4.0 * s))
+            .max_w(gpui::relative(0.8))
+            .min_w_0()
+            .rounded(px(16.0 * s))
+            .px(px(12.0 * s))
+            .py(px(8.0 * s))
+            .bg(p.input)
+            .child(header);
+        if (open || motion.is_some()) && has_body {
+            let mut blocks: Vec<AnyElement> = Vec::new();
+            for (part, error) in [("commandBody", false), ("stdout", false), ("stderr", true)] {
+                let content = text(card, part);
+                if !content.trim().is_empty() {
+                    blocks.push(self.tool_body(
+                        format!("{part}:{key}"),
+                        None,
+                        content,
+                        error,
+                        None,
+                        p,
+                    ));
+                }
+            }
+            let body = disclosure_body(
+                p,
+                DisclosureRail::ToolDetail,
+                8.0,
+                key.clone(),
+                "Collapse shell command",
+                blocks,
+                cx,
+            );
+            bubble = bubble.child(self.disclosure_body_motion(&key, motion, 4.0 * s, body));
+        }
         div()
             .flex()
             .flex_col()
             .items_end()
             .w_full()
             .min_w_0()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(ROW_GAP * s))
-                    .max_w(gpui::relative(0.8))
-                    .min_w_0()
-                    .rounded(px(16.0 * s))
-                    .px(px(12.0 * s))
-                    .py(px(8.0 * s))
-                    .bg(p.input)
-                    .children(rows),
-            )
+            .child(bubble)
             .into_any_element()
     }
 
@@ -242,7 +357,7 @@ impl NativeChatView {
     ) -> Vec<AnyElement> {
         indices
             .iter()
-            .map(|index| self.tool_row(id, *index, &tools[*index], false, p, cx))
+            .map(|index| self.tool_row(id, *index, &tools[*index], p, cx))
             .collect()
     }
 
@@ -297,13 +412,12 @@ impl NativeChatView {
         message_id: &str,
         index: usize,
         tool: &Value,
-        always_open: bool,
         p: &ChatAppearance,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let s = p.scale;
         let key = format!("tool:{message_id}:{index}");
-        let expanded = always_open || self.expanded.contains(&key);
+        let expanded = self.expanded.contains(&key);
         let has_detail = tool["hasDetail"] == true;
         let motion = self.disclosure_frame(&key, expanded && has_detail, cx);
         let failed = tool["failed"] == true;
