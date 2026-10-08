@@ -188,13 +188,13 @@ pub(crate) fn lift_account_usage_notice_suppression(project_id: &str, session_id
         notices.remove(&session_chat_notice_key(project_id, session_id));
     }
 }
-/// Whether an account switch is hiding this notice: only usage limits and a disabled account's error are hidden, the two notices a resumed CLI repaints from the previous login, and only while the switch suppression is in place.
+/// Whether an account switch is hiding this notice: only usage limits are hidden, and only while the switch suppression is in place.
 pub(crate) fn account_usage_notice_suppressed(
     project_id: &str,
     session_id: &str,
     notice: &SessionChatTerminalNotice,
 ) -> bool {
-    (notice.kind == SESSION_CHAT_NOTICE_USAGE_LIMIT || notice.account_disabled())
+    notice.kind == SESSION_CHAT_NOTICE_USAGE_LIMIT
         && account_usage_notice_suppression(project_id, session_id).is_some()
 }
 

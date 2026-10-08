@@ -89,34 +89,6 @@ fn with_paste_watch_of_at_least(
     steps
 }
 
-/// The retype's steps with `KeepSinglePaste` after its paste check, for an agent whose input box
-/// the send reads and whose verified clear sends no keys to an empty box.
-fn with_single_paste_guard(
-    mut steps: Vec<crate::session_chat_send::SessionChatSendStep>,
-    agent: Option<&str>,
-) -> Vec<crate::session_chat_send::SessionChatSendStep> {
-    use crate::session_chat_send::SessionChatSendStep;
-    let Some(agent) = crate::agents::identity::normalize_agent_id(agent)
-        .filter(|agent| crate::session_chat_send::keeps_single_paste(agent))
-    else {
-        return steps;
-    };
-    let check = steps
-        .iter()
-        .enumerate()
-        .find_map(|(index, step)| match step {
-            SessionChatSendStep::VerifyPasteLanded { text, .. } => Some((index, text.clone())),
-            _ => None,
-        });
-    if let Some((index, text)) = check {
-        steps.insert(
-            index + 1,
-            SessionChatSendStep::KeepSinglePaste { agent, text },
-        );
-    }
-    steps
-}
-
 /// CDXC:SessionChat 2026-10-05 WHY:
 /// The clear-and-retype attempt only runs when two paste checks found no message in the input box, so nothing was submitted; but an agent that takes a paste without the Return (or a screen read that missed a submitted turn) would get the message twice from it. The retype first asks the agent's transcript whether a user turn since this send already carries the message, and settles the send as delivered when it does.
 async fn paste_already_recorded(session: &Value, text: &str, since_ms: i64) -> bool {
@@ -163,18 +135,6 @@ pub(crate) async fn send_session_chat_message_with_draft(
     if source == SessionChatMessageSource::Composer {
         crate::accounts::recovery::user_action(state, project_id, session_id, false)?;
     }
-    // A session whose Claude login was disabled moves to another account before anything is typed (accounts/disabled.rs); the continuation and recovery sends are that switch's own.
-    let switch_owned = matches!(
-        source,
-        SessionChatMessageSource::AutomaticRecovery | SessionChatMessageSource::AccountSwitch(_)
-    );
-    let target = if !switch_owned
-        && crate::accounts::disabled::switch_before_send(state, project_id, session_id).await?
-    {
-        resolve_session_chat_send_target(state, &params, "sendSessionChatMessage")?
-    } else {
-        target
-    };
     // A draft whose Run on row picked a box has no agent to type into yet: its first message
     // creates the box (agents/draft_run_location.rs).
     if let Some(sent) = super::box_first_send::send_pending_box_first_message(
@@ -586,10 +546,7 @@ pub(crate) async fn send_session_chat_message_with_draft(
                     &target.session_id,
                     &target.zmx_name,
                     "session-chat-message",
-                    with_single_paste_guard(
-                        with_paste_watch_of_at_least(retry_steps, PASTE_RETRY_WATCH_MS),
-                        terminal_agent.as_deref(),
-                    ),
+                    with_paste_watch_of_at_least(retry_steps, PASTE_RETRY_WATCH_MS),
                 )
                 .await;
             }

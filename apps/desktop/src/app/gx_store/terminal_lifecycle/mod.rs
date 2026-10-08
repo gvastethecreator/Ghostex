@@ -9,7 +9,6 @@ pub(crate) mod open_conversation;
 mod runtime_actions;
 pub(crate) mod session_calls;
 mod session_edits;
-pub(crate) mod chat_grid_claims;
 pub(crate) mod shown_sessions;
 pub(crate) mod shown_sessions_report;
 pub(crate) mod terminal_events;

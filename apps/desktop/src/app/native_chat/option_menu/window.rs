@@ -312,7 +312,7 @@ impl ChatOptionMenu {
         let width = if self.compact {
             super::geometry::fit_width(&rows, width, &self.appearance, cx)
         } else {
-            super::geometry::width_for_details(&rows, width, &self.appearance, cx)
+            width
         };
         let width = px(width * scale).min(available.size.width - px(24.0 * scale));
         let heights = match super::geometry::measure_rows(

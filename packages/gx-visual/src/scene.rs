@@ -2,7 +2,6 @@
 
 use serde::Serialize;
 
-use crate::motion::Motion;
 use crate::text::line_height;
 use crate::theme::{format_alpha, Color};
 
@@ -88,9 +87,6 @@ pub struct Scene {
     pub title: Option<String>,
     pub items: Vec<Item>,
     pub regions: Vec<Region>,
-    /// The data marks that draw in, by item index (see [`Scene::at`]).
-    #[serde(skip)]
-    pub(crate) motions: Vec<(usize, Motion)>,
 }
 
 /// A published HTML page the block points at instead of holding a drawing.
@@ -117,7 +113,6 @@ pub(crate) struct Block {
     pub height: f32,
     pub items: Vec<Item>,
     pub regions: Vec<Region>,
-    pub motions: Vec<(usize, Motion)>,
 }
 
 impl Block {
@@ -136,19 +131,6 @@ impl Block {
             r.item = r.item.map(|item| item + base);
             r
         }));
-        self.motions.extend(
-            other
-                .motions
-                .into_iter()
-                .map(|(item, motion)| (item + base, motion.translate(dx, dy))),
-        );
-    }
-
-    /// Makes `item` (the mark just pushed) draw in with `motion`.
-    pub(crate) fn animate(&mut self, item: Option<usize>, motion: Motion) {
-        if let Some(item) = item {
-            self.motions.push((item, motion));
-        }
     }
 
     pub(crate) fn push(&mut self, item: Item) {

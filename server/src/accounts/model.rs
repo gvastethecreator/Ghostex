@@ -69,13 +69,11 @@ pub(crate) enum Priority {
     SoonestReset,
     LatestReset,
 }
-/// CDXC:AgentProviders 2026-10-08 DECISION:
-/// User: "please turn it on and make it default to on". Continue automatically starts on with At a limit set to Use another account for both providers, so a session moves to another account set to Automatic when its account hits a limit. Supersedes the off-and-wait default from 2026-09-06; a provider whose Settings were already saved keeps its saved choice. SEE-ALSO: apps/desktop/src/app/window/settings_modal/tabs/accounts/data.rs (`defaults`), packages/shared/agent-accounts.ts (`DEFAULT_ACCOUNT_POLICY`).
 impl Default for Policy {
     fn default() -> Self {
         Self {
-            enabled: true,
-            at_limit: LimitAction::Switch,
+            enabled: false,
+            at_limit: LimitAction::Wait,
             priority: Priority::SoonestReset,
             retry_errors: true,
         }
@@ -96,15 +94,6 @@ pub(crate) struct SavedAccount {
     pub show_in_titlebar: bool,
     pub eligible: bool,
     pub shared_history: bool,
-    /// Set when the login stopped working for good (see `disabled.rs`); cleared when the user sets the account back to Automatic or reconnects it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub disabled: Option<DisabledAccount>,
-}
-#[derive(Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct DisabledAccount {
-    pub reason: String,
-    pub at: String,
 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

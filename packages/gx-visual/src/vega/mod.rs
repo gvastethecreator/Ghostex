@@ -1,7 +1,6 @@
 //! The Vega-Lite subset: parsing a spec and drawing it per mark.
 
 mod arc;
-pub(crate) use arc::wedge;
 mod axis;
 mod bar;
 mod data;

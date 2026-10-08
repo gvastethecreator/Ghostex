@@ -219,7 +219,6 @@ impl Render for GhostexGpuiApp {
         // The shown sessions are reported to gxserver's Auto Sleep; while the selection is still moving that would happen once per tab step. The settle repaints, so the set is reported for the tab the user landed on.
         if !self.gx_store_selection_is_settling() {
             self.gx_store_report_shown_sessions(cx);
-            self.gx_store_report_chat_grid_claims(cx);
         }
         self.prepare_focus_bounds_for_render(window.scale_factor(), cx);
         #[cfg(target_os = "macos")]

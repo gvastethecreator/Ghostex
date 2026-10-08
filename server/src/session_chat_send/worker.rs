@@ -904,23 +904,6 @@ pub(super) async fn run_session_chat_send_worker(
                         }
                     }
                 }
-                SessionChatSendStep::KeepSinglePaste { agent, text } => {
-                    if let Err(error) = keep_single_session_chat_paste(
-                        &project_id,
-                        &session_id,
-                        &zmx_name,
-                        &source,
-                        &agent,
-                        &text,
-                        &generation,
-                        job_generation,
-                    )
-                    .await
-                    {
-                        outcome = Err(error);
-                        break;
-                    }
-                }
                 SessionChatSendStep::DriveSessionChatRewind { job_id } => {
                     /*
                     The driver owns its own failure taxonomy (which dialog step

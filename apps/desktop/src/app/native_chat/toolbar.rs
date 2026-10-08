@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 /// CDXC:SessionChat 2026-09-11 DECISION:
 /// User: show Summary mode between More actions and Session note when there is room; keep it in More actions in the compact toolbar.
 /// This order is also the order controls fold into More actions.
-pub(super) const COMPOSER_CONTROLS: [(&str, &str, &str, &str); 7] = [
+pub(super) const COMPOSER_CONTROLS: [(&str, &str, &str, &str); 6] = [
     (
         "summary",
         "summaryMode",
@@ -35,7 +35,6 @@ pub(super) const COMPOSER_CONTROLS: [(&str, &str, &str, &str); 7] = [
         "Maximize",
         "titlebar/maximize.svg",
     ),
-    ("dictate", "dictate", "Dictate", "titlebar/microphone.svg"),
     (
         "terminal",
         "terminalView",
@@ -55,10 +54,6 @@ impl NativeChatView {
     /// (`onSessionNote`, `onStash`, `onAttach`, the Terminal View switch); the core projects
     /// the same answer under `composerActions` so a control that cannot do anything is not drawn.
     pub(super) fn composer_control_available(&self, id: &str) -> bool {
-        // Dictation is the platform's own (`dictation.rs`), so the core does not gate it.
-        if id == "dictate" {
-            return super::dictation::DICTATION;
-        }
         let actions = &self.snapshot["composerActions"];
         actions.is_null() || actions[id] != false
     }
@@ -74,7 +69,6 @@ impl NativeChatView {
             "moreActions" => self.show_actions(position,window,cx),
             "maximizeComposer" => self.toggle_maximized(window,cx),
             "summaryMode" => self.invoke(json!({"type":"toggleSummary"}),cx),
-            "dictate" => self.toggle_dictation(window,cx),
             "attachPath" if cfg!(target_os = "linux") => self.show_chat_menu_at(vec![
                 json!({"label":"Images or files…","command":{"type":"host","action":"pickAttachments","requestId":"native-chat-attachments","selection":"files"}}),
                 json!({"label":"Folders…","command":{"type":"host","action":"pickAttachments","requestId":"native-chat-attachments","selection":"folders"}}),
@@ -105,7 +99,6 @@ impl NativeChatView {
                 "maximize" if self.maximized_window.is_some() => "titlebar/minimize.svg",
                 // The Summary glyph swaps with the mode, the way the More actions row does.
                 "summary" if self.snapshot["summaryMode"] == true => "titlebar/list-check.svg",
-                "dictate" if self.dictating(cx) => "titlebar/player-stop.svg",
                 _ => icon,
             };
             // The Terminal View control also carries the agent CLI's readiness tint and screen preview.

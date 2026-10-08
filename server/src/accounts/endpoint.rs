@@ -216,10 +216,6 @@ pub(crate) fn dispatch(
             let reconnecting = registry.accounts.iter().any(|a| a.id == id);
             if let Some(saved) = registry.accounts.iter_mut().find(|a| a.id == id) {
                 saved.selector = found.selector.clone();
-                // Signing in again is the user saying the login works now.
-                if saved.disabled.take().is_some() {
-                    saved.eligible = true;
-                }
             }
             if !reconnecting {
                 // CDXC:AgentProviders 2026-10-07 DECISION:
@@ -240,7 +236,6 @@ pub(crate) fn dispatch(
                     show_in_titlebar: false,
                     eligible: true,
                     shared_history: true,
-                    disabled: None,
                 });
             }
             store::write(&db, &registry)?;
@@ -319,9 +314,6 @@ pub(crate) fn dispatch(
             account.name = name.into();
             account.color = color.into();
             account.eligible = eligible;
-            if eligible {
-                account.disabled = None;
-            }
             store::write(&db, &registry)?;
             // Sessions carry only the name and color; an indicator or switching edit leaves them alone.
             let sessions = if renamed {
@@ -460,17 +452,6 @@ pub(crate) fn dispatch(
                     Some(required(params, "accountId")?),
                     SwitchSource::Manual,
                 )?;
-                // Choosing a disabled account by hand is the user saying it works again (disabled.rs); otherwise the next send would move the session straight off it.
-                let chosen = required(params, "accountId")?;
-                if let Some(account) = registry
-                    .accounts
-                    .iter_mut()
-                    .find(|a| a.id == chosen && a.disabled.is_some())
-                {
-                    account.disabled = None;
-                    account.eligible = true;
-                    store::write(&db, &registry)?;
-                }
                 let selected = get_session(&repository, params)?;
                 if selected
                     .pointer("/runtimeSettings/accountSwitchAttempt")
@@ -790,7 +771,7 @@ fn state_value(
     for found in &snapshot.accounts {
         let id = account_id(found);
         let saved = registry.accounts.iter().find(|a| a.id == id);
-        rows.push(json!({"id":id,"provider":found.provider,"selector":found.selector,"name":saved.map(|a|a.name.as_str()).unwrap_or(&found.name),"email":found.email,"indicator":saved.map(|a|a.indicator.as_str()).unwrap_or(""),"color":saved.map(|a|a.color.as_str()).unwrap_or("neutral"),"eligible":saved.is_some_and(|a|a.eligible),"registered":saved.is_some(),"showInTitlebar":saved.is_some_and(|a|a.show_in_titlebar),"sharedHistory":saved.is_some_and(|a|a.shared_history)||found.shared_history,"disabledReason":saved.and_then(|a|a.disabled.as_ref()).map(|d|d.reason.as_str()),"status":found.status,"usage":found.usage,"resetCredits":found.reset_credits,"resetCreditDetails":found.reset_credit_details,"resetCreditsError":found.reset_credits_error,"usageUpdatedAt":found.usage_updated_at,"usageError":found.usage_error,"sessionCount":session_counts.get(&id).copied().unwrap_or(0)}));
+        rows.push(json!({"id":id,"provider":found.provider,"selector":found.selector,"name":saved.map(|a|a.name.as_str()).unwrap_or(&found.name),"email":found.email,"indicator":saved.map(|a|a.indicator.as_str()).unwrap_or(""),"color":saved.map(|a|a.color.as_str()).unwrap_or("neutral"),"eligible":saved.is_some_and(|a|a.eligible),"registered":saved.is_some(),"showInTitlebar":saved.is_some_and(|a|a.show_in_titlebar),"sharedHistory":saved.is_some_and(|a|a.shared_history)||found.shared_history,"status":found.status,"usage":found.usage,"resetCredits":found.reset_credits,"resetCreditDetails":found.reset_credit_details,"resetCreditsError":found.reset_credits_error,"usageUpdatedAt":found.usage_updated_at,"usageError":found.usage_error,"sessionCount":session_counts.get(&id).copied().unwrap_or(0)}));
     }
     let loading = titlebar && snapshot.fetched_at.is_none();
     for saved in &registry.accounts {

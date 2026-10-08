@@ -27,19 +27,12 @@ impl ViewerDetachState {
         if unsafe { libc::getentropy(random.as_mut_ptr().cast(), random.len()) } != 0 {
             return Err(std::io::Error::last_os_error());
         }
-        #[cfg(windows)]
-        random.copy_from_slice(uuid::Uuid::new_v4().as_bytes());
-        #[cfg(not(any(unix, windows)))]
+        #[cfg(not(unix))]
         return Err(std::io::ErrorKind::Unsupported.into());
         let nonce = random
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>();
-        // zmx reads the 8-bit OSC from its PTY; wmx reads its control pipe, where every Ghostex
-        // control sequence is the 7-bit `ESC ]` form.
-        #[cfg(windows)]
-        let mut request = b"\x1b]".to_vec();
-        #[cfg(not(windows))]
         let mut request = vec![0x9d];
         request.extend_from_slice(format!("1337;ZMX_DETACH={nonce}\x07").as_bytes());
         self.nonce = Some(nonce);

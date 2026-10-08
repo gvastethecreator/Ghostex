@@ -66,7 +66,6 @@ mod input_bytes;
 mod paste_verification;
 mod queue;
 mod send_http;
-mod single_paste;
 mod steps;
 #[cfg(test)]
 mod tests;
@@ -81,6 +80,5 @@ pub use input_bytes::*;
 pub(crate) use paste_verification::*;
 pub use queue::*;
 pub(crate) use send_http::*;
-pub(crate) use single_paste::*;
 pub use steps::*;
 use worker::*;

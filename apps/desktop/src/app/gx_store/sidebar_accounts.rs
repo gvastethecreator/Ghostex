@@ -325,20 +325,6 @@ impl GhostexGpuiApp {
         close: bool,
         cx: &mut gpui::Context<Self>,
     ) -> bool {
-        // The terminal bar's Switch Account flyout asks for the same page and shows it itself.
-        if self
-            .agents_terminal_action_bar_account_page
-            .as_ref()
-            .is_some_and(|(owner, _)| owner == owner_id)
-        {
-            if close {
-                self.close_terminal_agent_action_bar_menu(cx);
-            } else if let Some((_, rows)) = self.agents_terminal_action_bar_account_page.as_mut() {
-                *rows = items;
-                cx.notify();
-            }
-            return true;
-        }
         let Some(menu) = self.native_sidebar.menu.as_mut() else {
             return false;
         };

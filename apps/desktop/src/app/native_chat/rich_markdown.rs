@@ -25,11 +25,6 @@ use serde_json::{Value, json};
  * packages/core-ui/styles/chat.css until 2026-09-25.
  */
 
-/// The transcript's prose line height, which a fenced block's code lines take too.
-const PROSE_LINE_HEIGHT: f32 = 22.75;
-/// The padding a fenced block's code sits in under its header (GPUI Kit's `p_3`).
-const CODE_PADDING: f32 = 12.0;
-
 const ALERT_OPEN: &str = "\u{E000}alert:";
 const ALERT_CLOSE: &str = "\u{E000}/alert";
 const TABLE_OPEN: &str = "\u{E000}table";
@@ -414,22 +409,6 @@ impl NativeChatView {
         cx.notify();
     }
 
-    /// Show a long fenced block whole, or cap it again (`markdown_style::code_block_cap`).
-    pub(super) fn set_code_expanded(
-        &mut self,
-        key: String,
-        expanded: bool,
-        cx: &mut gpui::Context<Self>,
-    ) {
-        if expanded {
-            self.code_expanded.insert(key);
-        } else {
-            self.code_expanded.remove(&key);
-        }
-        self.list.remeasure();
-        cx.notify();
-    }
-
     /// CDXC:SessionChat 2026-10-08 WHY:
     /// User: scrolling up "just above the last message" jumped "to the top of the message above it". gpui's list measures a row once in the overdraw above the viewport and scrolls by that height, and a TextView over 4KB parsed in the background, so its first layout (and every one after its row left the list's drawn range, which drops the view's state) was empty and the long reply was cached a few pixels tall; the first wheel step into it landed near its top. Chat text therefore parses on the UI thread, so a row's first height is its real one.
     fn text_view(
@@ -460,10 +439,6 @@ impl NativeChatView {
                 .unwrap_or(wrap_default)
         };
         let header_wraps = wraps.clone();
-        let expanded_blocks = self.code_expanded.clone();
-        let cap_id = id.clone();
-        let header_expanded = expanded_blocks.clone();
-        let scale = p.scale;
         TextView::markdown(id, content)
             .parse_synchronously(true)
             .when_some(self.row_find.clone(), |view, find| view.find(find))
@@ -488,15 +463,10 @@ impl NativeChatView {
             })
             .on_link_secondary_click(super::markdown_links::secondary_click(menu_chat))
             .code_block_actions(move |block, _, _| {
-                let long = super::markdown_style::code_block_collapses(block.code().lines().count());
-                let expanded = long.then(|| {
-                    header_expanded.contains(&super::code_block::wrap_key(&header_id, block))
-                });
                 super::code_block::header(
                     block,
                     &header_id,
                     header_wraps(block),
-                    expanded,
                     &header_chat,
                     &header_appearance,
                 )
@@ -504,17 +474,10 @@ impl NativeChatView {
             // React's fences scroll sideways until the reader asks for wrapping
             // (session-chat-code-wrap.ts (deleted 2026-10-01)); the native ones follow the same choice.
             .code_block_wrap(wraps)
-            // A long block's code scrolls under its header until the reader shows it whole.
-            .code_block_max_height(move |block| {
-                let key = super::code_block::wrap_key(&cap_id, block);
-                (super::markdown_style::code_block_collapses(block.code().lines().count())
-                    && !expanded_blocks.contains(&key))
-                .then(|| super::markdown_style::code_block_cap(PROSE_LINE_HEIGHT, CODE_PADDING, scale))
-            })
             .selectable(true)
             .style(style)
             .text_size(px(14.0 * p.scale))
-            .line_height(px(PROSE_LINE_HEIGHT * p.scale))
+            .line_height(px(22.75 * p.scale))
             .text_color(p.prose)
             .into_any_element()
     }

@@ -19,8 +19,8 @@ export interface AccountPolicy {
   retryErrors: boolean;
 }
 export const DEFAULT_ACCOUNT_POLICY: AccountPolicy = {
-  enabled: true,
-  atLimit: 'switch',
+  enabled: false,
+  atLimit: 'wait',
   priority: 'soonestReset',
   retryErrors: true,
 };

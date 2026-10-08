@@ -42,47 +42,6 @@ const TOOLTIP_WIDTH: f32 = 200.0;
 
 type Laid = Rc<Result<Visual, String>>;
 
-/// `packages/gx-chat-core/visual/chart-motion.json`: how long a chart takes to draw in.
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ChartMotion {
-    duration_ms: u64,
-}
-
-static CHART_MOTION: std::sync::LazyLock<ChartMotion> = std::sync::LazyLock::new(|| {
-    serde_json::from_str(include_str!(
-        "../../../../../packages/gx-chat-core/visual/chart-motion.json"
-    ))
-    .expect("shared chart motion")
-});
-
-thread_local! {
-    /// When each chart (by block key) was first drawn in this run of the app. A chart draws in
-    /// only then (`gxv::Scene::at`), not when its row is drawn again, scrolled back to, or shown
-    /// in a session the reader comes back to (see `motion.rs` in gx-visual).
-    static FIRST_DRAWN: RefCell<HashMap<String, Option<web_time::Instant>>> =
-        RefCell::new(HashMap::new());
-}
-
-/// How far `key`'s chart is through drawing in, or `None` once it has finished (or never draws
-/// in: reduced motion, or a chart with nothing that moves).
-fn draw_in_progress(key: &str, scene: &Scene, reduce_motion: bool) -> Option<f32> {
-    FIRST_DRAWN.with(|first| {
-        let mut first = first.borrow_mut();
-        let started = *first
-            .entry(key.to_owned())
-            .or_insert_with(|| (!reduce_motion && scene.has_motion()).then(web_time::Instant::now));
-        let elapsed = started?.elapsed().as_millis() as f32;
-        let progress = elapsed / CHART_MOTION.duration_ms as f32;
-        if progress >= 1.0 {
-            first.insert(key.to_owned(), None);
-            None
-        } else {
-            Some(progress)
-        }
-    })
-}
-
 /// The transcript's visual blocks, laid out once per source, width and theme.
 ///
 /// Asked for while a row renders with the view borrowed shared, so the maps are behind cells, as
@@ -549,12 +508,7 @@ impl NativeChatView {
         cx: &Context<Self>,
     ) -> AnyElement {
         let s = p.scale;
-        let drawing_in = draw_in_progress(key, scene, cx.reduce_motion());
         let scene = Rc::new(scene.clone());
-        let drawn = Rc::new(match drawing_in {
-            Some(progress) => scene.at(progress),
-            None => (*scene).clone(),
-        });
         let hovered = self
             .visual
             .hovered
@@ -595,12 +549,8 @@ impl NativeChatView {
                 move |bounds: Bounds<Pixels>, _: (), window: &mut Window, cx: &mut App| {
                     let region = hovered.and_then(|hover| scene.regions.get(hover.region));
                     paint_scene(
-                        &drawn, region, hover_fill, light, bounds, s, &font, window, cx,
+                        &scene, region, hover_fill, light, bounds, s, &font, window, cx,
                     );
-                    // The transcript is a cached view: a chart drawing in asks for its own frames.
-                    if drawing_in.is_some() {
-                        window.request_animation_frame();
-                    }
                 }
             },
         )

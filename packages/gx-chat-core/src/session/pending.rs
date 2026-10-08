@@ -191,32 +191,6 @@ fn user_texts(messages: &[&ChatMessage], advanced: bool) -> Vec<String> {
     texts
 }
 
-/// User rows with a later non-user turn, as (id, normalized text).
-fn answered_user_rows<'a>(messages: &[&'a ChatMessage]) -> Vec<(&'a str, String)> {
-    let mut rows = Vec::new();
-    let mut waiting = Vec::new();
-    for message in messages {
-        if matches!(message.role, ChatRole::User) {
-            waiting.push((
-                message.id.as_str(),
-                shell_command_key(normalize_pending_text(&user_message_text(message))),
-            ));
-            continue;
-        }
-        rows.append(&mut waiting);
-    }
-    rows
-}
-
-/// A user turn that is the pending text typed more than once back to back.
-fn repeats_pending_text(pending_text: &str, user_text: &str) -> bool {
-    if pending_text.is_empty() {
-        return false;
-    }
-    let pieces = vec![pending_text.to_string(); user_text.len() / pending_text.len() + 1];
-    count_leading_pending_texts_glued(&pieces, user_text) >= 2
-}
-
 /// Every user text, normalized.
 pub fn matching_user_texts(messages: &[&ChatMessage]) -> Vec<String> {
     user_texts(messages, false)
@@ -357,42 +331,13 @@ fn filter_pending_sends(
                     if user_text == &pending_text || !user_text.ends_with(&pending_text) {
                         return false;
                     }
-                    if is_steering_bundle || repeats_pending_text(&pending_text, user_text) {
+                    if is_steering_bundle {
                         return true;
                     }
                     is_staged_path_input(&user_text[..user_text.len() - pending_text.len()])
                 });
         if represented {
             embedded.push(index);
-        }
-    }
-
-    /*
-    CDXC:SessionChat 2026-10-08 WHY:
-    An echo is matched by text, so a recorded prompt that differs from what the composer sent stranded it under the real turn forever: on 2026-10-08 a late first paste made Claude record the message twice as one prompt, and the single-message echo stayed below the answer. A repeated message is matched above; for any other difference, an echo still unmatched once two answered user turns follow its send is retired by order, taking the first of them. One turn is not enough: a send typed while an earlier one is still being answered is recorded only after that turn ends.
-    */
-    let pending_texts: Vec<String> = pending
-        .iter()
-        .map(|entry| shell_command_key(normalize_pending_text(&entry.text)))
-        .collect();
-    let mut claimed: Vec<&str> = Vec::new();
-    let mut superseded: Vec<usize> = Vec::new();
-    for (index, entry) in still_open.iter().enumerate() {
-        if glued.contains(&index)
-            || embedded.contains(&index)
-            || entry.queued_prompt_id.is_some()
-            || entry.startup_delivery.is_some()
-        {
-            continue;
-        }
-        let rows: Vec<(&str, String)> =
-            answered_user_rows(&messages_after_boundary(messages, entry))
-                .into_iter()
-                .filter(|(id, text)| !claimed.contains(id) && !pending_texts.contains(text))
-                .collect();
-        if rows.len() >= 2 {
-            claimed.push(rows[0].0);
-            superseded.push(index);
         }
     }
 
@@ -404,7 +349,7 @@ fn filter_pending_sends(
         .filter(|_| {
             open_index += 1;
             let at = open_index as usize;
-            !glued.contains(&at) && !embedded.contains(&at) && !superseded.contains(&at)
+            !glued.contains(&at) && !embedded.contains(&at)
         })
         .map(|(entry, _)| entry.clone())
         .collect();

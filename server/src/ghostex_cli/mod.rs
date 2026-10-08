@@ -200,7 +200,6 @@ fn is_known_command(name: &str) -> bool {
         "k",
         "sleep",
         "hold-sessions-awake",
-        "hold-session-chat-grid",
         "client-hello",
         "wake",
         "focus",
@@ -563,13 +562,6 @@ fn run_command(name: &str, args: &[String]) -> CliResult<()> {
         */
         "hold-sessions-awake" => run_bridge_action(
             "holdSessionsAwake",
-            Parser::KeepSessionsAwake,
-            fail_on_not_ok,
-            args,
-        ),
-        // The chat grid claim lease (`session_chat_grid_claim.rs`), with the keep-awake verb's flags.
-        "hold-session-chat-grid" => run_bridge_action(
-            "holdSessionChatGrid",
             Parser::KeepSessionsAwake,
             fail_on_not_ok,
             args,

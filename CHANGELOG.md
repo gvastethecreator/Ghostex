@@ -4,42 +4,25 @@
 
 ## 10.15.5 - 2026-10-08
 
-**Ghostex 10.15.5 is out.** Dictation in the chat and the terminal, Chat View no longer starts a terminal it doesn't need, the phone opens chats much faster, and every conversation keeps its own model.
+**Ghostex 10.15.5 is out.** Windows close when you click away, every conversation keeps its own model, `!` commands get a cleaner card, and the app waits for its background service instead of asking you to click.
 
 ### 💬 Chat
-- **Dictate with the mic button** in the chat box, and with the new Dictate button on the terminal view's bar.
-- **Long code blocks are capped** with an expand button and scroll inside, charts draw in, and list markers and finished tasks are quieter.
 - **Each conversation remembers its own model and effort:** waking or resuming it comes back on what it last used, including a choice for that session only or a `/model` typed in Claude's terminal, and the chat box shows it right away.
-- **`!` commands show as `! command`** with their output in its own bubble below; tap the header to fold it.
-- **A message is never sent twice** when the computer is slow, and its preview bubble always clears.
-- **While Ghostex is still starting, the chat shows its loading skeleton** with the normal chat box and fills in by itself.
-
-### ⚡ Speed
-- **Chat View no longer runs a terminal in the background:** a session's terminal starts the first time you switch to it, and your last three stay warm. Terminal View works exactly as before.
-- **On Windows, switching between Chat and Terminal resizes the agent straight away** instead of waiting for a size check.
-
-### 👤 Accounts
-- **Continue automatically is on by default,** and at a limit Ghostex uses another account.
-- **An account whose subscription access was disabled is skipped,** and a message to one of its sessions first moves the session to an account with usage; Settings > Accounts says why it turned Manual.
-- **The terminal view's ⋯ menu offers Switch Account** for Claude and Codex, with each account's usage.
-
-### 🪟 Windows and dialogs
-- **Clicking away closes Quick Access, Settings, Search by Prompt, the viewers and the Agents Hub,** unless you're in the middle of typing something.
-- **Resizing the window closes floating panels and menus,** such as the Files list.
-- **The Settings scrollbar drags again** and sits 1px from the window edge, like the other windows.
-- **Menus with hotkeys widen to fit Windows' spelled-out shortcuts.**
-- **Files opened from outside the project show their name and a plain path in Open Files.**
+- **`!` commands show as `! command`** with their output in its own bubble below; click the header to fold it, even while it runs.
+- **While Ghostex is still starting, the chat shows its loading skeleton with the normal chat box** and fills in by itself.
 
 ### 🗂️ Sidebar
 - **"Loading sessions…" retries every 2 seconds on its own** while Ghostex's background service starts; Try now is still there.
 - **A dragged session card stays under your cursor,** and a pane from another project dims and says it can't split there.
 
-### 📱 Phone
-- **Chats open at once:** a Chat View session no longer connects its terminal until you switch to it, and chat uses one warm connection per computer instead of a new SSH command per request.
-- **The sessions list retries every 2 seconds** while Ghostex on the computer isn't answering.
+### 🪟 Windows and dialogs
+- **Clicking away closes Quick Access, Settings, Search by Prompt, the viewers and the Agents Hub,** unless you're in the middle of typing something.
+- **Resizing the window closes floating panels and menus,** such as the Files list.
+- **The Settings scrollbar drags again** and sits against the window's right edge.
+- **Files opened from outside the project show their name and a plain path in Open Files.**
 
-### 🧱 Under the hood
-- **GPUI and its component kit are updated** to the latest upstream.
+### 📱 Phone
+- **The sessions list retries every 2 seconds** while Ghostex on the computer isn't answering, instead of showing a raw error.
 
 ## 10.15.0 - 2026-10-08
 

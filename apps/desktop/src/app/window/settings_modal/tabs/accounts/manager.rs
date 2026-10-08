@@ -43,10 +43,6 @@ pub(crate) fn account_inset(content: AnyElement) -> AnyElement {
         .into_any_element()
 }
 
-/// The side inset of the account management rows and of the New session defaults panel's
-/// controls; the Auto-redeem rows below them use it so every control shares one right edge.
-const ACCOUNT_ROW_INSET_X: f32 = 16.0;
-
 /// The hover fill of a management row and the ghost fill of an expanded button.
 fn ghost_fill(p: &SettingsPalette) -> gpui::Rgba {
     if p.light {
@@ -254,11 +250,9 @@ impl AccountsTab {
             setting_row(
                 p,
                 SharedString::from(format!("accounts-{provider}-auto-redeem")),
-                RowSpec::new("Auto-redeem expiring resets")
-                    .description(
-                        "Ghostex automatically uses a banked reset 5 minutes before it expires, so it isn't lost.",
-                    )
-                    .inset_x(ACCOUNT_ROW_INSET_X),
+                RowSpec::new("Auto-redeem expiring resets").description(
+                    "Ghostex automatically uses a banked reset 5 minutes before it expires, so it isn't lost.",
+                ),
                 None,
                 switch_control(
                     p,
@@ -274,11 +268,9 @@ impl AccountsTab {
             setting_row(
                 p,
                 SharedString::from(format!("accounts-{provider}-auto-redeem-at-limit")),
-                RowSpec::new("Also use it when I hit a limit")
-                    .description(
-                        "When you hit a usage limit and a banked reset expires within 24 hours, Ghostex automatically uses it right away instead of waiting for its last 5 minutes.",
-                    )
-                    .inset_x(ACCOUNT_ROW_INSET_X),
+                RowSpec::new("Also use it when I hit a limit").description(
+                    "When you hit a usage limit and a banked reset expires within 24 hours, Ghostex automatically uses it right away instead of waiting for its last 5 minutes.",
+                ),
                 None,
                 switch_control(
                     p,
@@ -390,32 +382,22 @@ impl AccountsTab {
                     "Ghostex uses this account only when you select it. Automatic account switching skips it.",
                 )
             };
-            let row = h_flex().items_center().gap(px(4.0)).child(label).child(
-                div()
-                    .id(SharedString::from(format!("account-{id}-status-info")))
-                    .size(px(13.0))
-                    .tooltip(tooltip_text(tip))
-                    .child(settings_icon(icon::INFO_CIRCLE, 13.0, p.muted)),
-            );
-            // CDXC:AgentProviders 2026-10-08 DECISION: User: show why gxserver set an account to Manual, as a short line under its Automatic/Manual status ("Subscription access disabled"), with the full reason in its tooltip.
-            let disabled = account.disabled_reason().map(|reason| {
-                div()
-                    .id(SharedString::from(format!("account-{id}-disabled-reason")))
-                    .text_color(hsla(p.destructive))
-                    .tooltip(tooltip_text(format!(
-                        "{reason} Ghostex set this account to Manual. Turn Available for automatic switching back on, reconnect it, or pick it for a session when its access works again."
-                    )))
-                    .child("Subscription access disabled")
-            });
-            v_flex()
+            h_flex()
                 .flex_shrink_0()
-                .items_end()
+                .items_center()
+                .gap(px(4.0))
                 .whitespace_nowrap()
                 .text_size(px(11.0))
                 .line_height(px(15.71))
                 .text_color(hsla(p.muted))
-                .child(row)
-                .children(disabled)
+                .child(label)
+                .child(
+                    div()
+                        .id(SharedString::from(format!("account-{id}-status-info")))
+                        .size(px(13.0))
+                        .tooltip(tooltip_text(tip))
+                        .child(settings_icon(icon::INFO_CIRCLE, 13.0, p.muted)),
+                )
                 .into_any_element()
         } else {
             // CDXC:Settings 2026-09-07 DECISION: A saved account with missing credentials shows the reason and a Click to run login button directly in the account row. Repairing its login is available before consenting to shared conversations; adding it still requires that consent.
