@@ -1228,8 +1228,9 @@ account already in use, and Same as last session reuses the account of the last
 session. Pick a specific account instead to always start
 with it. When the rule finds no account, new sessions use the current CLI login.
 A custom agent whose command sets its own `CLAUDE_CONFIG_DIR` (or `CODEX_HOME`
-for Codex), or runs a wrapper instead of `claude` or `codex`, keeps its own
-login: Ghostex runs that command as-is and picks no account for it. Keep such a
+for Codex), or runs a wrapper other than `claude`, `codex` or their account
+helper (`cswap`, `xswap`), keeps its own login: Ghostex runs that command as-is
+and picks no account for it. Keep such a
 profile in `~/.claude-profiles/<name>` (or `~/.codex-profiles/<name>`), where
 Ghostex finds its conversations and installs its agent hooks: after creating a
 profile, choose Install hook or Update hook for that agent in Settings > Agents.
