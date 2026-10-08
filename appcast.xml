@@ -8,6 +8,40 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
         <link>https://github.com/maddada/Ghostex/releases</link>
         <description>Sparkle appcast for Ghostex macOS releases.</description>
         <item>
+            <title>10.15.5</title>
+            <pubDate>Thu, 08 Oct 2026 09:07:10 +0000</pubDate>
+            <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v10.15.5</sparkle:fullReleaseNotesLink>
+            <sparkle:version>101505</sparkle:version>
+            <sparkle:shortVersionString>10.15.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[# Ghostex 10.15.5
+
+## 10.15.5 - 2026-10-08
+
+**Ghostex 10.15.5 is out.** Windows close when you click away, every conversation keeps its own model, `!` commands get a cleaner card, and the app waits for its background service instead of asking you to click.
+
+### 💬 Chat
+- **Each conversation remembers its own model and effort:** waking or resuming it comes back on what it last used, including a choice for that session only or a `/model` typed in Claude's terminal, and the chat box shows it right away.
+- **`!` commands show as `! command`** with their output in its own bubble below; click the header to fold it, even while it runs.
+- **While Ghostex is still starting, the chat shows its loading skeleton with the normal chat box** and fills in by itself.
+
+### 🗂️ Sidebar
+- **"Loading sessions…" retries every 2 seconds on its own** while Ghostex's background service starts; Try now is still there.
+- **A dragged session card stays under your cursor,** and a pane from another project dims and says it can't split there.
+
+### 🪟 Windows and dialogs
+- **Clicking away closes Quick Access, Settings, Search by Prompt, the viewers and the Agents Hub,** unless you're in the middle of typing something.
+- **Resizing the window closes floating panels and menus,** such as the Files list.
+- **The Settings scrollbar drags again** and sits against the window's right edge.
+- **Files opened from outside the project show their name and a plain path in Open Files.**
+
+### 📱 Phone
+- **The sessions list retries every 2 seconds** while Ghostex on the computer isn't answering, instead of showing a raw error.
+]]></description>
+            <enclosure url="https://github.com/maddada/Ghostex/releases/download/v10.15.5/ghostex-10.15.5-arm64.dmg" length="115641581" type="application/octet-stream" sparkle:edSignature="pRepVGO+FQW2JtnegXrNTw4gJ++ueNh6aE4Ld5hNeuHle4P/rk+SZ5QuKdv7v48KrsA7fN6amoI+1cJynCPDAQ=="/>
+        </item>
+        <item>
             <title>10.15.0</title>
             <pubDate>Wed, 07 Oct 2026 21:37:16 +0000</pubDate>
             <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v10.15.0</sparkle:fullReleaseNotesLink>
@@ -249,51 +283,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
             <enclosure url="https://github.com/maddada/Ghostex/releases/download/v10.11.1/ghostex-10.11.1-arm64.dmg" length="111299058" type="application/octet-stream" sparkle:edSignature="ccnHXynre505cfYBGsdRITwAipd088wbFtHa7QFCE37jiAVmSIohKzlPH7Lcn+/qAHnnnvRZ+bfr248YriXnDQ=="/>
         </item>
         <item>
-            <title>10.11.0</title>
-            <pubDate>Sun, 04 Oct 2026 14:36:29 +0000</pubDate>
-            <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v10.11.0</sparkle:fullReleaseNotesLink>
-            <sparkle:version>101100</sparkle:version>
-            <sparkle:shortVersionString>10.11.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Ghostex 10.11.0
-
-## 10.11.0 - 2026-10-04
-
-**Ghostex 10.11.0 is out.** Send feedback straight from the sidebar, new threads fill in and agents start sooner, Freebuff and seven more agents get a status line, and on Windows the window drags smoothly with its dialogs, menus and toasts following along.
-
-### 📣 Feedback
-- **New: Send Feedback from the sidebar.** The chat-bubble button in the sidebar's top row opens a pop-up where you describe what's broken, confusing or missing and paste screenshots, review the exact GitHub issue before it goes out, and get a link to the issue once it's filed. If you hit the sending limit, it tells you when you can send again.
-
-### ⚡ Faster starts
-- **A new thread's composer fills in much sooner:** its mode and the model chosen at launch show right away, and a model or mode you pick in the composer is never replaced.
-- **New agents start sooner,** without a full hook check before every launch and without waiting for the chat to load first.
-- **Windows: Claude's status line updates no longer start PowerShell,** so each one arrives in a fraction of the time.
-
-### 🤖 Agents
-- **Freebuff sessions drop the "Freebuff:" prefix from their titles,** and the sidebar shows when Freebuff is working.
-- **Agents without a status line of their own get one showing the repo and branch:** Freebuff, Pi, OMP, Grok Build, Antigravity, OpenCode, ZCode and OpenClaude.
-- **Chat offers "Switch model in CLI" for agents whose models it can't list,** on the computer and the phone.
-- **Windows: sessions are no longer named "Windows PowerShell".**
-
-### 🪟 Windows
-- **Dragging the window is smoother,** because Ghostex no longer rebuilds a hidden window on every step of the move.
-- **Drag the window from the empty top of the sidebar,** and double-click there to maximize it.
-- **Overlay windows follow the window when it moves:** the maximized composer, dialogs and their close X, dropdowns, toasts and the Docs drawer.
-- **Clicking a dialog's close X no longer flashes the main window.**
-- **Tooltips and toasts no longer show a square box behind their rounded corners.**
-- **The chat's scroll-down and Esc pills show with transparency on,** including at 125% and 150% display scaling.
-- **Transparency is off by default on Windows,** so the window is fast and solid. Turn it on in Settings > Theme > Enable transparency.
-
-### 🩹 Fixes and polish
-- **Transparency Strength defaults to 10,** and Blur shows only where it changes something: on Windows once What shows behind the glass is no longer Desktop and windows, and Menu blur only on macOS.
-- **macOS: app dialogs move with the main window,** and the Automate dialog behaves like the other dialogs.
-- **A Codex question card can still be answered after Codex closed its question box,** thanks to @rgruenewald.
-- **The Extensions page has a flatter filter row,** and its count includes only the extensions it offers.
-]]></description>
-            <enclosure url="https://github.com/maddada/Ghostex/releases/download/v10.11.0/ghostex-10.11.0-arm64.dmg" length="111299670" type="application/octet-stream" sparkle:edSignature="CQib0B1TqRwk52qbOuvXa0CcE04EoztnWR7naIQrGsUAHHNIorPm6Fmzs4w9eHh9ApC8dWU9RuRsq/rZ8GAeAw=="/>
-        </item>
-        <item>
             <title>3.26.1</title>
             <pubDate>Mon, 01 Jun 2026 18:43:20 +0400</pubDate>
             <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v3.26.1</sparkle:fullReleaseNotesLink>
@@ -305,6 +294,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: 4cac10rWQDyVyNCHww/mDiqwGz2E3kxUhF9v8kwzaGMRFFLflyIZul0/hxWU0TL3PE1Tdcr1WyycRncAp61nDw==
-length: 24437
+edSignature: 956D4/8aJgfW8A589F8NGN+9ZMuTy7r2HZ8hbAgYBLNYi3yQvKsEcIyR1seUMl3CJJc0GG6W4/sJ9bhawxGRCA==
+length: 23145
 -->
