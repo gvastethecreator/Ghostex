@@ -145,7 +145,7 @@ impl GhostexGpuiApp {
             && docked_frame.animating
             && docked_frame.opening
             && self.native_docs_drawer_shown();
-        self.native_docs_sync_drawer(layout.overlay || pinning, !layout.docked, view, cx);
+        self.native_docs_sync_drawer(layout.overlay || pinning, !layout.docked, view, window, cx);
         let header_bottom = super::document_view::HEADER_BOUNDS
             .with(|cell| cell.get())
             .bottom();

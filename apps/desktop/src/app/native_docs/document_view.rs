@@ -150,7 +150,8 @@ impl GhostexGpuiApp {
             DocsFileKind::Image | DocsFileKind::Video | DocsFileKind::Audio
         );
         // CDXC:Docs 2026-10-01 WHY: the Show files button is the header row's last control, not a corner overlay drawn over the row's right end; a guessed reserve for the overlay let it cover the actions (the Open With arrow and Reload) whenever the row and the overlay disagreed.
-        let restore = (!layout.visible()).then(|| self.render_native_docs_restore_button(p, cx));
+        // CDXC:Docs 2026-10-09 DECISION: User: "when i hover the button to show files list pls keep the bar behind to not change". The button stays in the row while the list floats over it (a peek or a drawer) and goes only once the list is docked, so opening the floating list never re-lays out the bar: the title, the meta strip and the other buttons stay exactly where they were.
+        let restore = (!layout.docked).then(|| self.render_native_docs_restore_button(p, cx));
         // CDXC:Docs 2026-10-08 DECISION:
         // User: "when i click here please lets copy the whole path not the file name". Clicking the top bar's file name copies the file's full path on its computer (the project folder joined with a project-relative path), supersedes the 2026-09-07 rule of copying the displayed name.
         let copy_title: SharedString = {
