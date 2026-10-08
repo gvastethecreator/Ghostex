@@ -170,26 +170,15 @@ impl GhostexGpuiApp {
                 GpuiEngineTerminalZmxVisibility::Visible
             };
             let is_displayed = visibility == GpuiEngineTerminalZmxVisibility::Visible;
-            if is_displayed {
-                self.note_agents_terminal_viewer_shown(session_id);
-            }
-            view.update(cx, |view, cx| {
-                let shown = view.set_displayed(is_displayed);
+            view.update(cx, |view, _cx| {
+                view.set_displayed(is_displayed);
                 // The selection has settled (or never moved): the prepaint may resize and claim.
-                let released = view.set_zmx_grid_claim_held(false);
-                // CDXC:Terminal 2026-10-08 WHY: the terminal acts on these in its own prepaint, and
-                // with Faster rendering on a view is only prepainted again when it is notified.
-                if shown || released {
-                    cx.notify();
-                }
+                view.set_zmx_grid_claim_held(false);
             });
             if is_displayed {
                 let (cols, rows) = view.read(cx).model().size();
                 if previous != Some(GpuiEngineTerminalZmxVisibility::Visible) {
-                    view.update(cx, |view, cx| {
-                        view.request_zmx_visible_announce();
-                        cx.notify();
-                    });
+                    view.update(cx, |view, _cx| view.request_zmx_visible_announce());
                 }
                 self.agents_gpui_engine_terminal_zmx_visibility.insert(
                     session_id,

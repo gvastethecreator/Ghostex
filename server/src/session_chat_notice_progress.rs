@@ -103,7 +103,6 @@ pub(crate) fn refresh(
     let mut response_at = None;
     let mut error_at = None;
     let mut usage_limit_error_at = None;
-    let mut account_disabled_error_at = None;
     for line in text.lines() {
         let Ok(record) = serde_json::from_str::<Value>(line) else {
             continue;
@@ -134,9 +133,6 @@ pub(crate) fn refresh(
         } else {
             None
         };
-        if crate::accounts::disabled::transcript_record_disabled(&record) {
-            account_disabled_error_at = Some(timestamp);
-        }
         if let Some(message) = error_message {
             if notice
                 .detail
@@ -183,24 +179,6 @@ pub(crate) fn refresh(
                 let _ = crate::accounts::endpoint::update_session(repository, &row, runtime);
             }
         }
-    }
-    // A disabled account's error repainted after a switch is the previous login's; one the transcript records after the switch is the new login refusing too, so it lifts the suppression the same way a new usage limit does and the recovery pass can move on to the next account.
-    if notice.account_disabled() {
-        if let Some(since) =
-            crate::session_chat_notice::account_usage_notice_suppression(project, session)
-        {
-            if account_disabled_error_at.is_some_and(|error| error > since.timestamp_millis()) {
-                crate::session_chat_notice::lift_account_usage_notice_suppression(project, session);
-                let mut runtime = row["runtimeSettings"]
-                    .as_object()
-                    .cloned()
-                    .unwrap_or_default();
-                runtime.remove("accountSuppressedUsageNotice");
-                runtime.remove("accountSuppressedUsageNoticeAt");
-                let _ = crate::accounts::endpoint::update_session(repository, &row, runtime);
-            }
-        }
-        error_at = account_disabled_error_at.or(error_at);
     }
     // The limit chooser's body contains options, not the transcript's error
     // text. Its quota error still anchors progress and lifts switch suppression.

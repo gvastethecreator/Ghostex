@@ -31,7 +31,6 @@
 //! A grammar or subset change lands in the skill in the same commit.
 
 mod layout;
-mod motion;
 mod scene;
 mod spec;
 mod stats;
@@ -40,7 +39,6 @@ mod text;
 mod theme;
 mod vega;
 
-pub use motion::Motion;
 pub use scene::{scene_to_svg, Anchor, Item, PageRef, Region, Scene, TooltipLine, Visual};
 pub use text::text_width;
 pub use theme::{Color, Theme};
@@ -121,37 +119,17 @@ fn phone_regions(scene: &Scene) -> Vec<serde_json::Value> {
 }
 
 pub fn render_json(source: &str, width: f32, theme_json: &str, font_family: &str) -> String {
-    render_json_at(source, width, theme_json, font_family, None)
-}
-
-/// [`render_json`] with the drawing `progress` (0 to 1) of the way through drawing in
-/// ([`Scene::at`]); `None` is the finished drawing. `motion` says whether the chart has marks
-/// that draw in at all; the regions are always the finished drawing's.
-pub fn render_json_at(
-    source: &str,
-    width: f32,
-    theme_json: &str,
-    font_family: &str,
-    progress: Option<f32>,
-) -> String {
     let theme_value = serde_json::from_str::<serde_json::Value>(theme_json).unwrap_or_default();
     let theme = Theme::from_json(&theme_value);
     let value = match render(source, width, &theme) {
-        Ok(Visual::Drawing(scene)) => {
-            let drawn = match progress {
-                Some(progress) if progress < 1.0 => scene.at(progress),
-                _ => scene.clone(),
-            };
-            json!({
-                "kind": "drawing",
-                "width": scene.width,
-                "height": scene.height,
-                "title": scene.title,
-                "svg": scene_to_svg(&drawn, font_family),
-                "regions": phone_regions(&scene),
-                "motion": scene.has_motion(),
-            })
-        }
+        Ok(Visual::Drawing(scene)) => json!({
+            "kind": "drawing",
+            "width": scene.width,
+            "height": scene.height,
+            "title": scene.title,
+            "svg": scene_to_svg(&scene, font_family),
+            "regions": phone_regions(&scene),
+        }),
         Ok(Visual::Page(page)) => json!({
             "kind": "page",
             "title": page.title,

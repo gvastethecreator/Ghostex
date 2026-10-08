@@ -394,27 +394,16 @@ const CLAUDE_RULES: &[NoticeRule] = &[
                 parts: &[NoticePart::Text("API Error: 401")],
                 corroborators: &[],
             },
+            // An account whose organization turned off Claude Code for subscriptions answers every
+            // prompt with this line; only another account or an API key gets past it.
+            NoticeSignature {
+                scope: NoticeScope::Banner,
+                parts: &[NoticePart::Text(
+                    "Your organization has disabled Claude subscription access",
+                )],
+                corroborators: &[],
+            },
         ],
-        actions: &[OPEN_TERMINAL],
-        quote_evidence: true,
-    },
-    // An account whose organization turned off Claude Code for subscriptions answers every
-    // prompt with this line; only another account or an API key gets past it. It stays a
-    // `loginExpired` kind so every chat keeps its Switch account button; the title is what the
-    // account recovery pass recognises (`SessionChatTerminalNotice::account_disabled`).
-    NoticeRule {
-        kind: SESSION_CHAT_NOTICE_LOGIN_EXPIRED,
-        severity: SessionChatTerminalNoticeSeverity::Error,
-        title: CLAUDE_ACCOUNT_DISABLED_TITLE,
-        detail: "The organization behind this login turned off Claude subscription access, so every message on it fails. Ghostex moves the session to another account set to Automatic when you send a message, or by itself when Continue automatically is on; you can also switch the account yourself.",
-        blocks_input: false,
-        signatures: &[NoticeSignature {
-            scope: NoticeScope::Banner,
-            parts: &[NoticePart::Text(
-                "Your organization has disabled Claude subscription access",
-            )],
-            corroborators: &[],
-        }],
         actions: &[OPEN_TERMINAL],
         quote_evidence: true,
     },

@@ -74,7 +74,6 @@ pub const DEFAULT_GHOSTEX_SETTINGS: &[(&str, J)] = &[
     // All Automations and project Automate start hidden behind their
     // coming-soon overlay until Enable Experimental Features is on.
     ("showBetaFeatures", J::Bool(false)),
-    ("fasterRendering", J::Bool(false)),
     ("codeViewTabHidden", J::Bool(false)),
     ("browserViewTabHidden", J::Bool(false)),
     ("kanbanViewTabHidden", J::Bool(false)),

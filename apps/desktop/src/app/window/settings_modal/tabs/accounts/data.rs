@@ -120,15 +120,6 @@ impl Account {
         self.raw["eligible"].as_bool() == Some(true)
     }
 
-    /// Why gxserver took this login out of automatic switching (server/src/accounts/disabled.rs).
-    pub(crate) fn disabled_reason(&self) -> Option<String> {
-        self.raw
-            .get("disabledReason")
-            .and_then(Value::as_str)
-            .filter(|reason| !reason.is_empty())
-            .map(str::to_string)
-    }
-
     pub(crate) fn registered(&self) -> bool {
         self.raw["registered"].as_bool() == Some(true)
     }
@@ -301,7 +292,7 @@ impl AccountsState {
         if policy.is_object() {
             policy.clone()
         } else {
-            serde_json::json!({ "enabled": true, "atLimit": "switch", "priority": "soonestReset", "retryErrors": true })
+            serde_json::json!({ "enabled": false, "atLimit": "wait", "priority": "soonestReset", "retryErrors": true })
         }
     }
 

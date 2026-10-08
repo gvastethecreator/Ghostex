@@ -151,18 +151,6 @@ pub(crate) fn render(spec: &ChartSpec, width: f32, theme: &Theme) -> Result<Bloc
             dashed: false,
         });
         let shape = block.last_item();
-        block.animate(
-            shape,
-            crate::Motion::Sweep {
-                cx,
-                cy,
-                outer,
-                inner,
-                start,
-                end,
-                full: slices.len() == 1,
-            },
-        );
         let mut shown = Vec::new();
         if let (Some(def), Some(label)) = (spec.color_field(), &slice.label) {
             shown.push(Shown::colored(def, label.clone(), color));
@@ -184,7 +172,7 @@ pub(crate) fn render(spec: &ChartSpec, width: f32, theme: &Theme) -> Result<Bloc
 }
 
 /// A slice as a polygon: the outer arc, then the inner arc backwards (or the center for a pie).
-pub(crate) fn wedge(
+fn wedge(
     cx: f32,
     cy: f32,
     outer: f32,

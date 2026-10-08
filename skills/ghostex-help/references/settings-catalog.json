@@ -2851,21 +2851,6 @@
       "agentWritable": true
     },
     {
-      "key": "fasterRendering",
-      "title": "Faster rendering",
-      "subtitle": "Redraw only the parts of a window that changed, which uses less CPU while agents stream and you scroll. Experimental: turn it off if part of a window stops updating.",
-      "tab": "settings",
-      "tabTitle": "General",
-      "group": "advanced",
-      "groupTitle": "Advanced",
-      "section": "beta",
-      "sectionTitle": "Experimental",
-      "type": "boolean",
-      "default": false,
-      "advanced": true,
-      "agentWritable": true
-    },
-    {
       "key": "showAdvancedSettings",
       "title": "Show Advanced settings",
       "subtitle": "Show the rows marked Advanced in Settings.",

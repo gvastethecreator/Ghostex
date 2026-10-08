@@ -157,12 +157,6 @@ pub enum SessionChatSendStep {
         settle_ms: u64,
         timeout_ms: u64,
     },
-    /// After the clear-and-retype attempt's paste check: clear the input box and type the
-    /// message once when the first, late paste landed as well (session_chat_send/single_paste.rs).
-    KeepSinglePaste {
-        agent: String,
-        text: String,
-    },
     /*
     CDXC:SessionChat 2026-09-02:
     Hand the input line to the agent rewind driver for its whole terminal

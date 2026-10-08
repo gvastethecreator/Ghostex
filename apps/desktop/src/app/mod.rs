@@ -119,7 +119,6 @@ pub(crate) mod terminal_input;
 pub(crate) mod terminal_sync;
 mod terminal_view;
 pub(crate) mod titlebar;
-pub(crate) mod view_retention;
 pub(crate) mod update_available_modal_lifecycle;
 mod view_pane_state;
 mod view_panel;

@@ -115,7 +115,6 @@ pub const ADVANCED_MAIN_SETTING_KEYS: &[&str] = &[
     "dimSleepingSessions",
     "wakeSleepingSessionsOnSelect",
     "showBetaFeatures",
-    "fasterRendering",
 ];
 
 pub const HOTKEY_SETTINGS_SECTIONS: J = J::Arr(&[
@@ -483,7 +482,6 @@ pub const MAIN_SETTINGS_SCROLL_TARGET_SETTING_KEYS: &[(&str, &[&str])] = &[
             "dimSleepingSessions",
             "wakeSleepingSessionsOnSelect",
             "showBetaFeatures",
-            "fasterRendering",
         ],
     ),
     (
@@ -622,7 +620,7 @@ pub const MAIN_SETTINGS_SCROLL_TARGET_SETTING_KEYS: &[(&str, &[&str])] = &[
         "sleepingSessions",
         &["dimSleepingSessions", "wakeSleepingSessionsOnSelect"],
     ),
-    ("beta", &["showBetaFeatures", "fasterRendering"]),
+    ("beta", &["showBetaFeatures"]),
 ];
 
 pub const MAIN_SETTINGS_SECTION_SETTING_KEYS: &[(&str, &[&str])] = &[
@@ -812,7 +810,6 @@ pub const MAIN_SETTINGS_SECTION_SETTING_KEYS: &[(&str, &[&str])] = &[
             "dimSleepingSessions",
             "wakeSleepingSessionsOnSelect",
             "showBetaFeatures",
-            "fasterRendering",
         ],
     ),
 ];

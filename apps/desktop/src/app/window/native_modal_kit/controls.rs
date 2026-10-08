@@ -157,20 +157,16 @@ pub(crate) fn modal_switch(p: &ModalPalette, checked: bool, disabled: bool) -> A
 /// text gutter as padding inside it.
 ///
 /// CDXC:AppModal 2026-10-08 DECISION:
-/// User: "give the scroll bar 1px gap from the right border of the window. apply this in all modals that have the same kind of scroll bar pls to be consistent" (superseding the same day's flush "without gap" placement). The thumb sits 1px in from the modal window's right border: a 1px inset inside its track (gpui-component's default is 4px) and no window padding beside it; the content keeps its own gutter so text never sits under the thumb. Every modal scroll area that runs along the window's right border uses this one bar; scrollbars inside a bordered inner panel keep the default.
+/// User: "please stick the scrollbar to the right side more without gap if possible". The thumb
+/// sits flush against the modal's right edge: no inset inside its track (gpui-component's default
+/// is 4px) and no window padding beside it; the content keeps its own gutter so text never sits
+/// under the thumb. Settings' page body is the modal scroll area that runs along that edge.
 #[track_caller]
 pub(crate) fn modal_edge_scrollbar<H: gpui_component::scroll::ScrollbarHandle + Clone>(
     handle: &H,
 ) -> gpui_component::scroll::Scrollbar {
-    with_modal_edge_gap(gpui_component::scroll::Scrollbar::vertical(handle))
-}
-
-/// `modal_edge_scrollbar`'s 1px gap from the window border, for an edge bar with its own
-/// thickness. Apply it after `.thickness()`, which resets the inset.
-pub(crate) fn with_modal_edge_gap(
-    scrollbar: gpui_component::scroll::Scrollbar,
-) -> gpui_component::scroll::Scrollbar {
-    scrollbar.styles(|styles| styles.thumb(|thumb| thumb.inset(px(1.0))))
+    gpui_component::scroll::Scrollbar::vertical(handle)
+        .styles(|styles| styles.thumb(|thumb| thumb.inset(px(0.0))))
 }
 
 /// A rotating loader icon for busy primary buttons.

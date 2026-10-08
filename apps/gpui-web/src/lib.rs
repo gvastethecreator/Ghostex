@@ -113,14 +113,6 @@ pub fn run() -> Result<(), JsValue> {
 
     #[cfg(target_family = "wasm")]
     gpui_platform::web_init();
-    // CDXC:Settings 2026-10-08 SEE-ALSO: `?retention=on` (with `?a11y=off`, since GPUI Fast retains
-    // nothing while the accessibility mirror is on) turns on the desktop's Faster rendering for
-    // this page, so a retained frame can be tested in a browser (`app/view_retention.rs`).
-    gpui::set_default_view_retention(
-        web_sys::window()
-            .and_then(|window| window.location().search().ok())
-            .is_some_and(|search| search.contains("retention=on")),
-    );
     #[cfg(not(target_family = "wasm"))]
     let app = gpui_platform::application();
     #[cfg(target_family = "wasm")]

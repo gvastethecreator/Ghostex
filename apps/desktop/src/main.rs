@@ -256,9 +256,6 @@ fn main() {
     // before the window opens so first paint already uses the real color.
     initialize_workspace_background_color_from_ghostty_config();
     refresh_gpui_visual_settings(&shared_settings::shared_sidebar_settings_snapshot());
-    app::view_retention::apply_view_retention_default(
-        &shared_settings::shared_sidebar_settings_snapshot(),
-    );
 
     let application = gpui_platform::application().with_assets(assets::GhostexAssets);
     // OS-integration URL/file opens (ghostex:// + Finder Open With) hook the

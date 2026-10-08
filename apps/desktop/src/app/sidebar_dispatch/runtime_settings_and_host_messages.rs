@@ -55,7 +55,6 @@ impl GhostexGpuiApp {
         let changed = self.refresh_sidebar_runtime_settings_from_shared_settings(&settings, cx);
         if changed {
             self.notify_native_chat_views(cx);
-            crate::app::view_retention::apply_view_retention_after_settings_change(&settings, cx);
         }
         let appearance_settings_changed = changed && {
             let previous_settings =

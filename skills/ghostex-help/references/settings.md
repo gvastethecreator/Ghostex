@@ -177,7 +177,6 @@ How to use this file:
 #### Experimental
 
 - **Enable Experimental Features** `showBetaFeatures` (boolean, default false) [advanced]: Show experimental surfaces: OS Integration settings, Browser color scheme, and Keep Awake.
-- **Faster rendering** `fasterRendering` (boolean, default false) [advanced]: Redraw only the parts of a window that changed, which uses less CPU while agents stream and you scroll. Experimental: turn it off if part of a window stops updating.
 ### Settings window
 
 - **Show Advanced settings** `showAdvancedSettings` (boolean, default false): Show the rows marked Advanced in Settings.

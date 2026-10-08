@@ -28,7 +28,6 @@ mod composer_scroll;
 mod coordinator_threads;
 pub(crate) mod cursor;
 mod deferred_work;
-mod dictation;
 mod disclosure_body;
 mod edit_shortcuts;
 mod file_change_card;

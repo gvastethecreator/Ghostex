@@ -27,7 +27,6 @@ pub(crate) fn quick_launch_account<'a>(
                 .last_used_accounts
                 .get(&provider)
                 .and_then(|id| registered(id))
-                .filter(|account| account.disabled.is_none())
             {
                 return Some(account);
             }

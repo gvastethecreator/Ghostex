@@ -190,13 +190,6 @@ pub(crate) fn render(spec: &ChartSpec, width: f32, theme: &Theme) -> Result<Bloc
         };
         block.fill_rect(rx, ry, rw, rh, radius, color);
         let shape = block.last_item();
-        block.animate(
-            shape,
-            crate::Motion::Grow {
-                base: p0,
-                horizontal,
-            },
-        );
 
         let mut shown = vec![Shown::new(cat, cats.labels[bar.cat].clone())];
         if let (Some(def), Some(label)) = (spec.color_field(), series.label(bar.series)) {
