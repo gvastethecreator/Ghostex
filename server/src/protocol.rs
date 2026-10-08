@@ -507,6 +507,11 @@ pub fn endpoint_for(path: &str) -> Option<EndpointDescriptor> {
         */
         | "/api/holdSessionsAwake"
         /*
+        CDXC:Zmx 2026-10-08 WHY:
+        A chat shown on a remote machine's session claims that session's grid on the machine running it, like the keep-awake lease above. It carries only project/session ids, a holder id and a TTL.
+        */
+        | "/api/holdSessionChatGrid"
+        /*
         CDXC:Coordinators 2026-09-30 WHY:
         A coordinator and its threads live on the machine that runs them, so a
         client looking at a remote machine reads and steers them there, like

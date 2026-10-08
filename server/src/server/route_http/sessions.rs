@@ -516,6 +516,15 @@ pub(super) async fn route_sessions_http(
             &body_json,
             |repository, _db, params, _| hold_sessions_awake(repository, params),
         ),
+        "/api/holdSessionChatGrid" => handle_domain_http(
+            &state,
+            endpoint.path,
+            request_id,
+            &body_json,
+            |repository, _db, params, _| {
+                crate::session_chat_grid_claim::hold_session_chat_grid(&state, repository, params)
+            },
+        ),
         "/api/searchSessions" => handle_domain_http(
             &state,
             endpoint.path,

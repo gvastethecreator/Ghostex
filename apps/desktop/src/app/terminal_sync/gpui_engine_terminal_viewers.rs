@@ -20,6 +20,9 @@ pub(crate) struct GpuiRetiringTerminalViewer {
     _observation: gpui::Subscription,
 }
 
+/// Windows: how many recently shown terminals keep their viewer while their chat is shown.
+const WARM_TERMINAL_VIEWERS: usize = 3;
+
 pub(crate) struct GpuiTerminalChatClaimState {
     runtime_session_id: AgentsTerminalRuntimeSessionId,
     owner: Option<terminal_chat_claim::TerminalChatClaim>,
@@ -49,6 +52,12 @@ impl GhostexGpuiApp {
             for id in ids {
                 self.ensure_agents_gpui_engine_terminal_view(id, cx);
             }
+            self.agents_terminal_chat_claims.clear();
+            return;
+        }
+        // Windows: gxserver holds the chat claim for a shown chat (`chat_grid_claims.rs`); a second
+        // attach here would cost a PowerShell start and its `ZMX_CHAT` would never reach wmx.
+        if cfg!(windows) {
             self.agents_terminal_chat_claims.clear();
             return;
         }
@@ -196,7 +205,7 @@ impl GhostexGpuiApp {
         target: GpuiEngineTerminalEventTarget,
     ) -> bool {
         if !cfg!(unix) {
-            return false;
+            return self.agents_terminal_is_local_wmx_viewer(target);
         }
         match target {
             GpuiEngineTerminalEventTarget::Agents(id) => {
@@ -210,6 +219,48 @@ impl GhostexGpuiApp {
                         .is_some()
             }
         }
+    }
+
+    /// Windows: an Agents viewer whose command attaches to a session on this computer's wmx, the
+    /// only viewer whose claims and detach can use the attach control pipe. A remote session's
+    /// viewer runs `zmx attach` over SSH, where nothing reaches it around ConPTY.
+    pub(crate) fn agents_terminal_is_local_wmx_viewer(
+        &self,
+        target: GpuiEngineTerminalEventTarget,
+    ) -> bool {
+        let GpuiEngineTerminalEventTarget::Agents(id) = target else {
+            return false;
+        };
+        cfg!(windows)
+            && self
+                .agents_workspace
+                .session(id)
+                .is_some_and(|session| session.zmx_session_name.is_some())
+            && !self
+                .remote_attach_sessions
+                .values()
+                .any(|remote_session_id| *remote_session_id == id)
+    }
+
+    /// CDXC:Zmx 2026-10-08 DECISION:
+    /// User: "pls dont break things for users who set default to terminal at all". On Windows a viewer costs a PowerShell start (about 0.6 s), so only a session shown in Chat View waits for its viewer (it is spawned on the first switch to its terminal) or gives it up; a session in terminal view keeps its viewer exactly as before, shown or hidden, in this project or a parked one. macOS and Linux keep their existing policy, where a viewer is a cheap `zmx attach`.
+    pub(crate) fn agents_terminal_viewer_may_wait(&self, session_id: TerminalSessionId) -> bool {
+        !cfg!(windows) || self.agents_chat_mode_sessions.contains(&session_id)
+    }
+
+    /// Windows: the sessions whose terminal was shown most recently keep their viewer while their
+    /// chat is shown, so switching back to their terminal starts no PowerShell.
+    pub(crate) fn note_agents_terminal_viewer_shown(&mut self, session_id: TerminalSessionId) {
+        if !cfg!(windows) {
+            return;
+        }
+        let warm = &mut self.agents_terminal_warm_viewers;
+        if warm.front() == Some(&session_id) {
+            return;
+        }
+        warm.retain(|id| *id != session_id);
+        warm.push_front(session_id);
+        warm.truncate(WARM_TERMINAL_VIEWERS);
     }
 
     pub(crate) fn remember_gpui_terminal_viewer_recipe(
@@ -438,8 +489,12 @@ impl GhostexGpuiApp {
                 (self.agents_terminal_has_detachable_viewer(*id)
                     && !(parking && kept_alive.contains(id))
                     && (parking || !self.agents_terminal_viewer_is_visible(*id))
+                    && (!cfg!(windows)
+                        || (self.agents_terminal_viewer_may_wait(*id)
+                            && !self.agents_terminal_warm_viewers.contains(id)))
                     && (parking
                         || !self.agents_terminal_chat_is_visible(*id)
+                        || cfg!(windows)
                         || self
                             .agents_terminal_chat_claims
                             .get(id)
@@ -484,7 +539,12 @@ impl GhostexGpuiApp {
         }
         let mut retired = Vec::new();
         let keep = self.project_switch_keep_alive();
-        for (project_id, parked) in &mut self.parked_agents_terminal_runtimes_by_project {
+        // Windows keeps a parked project's viewers, as it always did (`agents_terminal_viewer_may_wait`).
+        for (project_id, parked) in self
+            .parked_agents_terminal_runtimes_by_project
+            .iter_mut()
+            .filter(|_| !cfg!(windows))
+        {
             let ids = parked
                 .gpui_engine_terminals
                 .iter()
