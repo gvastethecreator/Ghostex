@@ -195,6 +195,59 @@ fn windows_arch() -> &'static str {
     }
 }
 
+/// The release whose WSL2 gxserver runtime this start uses: `app_version` once it is cached or
+/// published, otherwise the newest cached earlier release.
+///
+/// CDXC:PlatformSupport 2026-10-08 WHY:
+/// `chore: prepare X.Y.Z` bumps package.json before the release workflow publishes vX.Y.Z (and a cancelled release never publishes it), so a start in that window asked for a runtime asset that does not exist and failed with a 404. The WSL2 runtime only serves WSL projects; until vX.Y.Z is published the start uses the newest runtime it already holds, and the first start after publishing downloads the real one into its own `ghostex-X.Y.Z` folder.
+fn published_runtime_version(app_version: &str, arch: &str) -> String {
+    let artifacts = root().join("build/runtime-artifacts");
+    let archive_name = format!("gxserver-linux-{arch}.tar.gz");
+    let cached = |version: &str| {
+        artifacts
+            .join(format!("ghostex-{version}"))
+            .join(arch)
+            .join(&archive_name)
+            .exists()
+    };
+    if cached(app_version) {
+        return app_version.to_string();
+    }
+    let curl = if cfg!(windows) { "curl.exe" } else { "curl" };
+    let published = output(
+        Command::new(curl)
+            .args(["-fsIL", "-o"])
+            .arg(if cfg!(windows) { "NUL" } else { "/dev/null" })
+            .arg(format!(
+                "https://github.com/maddada/Ghostex/releases/download/v{app_version}/{archive_name}"
+            )),
+    )
+    .is_ok_and(|result| result.status.success());
+    if published {
+        return app_version.to_string();
+    }
+    let parse = |version: &str| -> Option<(u64, u64, u64)> {
+        let mut parts = version.split('.').map(|part| part.parse::<u64>().ok());
+        Some((parts.next()??, parts.next()??, parts.next()??))
+    };
+    let Some(wanted) = parse(app_version) else {
+        return app_version.to_string();
+    };
+    fs::read_dir(&artifacts)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let version = name.strip_prefix("ghostex-")?.to_string();
+            let parsed = parse(&version)?;
+            (parsed < wanted && cached(&version)).then_some((parsed, version))
+        })
+        .max()
+        .map(|(_, version)| version)
+        .unwrap_or_else(|| app_version.to_string())
+}
+
 /// The WSL2 gxserver runtime and the code-server Source runtime a Windows build bundles.
 pub struct RuntimeArchives {
     require_wsl_runtime: bool,
@@ -245,11 +298,15 @@ impl RuntimeArchives {
         let code_server_archive_name = field("archive_name")?;
         // CDXC:PlatformSupport 2026-08-09:
         // The gxserver release asset keeps the same filename across Ghostex releases, so an architecture-only cache could reuse a stale runtime from an earlier release. Scope the cache to the immutable Ghostex release tag so a version can only consume the WSL runtime published with that version.
+        let runtime_version = match &explicit_gxserver {
+            Some(_) => app_version.clone(),
+            None => published_runtime_version(&app_version, arch),
+        };
         let gxserver_archive = match &explicit_gxserver {
             Some(path) => std::path::absolute(path)?,
             None => root()
                 .join("build/runtime-artifacts")
-                .join(format!("ghostex-{app_version}"))
+                .join(format!("ghostex-{runtime_version}"))
                 .join(arch)
                 .join(format!("gxserver-linux-{arch}.tar.gz")),
         };
@@ -269,7 +326,7 @@ impl RuntimeArchives {
             code_server_component_version: field("component_version")?,
             code_server_download_tag: field("download_tag")?,
             code_server_archive_name,
-            app_version,
+            app_version: runtime_version,
         })
     }
 
