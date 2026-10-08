@@ -1239,8 +1239,9 @@ sessions rule, just like the sidebar agent button, while the terminal and your
 unsent chat text stay in place.
 Sign-in and usage-limit notices in Claude and Codex chats offer Switch account
 beside Open terminal, so you can choose another account directly from those notices.
-In the chat's More actions menu, click Switch Account to open its submenu;
-hovering over it does not open it. Open submenus stay open when you move the
+In the chat's More actions menu, and in the ⋯ menu of the bar under a Claude or
+Codex terminal view, click Switch Account to open its submenu of saved accounts
+with their usage; hovering over it does not open it. Open submenus stay open when you move the
 pointer across other menu items, so you can move into them without rushing.
 Switching a running Claude or Codex session to another account, from More
 actions > Switch Account, a terminal notice, or automatically when its account hits a usage limit,

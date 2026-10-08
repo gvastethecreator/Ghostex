@@ -469,6 +469,10 @@ pub struct GhostexGpuiApp {
     /// The open ⋯ menu's "Switch Account" flyout is showing. Reset whenever
     /// the menu itself closes or moves to another session.
     pub(crate) agents_terminal_action_bar_account_submenu_open: bool,
+    /// A Claude or Codex session's flyout rows while that flyout is open: the sidebar session id
+    /// the accounts were asked for, and the rows gx-core's `sessionAccounts` page last published
+    /// (`gx_store/sidebar_accounts.rs`), the same rows the sidebar row's Switch Account shows.
+    pub(crate) agents_terminal_action_bar_account_page: Option<(String, Vec<serde_json::Value>)>,
     /// Sessions whose current compatibility state has already been considered
     /// for the saved automatic Chat preference, together with the effective
     /// Default Agent View each one was considered under. These observations

@@ -15,6 +15,7 @@
 // dismiss-on-outside-press menu surface, like the titlebar's dropdown panels —
 // and it occludes only its own visible rectangle.
 
+mod account_flyout;
 mod menu_width;
 mod model_pill;
 mod palette;
@@ -656,12 +657,12 @@ impl GhostexGpuiApp {
             .agents_sidebar_session_for_terminal(session_id)
             .map(|session| session.switchable_agents.clone())
             .unwrap_or_default();
-        let menu_width = self.terminal_agent_bar_menu_width(
-            surface,
-            session_id,
-            !switchable_agents.is_empty(),
-            cx,
-        );
+        // The chat's menu rule: Claude and Codex sessions switch between saved accounts, every
+        // other agent between the daemon's switchable-agent rows.
+        let accounts_target = self.terminal_agent_bar_account_target(session_id);
+        let has_switch_account = accounts_target.is_some() || !switchable_agents.is_empty();
+        let menu_width =
+            self.terminal_agent_bar_menu_width(surface, session_id, has_switch_account, cx);
         let mut menu = div()
             .id(format!("ghostex-gpui-terminal-agent-bar-menu-{suffix}"))
             .absolute()
@@ -697,9 +698,7 @@ impl GhostexGpuiApp {
         for row in TERMINAL_AGENT_BAR_MENU_ROWS {
             match row {
                 Some(action) => {
-                    if *action == TerminalAgentBarAction::SwitchAccount
-                        && switchable_agents.is_empty()
-                    {
+                    if *action == TerminalAgentBarAction::SwitchAccount && !has_switch_account {
                         continue;
                     }
                     if let Some(heading) = terminal_agent_bar_menu_group_heading(*action) {
@@ -714,14 +713,22 @@ impl GhostexGpuiApp {
                 }
             }
         }
-        if self.agents_terminal_action_bar_account_submenu_open && !switchable_agents.is_empty() {
-            menu = menu.child(self.render_terminal_agent_bar_account_submenu(
-                session_id,
-                menu_width,
-                &switchable_agents,
-                suffix,
-                cx,
-            ));
+        if self.agents_terminal_action_bar_account_submenu_open {
+            if accounts_target.is_some() {
+                if let Some((_, rows)) = self.agents_terminal_action_bar_account_page.clone() {
+                    menu = menu.child(
+                        self.render_terminal_agent_bar_account_page(menu_width, &rows, suffix, cx),
+                    );
+                }
+            } else if !switchable_agents.is_empty() {
+                menu = menu.child(self.render_terminal_agent_bar_account_submenu(
+                    session_id,
+                    menu_width,
+                    &switchable_agents,
+                    suffix,
+                    cx,
+                ));
+            }
         }
 
         menu.into_any_element()
@@ -761,11 +768,13 @@ impl GhostexGpuiApp {
             (self.agents_terminal_action_bar_menu_session != Some(session_id))
                 .then_some(session_id);
         self.agents_terminal_action_bar_account_submenu_open = false;
+        self.agents_terminal_action_bar_account_page = None;
         cx.notify();
     }
 
     pub(crate) fn close_terminal_agent_action_bar_menu(&mut self, cx: &mut gpui::Context<Self>) {
         self.agents_terminal_action_bar_account_submenu_open = false;
+        self.agents_terminal_action_bar_account_page = None;
         if self
             .agents_terminal_action_bar_menu_session
             .take()
@@ -904,8 +913,12 @@ impl GhostexGpuiApp {
         // The Switch Account row only opens its flyout; the menu stays up so
         // the account rows have somewhere to be.
         if action == TerminalAgentBarAction::SwitchAccount {
-            self.agents_terminal_action_bar_account_submenu_open =
-                !self.agents_terminal_action_bar_account_submenu_open;
+            let open = !self.agents_terminal_action_bar_account_submenu_open;
+            self.agents_terminal_action_bar_account_submenu_open = open;
+            self.agents_terminal_action_bar_account_page = None;
+            if open && let Some(target) = self.terminal_agent_bar_account_target(session_id) {
+                self.open_terminal_agent_bar_account_page(target, cx);
+            }
             cx.notify();
             return;
         }

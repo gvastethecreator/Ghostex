@@ -300,6 +300,7 @@ impl GhostexGpuiApp {
                 terminal_agent_bar_sessions: HashSet::new(),
                 agents_terminal_action_bar_menu_session: None,
                 agents_terminal_action_bar_account_submenu_open: false,
+                agents_terminal_action_bar_account_page: None,
                 agents_chat_auto_switch_observed_sessions: HashMap::new(),
                 pending_agents_chat_launch_intents: HashSet::new(),
                 pending_agents_chat_launch_follow_view: HashSet::new(),

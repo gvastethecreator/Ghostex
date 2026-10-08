@@ -121,7 +121,7 @@ pub(crate) fn launcher_account_page(
 }
 
 /// A session's Switch Account flyout from a read list: the accounts of the session's provider,
-/// the current one ticked, none pickable while the session works.
+/// each with its usage, the current one ticked, none pickable while the session works.
 pub(crate) fn session_account_page(
     session_id: &str,
     data: &AccountsState,
@@ -137,8 +137,12 @@ pub(crate) fn session_account_page(
         .registered_for(provider)
         .map(|account| {
             let is_current = account.id.is_some() && account.id.as_deref() == current;
+            // The launcher's usage line, so a flyout (the sidebar's and the terminal bar's) shows
+            // what the chat's Switch Account panel shows beside each account.
+            let usage = account_usage_detail(account, provider.unwrap_or_default());
             MenuItem {
                 label: Some(account_text(&account.name, hide_account_emails)),
+                detail: (!usage.is_empty()).then_some(usage),
                 agent_icon: account.provider.clone(),
                 image_data_url: logo(account.provider.as_deref()),
                 checked: is_current,
