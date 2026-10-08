@@ -20,7 +20,7 @@ use super::model::{
 use super::window::{
     FIND_PLACEHOLDER, FIND_PLACEHOLDER_SHORT, FindMenu, FindNoticeKind, GpuiFindPromptsModalWindow,
 };
-use crate::app::window::native_modal_kit::hsla;
+use crate::app::window::native_modal_kit::{hsla, modal_edge_scrollbar};
 use crate::app::window::quick_access::chrome::quick_access_tooltip;
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
@@ -30,7 +30,6 @@ use gpui::{
     StyledText, Window, canvas, div, list, point, px, relative, svg,
 };
 use gpui_component::input::{Input, Textarea};
-use gpui_component::scroll::Scrollbar;
 use gpui_component::{h_flex, v_flex};
 use std::time::Duration;
 
@@ -555,7 +554,7 @@ impl GpuiFindPromptsModalWindow {
                     .absolute()
                     .size_0(),
                 )
-                .child(Scrollbar::vertical(&self.list))
+                .child(modal_edge_scrollbar(&self.list))
             })
             .when(!self.loading, |this| {
                 this.child(
@@ -963,7 +962,7 @@ impl GpuiFindPromptsModalWindow {
                     .track_scroll(&self.preview_scroll)
                     .child(preview_body),
             )
-            .child(Scrollbar::vertical(&self.preview_scroll));
+            .child(modal_edge_scrollbar(&self.preview_scroll));
         let footer = h_flex()
             .flex_shrink_0()
             .w_full()
@@ -1201,7 +1200,7 @@ impl GpuiFindPromptsModalWindow {
                                 .text_color(hsla(p.foreground))
                                 .child(text),
                         )
-                        .child(Scrollbar::vertical(&self.expanded_scroll)),
+                        .child(modal_edge_scrollbar(&self.expanded_scroll)),
                 )
                 .into_any_element(),
         )
