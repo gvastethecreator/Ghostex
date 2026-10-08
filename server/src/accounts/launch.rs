@@ -67,8 +67,13 @@ fn uses_own_login(base: &str, provider: Provider) -> bool {
         Provider::Codex => "CODEX_HOME",
     };
     let mut offset = 0;
+    let mut skip_value = false;
     while let Some((_, end, word)) = command_word(base, offset) {
         offset = end;
+        if skip_value {
+            skip_value = false;
+            continue;
+        }
         if let Some((name, _)) = word.split_once('=') {
             if name == profile_var {
                 return true;
@@ -76,6 +81,11 @@ fn uses_own_login(base: &str, provider: Provider) -> bool {
             continue;
         }
         if matches!(word.as_str(), "env" | "exec" | "command") {
+            continue;
+        }
+        // Options of the prefixes above, such as `env -u NAME claude`, come before the executable; `env -u`/`-C` and `exec -a` take the next word as their value.
+        if word.starts_with('-') {
+            skip_value = matches!(word.as_str(), "-u" | "--unset" | "-C" | "--chdir" | "-a");
             continue;
         }
         let executable = Path::new(&word)
