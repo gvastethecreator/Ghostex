@@ -631,9 +631,10 @@ impl GhostexGpuiApp {
         window: &Window,
         cx: &App,
     ) -> WorkspacePaneBorderState {
-        if self
-            .agents_workspace
-            .active_session_in_pane_has_attention(leaf.pane_id)
+        if leaf
+            .tab_group
+            .active_session_id()
+            .is_some_and(|session_id| self.gx_store_shell_session_has_attention(session_id))
         {
             return WorkspacePaneBorderState::Attention;
         }

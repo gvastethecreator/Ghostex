@@ -4,4 +4,5 @@
 //! `attention.rs`.
 
 mod host;
+mod pane_state;
 mod report;

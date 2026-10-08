@@ -65,12 +65,6 @@ impl WorkspaceModel {
             .and_then(|leaf| leaf.tab_group.active_session_id())
     }
 
-    pub(crate) fn active_session_in_pane_has_attention(&self, pane_id: WorkspacePaneId) -> bool {
-        self.active_session_in_pane(pane_id)
-            .and_then(|session_id| self.session(session_id))
-            .is_some_and(|session| session.activity == AgentTerminalActivity::Attention)
-    }
-
     pub(crate) fn acknowledge_attention_for_session_activation(
         &mut self,
         session_id: TerminalSessionId,

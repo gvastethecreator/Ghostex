@@ -166,6 +166,14 @@ impl Render for GhostexGpuiApp {
                 self.native_chats.get(session).map(|(_, view)| view.clone().into_any_element())
             }
         });
+        // CDXC:Workarea 2026-10-09 DECISION: User: "top border here should have 1px blue line when the session here has \"attention\" status". The work area's top edge turns the sidebar dot's blue while the open session's row has it; the 1px edge is always there, transparent otherwise, so the line never moves the header.
+        let attention = open.as_ref().is_some_and(|session| {
+            self.gx_store
+                .core
+                .presentation()
+                .session(session)
+                .is_some_and(|session| session.activity.as_str() == "attention")
+        });
         let header = self.render_workarea_header(cx);
         let terminal_bar = (shows_terminal && surface.is_some())
             .then(|| self.render_terminal_action_bar(cx));
@@ -190,6 +198,8 @@ impl Render for GhostexGpuiApp {
                     .min_w_0()
                     .flex()
                     .flex_col()
+                    .border_t_1()
+                    .border_color(if attention { rgb(0x95d7f6).into() } else { gpui::transparent_black() })
                     .child(header)
                     .child(match surface {
                         Some(surface) => div().flex_1().min_h_0().overflow_hidden().child(surface),
