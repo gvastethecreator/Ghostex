@@ -820,13 +820,15 @@ impl TerminalView {
     }
 
     /// Holds or releases the prepaint's grid resize and `ZMX_VISIBLE` claim (see `zmx_grid_claim_held`).
-    pub fn set_zmx_grid_claim_held(&mut self, held: bool) {
-        self.zmx_grid_claim_held = held;
+    /// Returns whether that changed, so the caller can ask for the prepaint that acts on it.
+    pub fn set_zmx_grid_claim_held(&mut self, held: bool) -> bool {
+        std::mem::replace(&mut self.zmx_grid_claim_held, held) != held
     }
 
     /// Whether the app currently shows this terminal in a slot; hidden terminals stop redrawing the window on output.
-    pub fn set_displayed(&mut self, displayed: bool) {
-        self.displayed = displayed;
+    /// Returns whether that changed, so the caller can ask for the prepaint that acts on it.
+    pub fn set_displayed(&mut self, displayed: bool) -> bool {
+        std::mem::replace(&mut self.displayed, displayed) != displayed
     }
 
     /// Resize the cell grid outside a layout pass, keeping the cell pixel

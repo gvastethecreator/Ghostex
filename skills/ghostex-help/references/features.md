@@ -2376,7 +2376,10 @@ On Linux, transparency works on Xorg and Wayland desktops (the desktop app curre
 While glass is on, four sliders tune it, each in dark mode and in light mode: Sidebar tint and Work area tint set how much of the desktop each area hides, independently, so either can be the darker one; lower shows more of your desktop.
 Keep Awake (Power)
 prevents sleep while agents work.
-Advanced holds Enable Experimental Features. The separate Debugging page sits
+Advanced holds Enable Experimental Features and Faster rendering (off by default), which
+redraws only the parts of a window that changed so Ghostex uses less CPU while agents stream
+and you scroll; it applies at once, and turning it off brings back the usual drawing if part
+of a window ever stops updating (`fasterRendering`). The separate Debugging page sits
 above About and appears in the Settings sidebar only while Show Advanced is on
 (a Settings search still finds it). It starts with Show debug UI controls.
 Enable that switch to see Diagnostic logs. Diagnostic logs has one switch per area (terminals,
