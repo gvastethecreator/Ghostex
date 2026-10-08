@@ -15,6 +15,7 @@
 // dismiss-on-outside-press menu surface, like the titlebar's dropdown panels —
 // and it occludes only its own visible rectangle.
 
+mod menu_width;
 mod model_pill;
 mod palette;
 
@@ -94,7 +95,9 @@ const TERMINAL_AGENT_BAR_STASH_ICON_SIZE: f32 = 20.0;
 const TERMINAL_AGENT_BAR_MENU_ICON_SIZE: f32 = 14.0;
 const TERMINAL_AGENT_BAR_MENU_SHORTCUT_SIZE: f32 = 11.0;
 const TERMINAL_AGENT_BAR_INDICATOR_SIZE: f32 = 12.0;
-const TERMINAL_AGENT_BAR_MENU_WIDTH: f32 = 200.0;
+/// The ⋯ menu is as wide as its rows need (`menu_width.rs`), between these.
+const TERMINAL_AGENT_BAR_MENU_MIN_WIDTH: f32 = 200.0;
+const TERMINAL_AGENT_BAR_MENU_MAX_WIDTH: f32 = 360.0;
 /// Distance from the ⋯ button's top edge up to the menu's bottom edge.
 const TERMINAL_AGENT_BAR_MENU_GAP: f32 = 6.0;
 
@@ -649,6 +652,16 @@ impl GhostexGpuiApp {
         suffix: &str,
         cx: &mut gpui::Context<Self>,
     ) -> AnyElement {
+        let switchable_agents = self
+            .agents_sidebar_session_for_terminal(session_id)
+            .map(|session| session.switchable_agents.clone())
+            .unwrap_or_default();
+        let menu_width = self.terminal_agent_bar_menu_width(
+            surface,
+            session_id,
+            !switchable_agents.is_empty(),
+            cx,
+        );
         let mut menu = div()
             .id(format!("ghostex-gpui-terminal-agent-bar-menu-{suffix}"))
             .absolute()
@@ -656,7 +669,8 @@ impl GhostexGpuiApp {
             .bottom(px(
                 TERMINAL_AGENT_BAR_BUTTON_SIZE + TERMINAL_AGENT_BAR_MENU_GAP
             ))
-            .w(px(TERMINAL_AGENT_BAR_MENU_WIDTH))
+            .w(px(menu_width))
+            .font_family(crate::ui_fonts::UI_FONT)
             .flex()
             .flex_col()
             .p(px(5.0))
@@ -680,10 +694,6 @@ impl GhostexGpuiApp {
             ])
             .occlude();
 
-        let switchable_agents = self
-            .agents_sidebar_session_for_terminal(session_id)
-            .map(|session| session.switchable_agents.clone())
-            .unwrap_or_default();
         for row in TERMINAL_AGENT_BAR_MENU_ROWS {
             match row {
                 Some(action) => {
@@ -707,6 +717,7 @@ impl GhostexGpuiApp {
         if self.agents_terminal_action_bar_account_submenu_open && !switchable_agents.is_empty() {
             menu = menu.child(self.render_terminal_agent_bar_account_submenu(
                 session_id,
+                menu_width,
                 &switchable_agents,
                 suffix,
                 cx,
@@ -771,6 +782,7 @@ impl GhostexGpuiApp {
     fn render_terminal_agent_bar_account_submenu(
         &self,
         session_id: TerminalSessionId,
+        menu_width: f32,
         switchable_agents: &[GpuiSwitchableSessionAgent],
         suffix: &str,
         cx: &mut gpui::Context<Self>,
@@ -780,9 +792,7 @@ impl GhostexGpuiApp {
                 "ghostex-gpui-terminal-agent-bar-account-submenu-{suffix}"
             ))
             .absolute()
-            .right(px(
-                TERMINAL_AGENT_BAR_MENU_WIDTH + TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_GAP
-            ))
+            .right(px(menu_width + TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_GAP))
             .bottom_0()
             .w(px(TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_WIDTH))
             .flex()
