@@ -15,6 +15,10 @@
 // dismiss-on-outside-press menu surface, like the titlebar's dropdown panels —
 // and it occludes only its own visible rectangle.
 
+mod account_flyout;
+mod dictation;
+pub(crate) use dictation::TerminalDictation;
+mod menu_width;
 mod model_pill;
 mod palette;
 
@@ -94,7 +98,9 @@ const TERMINAL_AGENT_BAR_STASH_ICON_SIZE: f32 = 20.0;
 const TERMINAL_AGENT_BAR_MENU_ICON_SIZE: f32 = 14.0;
 const TERMINAL_AGENT_BAR_MENU_SHORTCUT_SIZE: f32 = 11.0;
 const TERMINAL_AGENT_BAR_INDICATOR_SIZE: f32 = 12.0;
-const TERMINAL_AGENT_BAR_MENU_WIDTH: f32 = 200.0;
+/// The ⋯ menu is as wide as its rows need (`menu_width.rs`), between these.
+const TERMINAL_AGENT_BAR_MENU_MIN_WIDTH: f32 = 200.0;
+const TERMINAL_AGENT_BAR_MENU_MAX_WIDTH: f32 = 360.0;
 /// Distance from the ⋯ button's top edge up to the menu's bottom edge.
 const TERMINAL_AGENT_BAR_MENU_GAP: f32 = 6.0;
 
@@ -134,6 +140,8 @@ const TERMINAL_AGENT_BAR_FORK_ICON: &str = "titlebar/git-branch.svg";
 const TERMINAL_AGENT_BAR_FULL_RELOAD_ICON: &str = "titlebar/refresh.svg";
 const TERMINAL_AGENT_BAR_STASHED_PROMPTS_ICON: &str = "titlebar/stack-push.svg";
 const TERMINAL_AGENT_BAR_CHAT_VIEW_ICON: &str = "titlebar/message-circle.svg";
+const TERMINAL_AGENT_BAR_DICTATE_ICON: &str = "titlebar/microphone.svg";
+const TERMINAL_AGENT_BAR_STOP_DICTATING_ICON: &str = "titlebar/player-stop.svg";
 const TERMINAL_AGENT_BAR_EXPORT_TRANSCRIPT_ICON: &str = "titlebar/file-export.svg";
 const TERMINAL_AGENT_BAR_SWITCH_ACCOUNT_ICON: &str = "titlebar/user-circle.svg";
 const TERMINAL_AGENT_BAR_SUBMENU_CHEVRON_ICON: &str = "titlebar/chevron-left.svg";
@@ -173,6 +181,7 @@ pub(crate) enum TerminalAgentBarAction {
     StashedPrompts,
     AttachPath,
     Maximize,
+    Dictate,
     ToggleChatView,
     PromptEditor,
     VerboseMode,
@@ -199,6 +208,7 @@ impl TerminalAgentBarAction {
             Self::StashedPrompts => "stashed-prompts",
             Self::AttachPath => "attach-path",
             Self::Maximize => "maximize",
+            Self::Dictate => "dictate",
             Self::ToggleChatView => "chat-view",
             Self::PromptEditor => "prompt-editor",
             Self::VerboseMode => "verbose-mode",
@@ -226,6 +236,7 @@ impl TerminalAgentBarAction {
                 "Maximize pane",
                 terminal_element::TERMINAL_OVERLAY_FOCUS_MODE_HOTKEY_ACTION_ID,
             ),
+            Self::Dictate => ("Dictate", ""),
             Self::ToggleChatView => ("Chat View", "toggleChatView"),
             Self::PromptEditor => ("Prompt editor", "promptEditor"),
             Self::VerboseMode => ("Verbose mode", ""),
@@ -248,6 +259,7 @@ impl TerminalAgentBarAction {
             Self::StashedPrompts => TERMINAL_AGENT_BAR_STASHED_PROMPTS_ICON,
             Self::AttachPath => TERMINAL_AGENT_BAR_ATTACH_PATH_ICON,
             Self::Maximize => TERMINAL_AGENT_BAR_MAXIMIZE_ICON,
+            Self::Dictate => TERMINAL_AGENT_BAR_DICTATE_ICON,
             Self::ToggleChatView => TERMINAL_AGENT_BAR_CHAT_VIEW_ICON,
             Self::PromptEditor => TERMINAL_AGENT_BAR_PROMPT_EDITOR_ICON,
             Self::VerboseMode => TERMINAL_AGENT_BAR_VERBOSE_MODE_ICON,
@@ -288,6 +300,7 @@ impl TerminalAgentBarAction {
             Self::ToggleMenu
             | Self::AttachPath
             | Self::Maximize
+            | Self::Dictate
             | Self::PromptEditor
             | Self::SwitchAccount
             | Self::VerboseMode => None,
@@ -482,6 +495,18 @@ impl GhostexGpuiApp {
                             None,
                             cx,
                         ))
+                        .when(dictation::TERMINAL_DICTATION, |this| {
+                            this.child(self.render_terminal_agent_bar_icon_button(
+                                surface,
+                                session_id,
+                                TerminalAgentBarAction::Dictate,
+                                false,
+                                0,
+                                &suffix,
+                                None,
+                                cx,
+                            ))
+                        })
                         .child(self.render_terminal_agent_bar_icon_button(
                             surface,
                             session_id,
@@ -575,6 +600,12 @@ impl GhostexGpuiApp {
                     ));
                 }
             }
+            TerminalAgentBarAction::Dictate => {
+                if self.terminal_dictating(session_id) {
+                    state.icon_path = TERMINAL_AGENT_BAR_STOP_DICTATING_ICON;
+                    state.label = "Stop dictating";
+                }
+            }
             TerminalAgentBarAction::Maximize => {
                 let TerminalAgentBarSurface::AgentsPane(pane_id) = surface;
                 if self.agents_workspace.focus_mode_pane == Some(pane_id) {
@@ -649,6 +680,16 @@ impl GhostexGpuiApp {
         suffix: &str,
         cx: &mut gpui::Context<Self>,
     ) -> AnyElement {
+        let switchable_agents = self
+            .agents_sidebar_session_for_terminal(session_id)
+            .map(|session| session.switchable_agents.clone())
+            .unwrap_or_default();
+        // The chat's menu rule: Claude and Codex sessions switch between saved accounts, every
+        // other agent between the daemon's switchable-agent rows.
+        let accounts_target = self.terminal_agent_bar_account_target(session_id);
+        let has_switch_account = accounts_target.is_some() || !switchable_agents.is_empty();
+        let menu_width =
+            self.terminal_agent_bar_menu_width(surface, session_id, has_switch_account, cx);
         let mut menu = div()
             .id(format!("ghostex-gpui-terminal-agent-bar-menu-{suffix}"))
             .absolute()
@@ -656,7 +697,8 @@ impl GhostexGpuiApp {
             .bottom(px(
                 TERMINAL_AGENT_BAR_BUTTON_SIZE + TERMINAL_AGENT_BAR_MENU_GAP
             ))
-            .w(px(TERMINAL_AGENT_BAR_MENU_WIDTH))
+            .w(px(menu_width))
+            .font_family(crate::ui_fonts::UI_FONT)
             .flex()
             .flex_col()
             .p(px(5.0))
@@ -680,16 +722,10 @@ impl GhostexGpuiApp {
             ])
             .occlude();
 
-        let switchable_agents = self
-            .agents_sidebar_session_for_terminal(session_id)
-            .map(|session| session.switchable_agents.clone())
-            .unwrap_or_default();
         for row in TERMINAL_AGENT_BAR_MENU_ROWS {
             match row {
                 Some(action) => {
-                    if *action == TerminalAgentBarAction::SwitchAccount
-                        && switchable_agents.is_empty()
-                    {
+                    if *action == TerminalAgentBarAction::SwitchAccount && !has_switch_account {
                         continue;
                     }
                     if let Some(heading) = terminal_agent_bar_menu_group_heading(*action) {
@@ -704,13 +740,22 @@ impl GhostexGpuiApp {
                 }
             }
         }
-        if self.agents_terminal_action_bar_account_submenu_open && !switchable_agents.is_empty() {
-            menu = menu.child(self.render_terminal_agent_bar_account_submenu(
-                session_id,
-                &switchable_agents,
-                suffix,
-                cx,
-            ));
+        if self.agents_terminal_action_bar_account_submenu_open {
+            if accounts_target.is_some() {
+                if let Some((_, rows)) = self.agents_terminal_action_bar_account_page.clone() {
+                    menu = menu.child(
+                        self.render_terminal_agent_bar_account_page(menu_width, &rows, suffix, cx),
+                    );
+                }
+            } else if !switchable_agents.is_empty() {
+                menu = menu.child(self.render_terminal_agent_bar_account_submenu(
+                    session_id,
+                    menu_width,
+                    &switchable_agents,
+                    suffix,
+                    cx,
+                ));
+            }
         }
 
         menu.into_any_element()
@@ -750,11 +795,13 @@ impl GhostexGpuiApp {
             (self.agents_terminal_action_bar_menu_session != Some(session_id))
                 .then_some(session_id);
         self.agents_terminal_action_bar_account_submenu_open = false;
+        self.agents_terminal_action_bar_account_page = None;
         cx.notify();
     }
 
     pub(crate) fn close_terminal_agent_action_bar_menu(&mut self, cx: &mut gpui::Context<Self>) {
         self.agents_terminal_action_bar_account_submenu_open = false;
+        self.agents_terminal_action_bar_account_page = None;
         if self
             .agents_terminal_action_bar_menu_session
             .take()
@@ -771,6 +818,7 @@ impl GhostexGpuiApp {
     fn render_terminal_agent_bar_account_submenu(
         &self,
         session_id: TerminalSessionId,
+        menu_width: f32,
         switchable_agents: &[GpuiSwitchableSessionAgent],
         suffix: &str,
         cx: &mut gpui::Context<Self>,
@@ -780,9 +828,7 @@ impl GhostexGpuiApp {
                 "ghostex-gpui-terminal-agent-bar-account-submenu-{suffix}"
             ))
             .absolute()
-            .right(px(
-                TERMINAL_AGENT_BAR_MENU_WIDTH + TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_GAP
-            ))
+            .right(px(menu_width + TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_GAP))
             .bottom_0()
             .w(px(TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_WIDTH))
             .flex()
@@ -894,8 +940,12 @@ impl GhostexGpuiApp {
         // The Switch Account row only opens its flyout; the menu stays up so
         // the account rows have somewhere to be.
         if action == TerminalAgentBarAction::SwitchAccount {
-            self.agents_terminal_action_bar_account_submenu_open =
-                !self.agents_terminal_action_bar_account_submenu_open;
+            let open = !self.agents_terminal_action_bar_account_submenu_open;
+            self.agents_terminal_action_bar_account_submenu_open = open;
+            self.agents_terminal_action_bar_account_page = None;
+            if open && let Some(target) = self.terminal_agent_bar_account_target(session_id) {
+                self.open_terminal_agent_bar_account_page(target, cx);
+            }
             cx.notify();
             return;
         }
@@ -923,6 +973,13 @@ impl GhostexGpuiApp {
             return;
         }
         if !self.terminal_agent_bar_action_enabled(surface, session_id, action) {
+            return;
+        }
+
+        // Dictation listens in the app and pastes into the terminal when it ends
+        // (`dictation.rs`), so it is not a `TerminalViewEvent` either.
+        if action == TerminalAgentBarAction::Dictate {
+            self.toggle_terminal_dictation(session_id, window, cx);
             return;
         }
 

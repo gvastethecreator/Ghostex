@@ -252,6 +252,10 @@ impl GhostexGpuiApp {
             self.ghostex_capture_settings_changed(settings_snapshot, cx);
         }
         refresh_gpui_visual_settings(settings_snapshot);
+        crate::app::view_retention::apply_view_retention_after_settings_change(
+            settings_snapshot,
+            cx,
+        );
         apply_gpui_component_theme(cx);
         self.native_kanban_notify_appearance(cx);
         self.native_automate_notify_appearance(cx);

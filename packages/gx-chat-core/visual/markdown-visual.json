@@ -9,5 +9,9 @@
     "paddingY": 1.6,
     "borderWidth": 1,
     "radius": 6
+  },
+  "codeBlock": {
+    "collapsedLines": 20,
+    "collapseAfterLines": 26
   }
 }

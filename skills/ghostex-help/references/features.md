@@ -704,6 +704,15 @@ command, and `$skill-name` for Codex.
 Use the paperclip to attach images, files, or folders. On Linux, choose
 **Images or files…** or **Folders…** before selecting items in the system picker;
 the terminal's attachment action offers the same choices.
+Press the microphone beside Terminal View to dictate: speak, then press it again
+to stop, and what you said is typed into your message without sending it. It uses
+your computer's speech recognition on macOS and Windows (on Windows, turn on
+Online speech recognition in Windows Settings > Privacy & security > Speech) and
+the phone's on the mobile app; Linux has no microphone button. In a session's
+terminal view the same microphone sits left of Chat View on the bar below the
+terminal, and what you say is typed into the terminal without pressing Enter.
+A long code block shows its first lines and scrolls inside the block; the arrows
+button in the block's header shows the whole block, and again collapses it.
 Hover a message to show its actions and the time it was sent in a row below
 it: Copy message, Reply by Annotating, and Save to md under an agent's final
 reply; Rewind to here, Save prompt, and Copy message under your own messages.
@@ -1058,7 +1067,8 @@ The button highlights when Summary mode is on; its tooltip shows the Toggle Summ
 Mode shortcut (Option+Ctrl+S on macOS, Ctrl+Alt+Shift+S on Windows and Linux), which
 switches it from anywhere in that chat and can be changed in Settings > Hotkeys.
 As space gets tighter, toolbar buttons move into More actions one at a time:
-Summary mode (under View), Session note, Stash prompt, Attach, Maximize, then Terminal View.
+Summary mode (under View), Session note, Stash prompt, Attach, Maximize, Dictate, then
+Terminal View.
 If the context ring still does not fit beside the model, it moves into Model
 settings at the top of More actions; the model pill shortens instead of moving.
 Controls return as space opens up; More actions and Send or Stop stay visible.
@@ -1231,8 +1241,9 @@ sessions rule, just like the sidebar agent button, while the terminal and your
 unsent chat text stay in place.
 Sign-in and usage-limit notices in Claude and Codex chats offer Switch account
 beside Open terminal, so you can choose another account directly from those notices.
-In the chat's More actions menu, click Switch Account to open its submenu;
-hovering over it does not open it. Open submenus stay open when you move the
+In the chat's More actions menu, and in the ⋯ menu of the bar under a Claude or
+Codex terminal view, click Switch Account to open its submenu of saved accounts
+with their usage; hovering over it does not open it. Open submenus stay open when you move the
 pointer across other menu items, so you can move into them without rushing.
 Switching a running Claude or Codex session to another account, from More
 actions > Switch Account, a terminal notice, or automatically when its account hits a usage limit,
@@ -1255,7 +1266,10 @@ the interrupted work once the new account is ready. Configured recovery after
 errors can also continue work on the same account.
 Whether a session keeps going at a limit comes from Continue automatically and
 When the account runs out under the provider's New session defaults in Settings >
-Accounts. Every Claude and Codex session follows those settings as they are now,
+Accounts. Both start on: Continue automatically is on and When the account runs
+out is Use another account, so a session moves to another account set to
+Automatic when it hits a limit; turn Continue automatically off there to stop
+that. Every Claude and Codex session follows those settings as they are now,
 including sessions that are already open, forks, and restored sessions, so a
 change there applies everywhere at once. To make one session behave differently,
 open More actions > Switch Account and click Customize under Keep going at a
@@ -1272,6 +1286,13 @@ instead, such as "The saved login expired. Reconnect this account."
 A newly added account starts with Available for automatic switching on; turn it
 off in the account's editor in Settings > Accounts to keep that account out of
 automatic switching.
+When Claude says "Your organization has disabled Claude subscription access",
+that account cannot be used any more: Ghostex turns its Available for automatic
+switching off, and the next message you send to a session on it first moves the
+session to the best account set to Automatic, resuming the same conversation.
+With Continue automatically on, Ghostex moves the session by itself and
+continues the message that failed. Turn the option back on, reconnect the
+account, or pick it for a session when its access works again.
 Reconnecting a Codex account works while that account's sessions keep running.
 When Codex still has to stop first, Settings lists the sessions in the way and
 offers Sleep sessions and continue; sleeping keeps them in the sidebar and they
@@ -2355,7 +2376,10 @@ On Linux, transparency works on Xorg and Wayland desktops (the desktop app curre
 While glass is on, four sliders tune it, each in dark mode and in light mode: Sidebar tint and Work area tint set how much of the desktop each area hides, independently, so either can be the darker one; lower shows more of your desktop.
 Keep Awake (Power)
 prevents sleep while agents work.
-Advanced holds Enable Experimental Features. The separate Debugging page sits
+Advanced holds Enable Experimental Features and Faster rendering (off by default), which
+redraws only the parts of a window that changed so Ghostex uses less CPU while agents stream
+and you scroll; it applies at once, and turning it off brings back the usual drawing if part
+of a window ever stops updating (`fasterRendering`). The separate Debugging page sits
 above About and appears in the Settings sidebar only while Show Advanced is on
 (a Settings search still finds it). It starts with Show debug UI controls.
 Enable that switch to see Diagnostic logs. Diagnostic logs has one switch per area (terminals,

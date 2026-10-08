@@ -420,6 +420,15 @@ fn experimental_section(
                 ),
         ));
     }
+    rows.extend(page.toggle(
+        g,
+        "beta",
+        "fasterRendering",
+        "Faster rendering",
+        "Redraw only the parts of a window that changed, which uses less CPU while agents stream and you scroll. Experimental: turn it off if part of a window stops updating.",
+        false,
+        cx,
+    ));
     settings_section(&p, "Experimental", None, None, rows)
         .map(|section| PageBlock::section("beta", section))
 }

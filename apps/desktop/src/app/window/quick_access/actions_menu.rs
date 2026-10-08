@@ -21,6 +21,8 @@ use gpui::{
 use gpui_component::{h_flex, v_flex};
 use serde_json::json;
 
+const QUICK_ACCESS_ACTIONS_MENU_MAX_WIDTH: f32 = 480.0;
+
 #[derive(Clone, Copy)]
 pub(crate) struct QuickAccessMenuRequest {
     position: Point<Pixels>,
@@ -344,7 +346,12 @@ impl GpuiQuickAccessWindow {
                 .bg(hsla(p.hosted_menu_background))
                 .into_any_element();
         }
-        let surface = surface.w(px(if panel { 290.0 } else { 240.0 }));
+        // Fitted to its rows from the old fixed width up: Windows spells a chord out as several
+        // keycaps (`Ctrl` `Alt` `Shift` `F`) where macOS draws one short glyph run, and the fixed
+        // width ellipsized the labels beside them. The frosted host window takes this laid-out frame.
+        let surface = surface
+            .min_w(px(if panel { 290.0 } else { 240.0 }))
+            .max_w(px(QUICK_ACCESS_ACTIONS_MENU_MAX_WIDTH));
         let on_mouse_down_out = cx.listener(|this, _: &MouseDownEvent, _window, cx| {
             this.context_menu = None;
             cx.notify();

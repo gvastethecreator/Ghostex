@@ -118,11 +118,12 @@ struct Plan {
     claim: String,
     prompt: Option<String>,
 }
+/// A disabled account counts: another account recovers it (disabled.rs), although retrying on the same one never does.
 pub(crate) fn retryable(notice: &SessionChatTerminalNotice) -> bool {
     matches!(
         notice.kind.as_str(),
         "usageLimit" | "streamError" | "agentExited" | "agentError"
-    )
+    ) || notice.account_disabled()
 }
 pub(crate) fn holds_queue(
     repository: &DomainRepository<'_>,
@@ -150,7 +151,8 @@ pub(crate) fn holds_queue(
         return false;
     };
     let policy = launch::effective_policy(&registry, provider, session);
-    policy.enabled && (notice.kind == "usageLimit" || policy.retry_errors)
+    policy.enabled
+        && (notice.kind == "usageLimit" || notice.account_disabled() || policy.retry_errors)
 }
 fn time(value: Option<&Value>) -> Option<DateTime<Utc>> {
     value
@@ -161,7 +163,7 @@ fn time(value: Option<&Value>) -> Option<DateTime<Utc>> {
 fn backoff(attempt: u64) -> chrono::Duration {
     chrono::Duration::minutes((5_i64.saturating_mul(1_i64 << attempt.min(4))).min(60))
 }
-fn save(
+pub(super) fn save(
     state: &AppState,
     repo: &DomainRepository<'_>,
     session: &Value,
@@ -229,8 +231,18 @@ fn collect(
             }
         }
     }
+    // A provider with nothing saved follows `Policy::default`, which is on.
     if registry.accounts.is_empty()
-        && registry.defaults.values().all(|p| !p.enabled)
+        && [Provider::Claude, Provider::Codex]
+            .into_iter()
+            .all(|provider| {
+                !registry
+                    .defaults
+                    .get(&provider)
+                    .cloned()
+                    .unwrap_or_default()
+                    .enabled
+            })
         && !targets.iter().any(|s| {
             s.pointer("/runtimeSettings/accountPolicyOverride/enabled")
                 .and_then(Value::as_bool)
@@ -397,6 +409,10 @@ fn plan_session(
     let Some(provider) = launch::provider(&project, old) else {
         return Ok(None);
     };
+    // Ahead of the Continue automatically check: a disabled login is marked out of automatic switching whatever this session's policy says.
+    if super::disabled::recover(state, db, repo, snapshot, &project, old, provider)? {
+        return Ok(None);
+    }
     let policy = launch::effective_policy(registry, provider, old);
     if !policy.enabled
         || old
@@ -496,7 +512,11 @@ fn plan_session(
     let Some(notice) = notice else {
         return Ok(None);
     };
-    if !retryable(&notice) || (notice.kind != "usageLimit" && !policy.retry_errors) {
+    // A disabled account that disabled.rs did not act on is not retried here: the same login refuses every continuation.
+    if !retryable(&notice)
+        || notice.account_disabled()
+        || (notice.kind != "usageLimit" && !policy.retry_errors)
+    {
         if !recovery.is_null() && recovery["status"].as_str() == Some("waiting") {
             recovery["status"] = json!("needsAttention");
             recovery["reason"] = json!(notice.title);
@@ -693,7 +713,7 @@ fn has_room(account: &DiscoveredAccount, model: &str, now: DateTime<Utc>) -> boo
             .filter(|w| relevant(w, model))
             .all(|w| w.used_percent < 100.)
 }
-fn ranked<'a>(
+pub(super) fn ranked<'a>(
     registry: &'a Registry,
     snapshot: &Snapshot,
     provider: Provider,
