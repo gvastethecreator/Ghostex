@@ -1263,7 +1263,10 @@ the interrupted work once the new account is ready. Configured recovery after
 errors can also continue work on the same account.
 Whether a session keeps going at a limit comes from Continue automatically and
 When the account runs out under the provider's New session defaults in Settings >
-Accounts. Every Claude and Codex session follows those settings as they are now,
+Accounts. Both start on: Continue automatically is on and When the account runs
+out is Use another account, so a session moves to another account set to
+Automatic when it hits a limit; turn Continue automatically off there to stop
+that. Every Claude and Codex session follows those settings as they are now,
 including sessions that are already open, forks, and restored sessions, so a
 change there applies everywhere at once. To make one session behave differently,
 open More actions > Switch Account and click Customize under Keep going at a

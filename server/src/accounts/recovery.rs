@@ -231,8 +231,18 @@ fn collect(
             }
         }
     }
+    // A provider with nothing saved follows `Policy::default`, which is on.
     if registry.accounts.is_empty()
-        && registry.defaults.values().all(|p| !p.enabled)
+        && [Provider::Claude, Provider::Codex]
+            .into_iter()
+            .all(|provider| {
+                !registry
+                    .defaults
+                    .get(&provider)
+                    .cloned()
+                    .unwrap_or_default()
+                    .enabled
+            })
         && !targets.iter().any(|s| {
             s.pointer("/runtimeSettings/accountPolicyOverride/enabled")
                 .and_then(Value::as_bool)

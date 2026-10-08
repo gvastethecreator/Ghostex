@@ -382,22 +382,32 @@ impl AccountsTab {
                     "Ghostex uses this account only when you select it. Automatic account switching skips it.",
                 )
             };
-            h_flex()
+            let row = h_flex().items_center().gap(px(4.0)).child(label).child(
+                div()
+                    .id(SharedString::from(format!("account-{id}-status-info")))
+                    .size(px(13.0))
+                    .tooltip(tooltip_text(tip))
+                    .child(settings_icon(icon::INFO_CIRCLE, 13.0, p.muted)),
+            );
+            // CDXC:AgentProviders 2026-10-08 DECISION: User: show why gxserver set an account to Manual, as a short line under its Automatic/Manual status ("Subscription access disabled"), with the full reason in its tooltip.
+            let disabled = account.disabled_reason().map(|reason| {
+                div()
+                    .id(SharedString::from(format!("account-{id}-disabled-reason")))
+                    .text_color(hsla(p.destructive))
+                    .tooltip(tooltip_text(format!(
+                        "{reason} Ghostex set this account to Manual. Turn Available for automatic switching back on, reconnect it, or pick it for a session when its access works again."
+                    )))
+                    .child("Subscription access disabled")
+            });
+            v_flex()
                 .flex_shrink_0()
-                .items_center()
-                .gap(px(4.0))
+                .items_end()
                 .whitespace_nowrap()
                 .text_size(px(11.0))
                 .line_height(px(15.71))
                 .text_color(hsla(p.muted))
-                .child(label)
-                .child(
-                    div()
-                        .id(SharedString::from(format!("account-{id}-status-info")))
-                        .size(px(13.0))
-                        .tooltip(tooltip_text(tip))
-                        .child(settings_icon(icon::INFO_CIRCLE, 13.0, p.muted)),
-                )
+                .child(row)
+                .children(disabled)
                 .into_any_element()
         } else {
             // CDXC:Settings 2026-09-07 DECISION: A saved account with missing credentials shows the reason and a Click to run login button directly in the account row. Repairing its login is available before consenting to shared conversations; adding it still requires that consent.
