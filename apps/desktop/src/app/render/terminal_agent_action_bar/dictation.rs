@@ -58,12 +58,8 @@ impl GhostexGpuiApp {
             match event {
                 SpeechEvent::Final(text) => this.paste_terminal_dictation(session_id, text, cx),
                 SpeechEvent::Error(error) => {
-                    this.dispatch_gpui_workspace_action_toast(
-                        "error",
-                        "Dictation stopped",
-                        &error.to_string(),
-                        cx,
-                    );
+                    let toast = crate::app::native_chat::dictation::dictation_failure_toast(error);
+                    this.receive_gpui_app_toast_bridge_message(&toast, cx);
                 }
                 _ => {}
             }
