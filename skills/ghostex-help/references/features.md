@@ -1227,15 +1227,14 @@ reset the one whose limit resets first, Most used first keeps draining the
 account already in use, and Same as last session reuses the account of the last
 session. Pick a specific account instead to always start
 with it. When the rule finds no account, new sessions use the current CLI login.
-A custom agent whose command sets its own `CLAUDE_CONFIG_DIR` (or `CODEX_HOME`
-for Codex), or runs a wrapper other than `claude`, `codex` or their account
-helper (`cswap`, `xswap`), keeps its own login: Ghostex runs that command as-is
-and picks no account for it. Keep such a
-profile in `~/.claude-profiles/<name>` (or `~/.codex-profiles/<name>`), where
-Ghostex finds its conversations and installs its agent hooks: after creating a
-profile, choose Install hook or Update hook for that agent in Settings > Agents.
-Ghostex installs its skills only in `~/.claude/skills` (or `~/.codex/skills`),
-so link the profile's `skills` folder to that one.
+A custom agent that brings its own login keeps it: when its command sets
+`CLAUDE_CONFIG_DIR` (or `CODEX_HOME` for Codex), or runs your own wrapper
+script instead of `claude` or `codex`, Ghostex runs the command as-is and picks
+no account for it. Keep such a profile in `~/.claude-profiles/<name>` (or
+`~/.codex-profiles/<name>`) so Ghostex finds its conversations, then choose
+Install hook for that agent in Settings > Agents. Ghostex's skills live in
+`~/.claude/skills` (or `~/.codex/skills`); link the profile's `skills` folder
+there to use them.
 Each provider on Settings > Accounts also lists its account helper, Claude Swap
 (cswap) or Codex Swap (xswap), with three icon buttons: Update (shown when a
 newer release is out; otherwise a check mark that checks again when clicked),
