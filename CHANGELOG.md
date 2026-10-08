@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 10.15.5 - 2026-10-08
+
+**Ghostex 10.15.5 is out.** Windows close when you click away, every conversation keeps its own model, and the app waits for its background service instead of asking you to click.
+
+### 💬 Chat
+- **Each conversation remembers its own model and effort:** waking or resuming it comes back on what it last used, including a choice for that session only or a `/model` typed in Claude's terminal, and the chat box shows it right away.
+- **While Ghostex is still starting, the chat shows its loading skeleton with the normal chat box** and fills in by itself.
+
+### 🗂️ Sidebar
+- **"Loading sessions…" retries every 2 seconds on its own** while Ghostex's background service starts; Try now is still there.
+- **A dragged session card stays under your cursor,** and a pane from another project dims and says it can't split there.
+
+### 🪟 Windows and dialogs
+- **Clicking away closes Quick Access, Settings, Search by Prompt, the viewers and the Agents Hub,** unless you're in the middle of typing something.
+- **Resizing the window closes floating panels and menus,** such as the Files list.
+- **Files opened from outside the project show their name and a plain path in Open Files.**
+
+### 📱 Phone
+- **The sessions list retries every 2 seconds** while Ghostex on the computer isn't answering, instead of showing a raw error.
+
 ## 10.15.0 - 2026-10-08
 
 **Ghostex 10.15.0 is out.** Empryo joins as a built-in agent, the chat feels instant (sending, the model name, `!` shell commands), Windows terminals use PowerShell 7, and Easy Connect pairs Windows administrator accounts.
