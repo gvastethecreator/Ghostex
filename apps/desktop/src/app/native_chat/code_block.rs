@@ -87,11 +87,13 @@ pub(super) fn wrap_key(id: &str, block: &CodeBlock) -> String {
 /// The label is the file the fence named when it named one (with the same glyph
 /// an inline path carries) and the bare language otherwise, which is every fence
 /// an agent writes without meta. Copy is always there; open is there only when
-/// the name really is a path the host can open.
+/// the name really is a path the host can open. A long block (`expanded` is
+/// `Some`) also gets the button that shows it whole or caps it again.
 pub(super) fn header(
     block: &CodeBlock,
     id: &str,
     wrapped: bool,
+    expanded: Option<bool>,
     chat: &WeakEntity<NativeChatView>,
     p: &ChatAppearance,
 ) -> AnyElement {
@@ -145,6 +147,21 @@ pub(super) fn header(
                 .items_center()
                 .flex_shrink_0()
                 .gap(px(2.0 * s))
+                .when_some(expanded, |this, expanded| {
+                    let chat = chat.clone();
+                    let key = key.clone();
+                    let icon = if expanded {
+                        "titlebar/arrows-diagonal-minimize.svg"
+                    } else {
+                        "titlebar/arrows-diagonal.svg"
+                    };
+                    this.child(action("expand-fence", icon, p, move |cx| {
+                        let key = key.clone();
+                        let _ = chat.update(cx, |chat, cx| {
+                            chat.set_code_expanded(key, !expanded, cx);
+                        });
+                    }))
+                })
                 .child({
                     let chat = chat.clone();
                     action("wrap-fence", "titlebar/text-wrap.svg", p, move |cx| {

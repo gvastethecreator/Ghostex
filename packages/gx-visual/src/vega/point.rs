@@ -171,6 +171,7 @@ pub(crate) fn render(spec: &ChartSpec, width: f32, theme: &Theme) -> Result<Bloc
         let color = series.color(dot.series);
         block.circle(cx, cy, RADIUS, color.with_alpha(color.a * 0.85));
         let shape = block.last_item();
+        block.animate(shape, crate::Motion::Pop);
         let mut shown = vec![
             Shown::new(x, describe(x, dot.x, &x_domain, x_years)),
             Shown::new(y, describe(y, dot.y, &y_domain, y_years)),

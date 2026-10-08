@@ -141,6 +141,8 @@ impl NativeChatView {
             "stashPrompt" => "Stash prompt",
             "attachPath" => "Attach a file or folder",
             "terminalView" => "Terminal View",
+            "dictate" if self.dictating(cx) => "Stop dictating",
+            "dictate" => "Dictate",
             _ => action,
         };
         // CDXC:SessionChat 2026-09-18 SEE-ALSO: The stash count badge, the session-note presence dot and the pressed Summary/Note states come from the core's composer chrome (`packages/gx-chat-core/src/composer/note.rs`), ported from React's `session-chat-composer-actions.tsx` chrome.
@@ -150,6 +152,7 @@ impl NativeChatView {
             "sessionNote" => chrome["notePressed"] == true,
             "maximizeComposer" => self.maximized_window.is_some(),
             "moreActions" => self.chat_menu_is_open(super::actions::MORE_ACTIONS_TRIGGER),
+            "dictate" => self.dictating(cx),
             _ => false,
         };
         let badge = match action {
