@@ -1227,6 +1227,9 @@ reset the one whose limit resets first, Most used first keeps draining the
 account already in use, and Same as last session reuses the account of the last
 session. Pick a specific account instead to always start
 with it. When the rule finds no account, new sessions use the current CLI login.
+A custom agent whose command sets its own `CLAUDE_CONFIG_DIR` (or `CODEX_HOME`
+for Codex), or runs a wrapper instead of `claude` or `codex`, keeps its own
+login: Ghostex runs that command as-is and picks no account for it.
 Each provider on Settings > Accounts also lists its account helper, Claude Swap
 (cswap) or Codex Swap (xswap), with three icon buttons: Update (shown when a
 newer release is out; otherwise a check mark that checks again when clicked),

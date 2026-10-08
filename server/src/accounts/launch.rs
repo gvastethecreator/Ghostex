@@ -60,6 +60,33 @@ pub(crate) fn with_account_command(
     Err(invalid())
 }
 
+/// Whether a command sets the provider's profile directory itself or runs something other than the provider CLI or its account helper, so an automatic account would override or reject it.
+fn uses_own_login(base: &str, provider: Provider) -> bool {
+    let profile_var = match provider {
+        Provider::Claude => "CLAUDE_CONFIG_DIR",
+        Provider::Codex => "CODEX_HOME",
+    };
+    let mut offset = 0;
+    while let Some((_, end, word)) = command_word(base, offset) {
+        offset = end;
+        if let Some((name, _)) = word.split_once('=') {
+            if name == profile_var {
+                return true;
+            }
+            continue;
+        }
+        if matches!(word.as_str(), "env" | "exec" | "command") {
+            continue;
+        }
+        let executable = Path::new(&word)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        return executable != provider.id() && executable != provider.helper();
+    }
+    false
+}
+
 pub(crate) fn provider(project: &Value, session: &Value) -> Option<Provider> {
     match crate::agents::session_agent_family_id(project, session).as_deref() {
         Some("claude") => Some(Provider::Claude),
@@ -120,6 +147,16 @@ pub(crate) fn apply_new_session(
         "codex" => Provider::Codex,
         _ => return Ok(None),
     };
+    // CDXC:AgentProviders 2026-10-08 WHY:
+    // Upstream #208: a custom agent whose command sets its own profile (CLAUDE_CONFIG_DIR or CODEX_HOME) or runs a wrapper such as `claude-personal` had that profile replaced by cswap's session profile, or failed to launch, as soon as any account was registered. Such a command already chose its login, so it runs as-is. The sidebar launcher sends the rule's account as `accountId`, so an automatic choice cannot be told apart from a picked one here.
+    if runtime
+        .get("accountBaseCommand")
+        .or_else(|| runtime.get("agentCommand"))
+        .and_then(Value::as_str)
+        .is_some_and(|base| uses_own_login(base, provider))
+    {
+        return Ok(None);
+    }
     let registry = store::read(db)?;
     // CDXC:AgentProviders 2026-09-11 DECISION: User: use the current CLI login until an account is added to Ghostex for that provider (2026-09-09); once accounts exist, a launch without an explicit account uses the provider's Account for new sessions rule from Settings (Most limit remaining by default, see default_account.rs), which supersedes the lowest-slot choice. When that rule yields no account the launch keeps the current CLI login, so a normal CLI launch needs no account switcher.
     let snapshot = super::runtime::current_snapshot();
