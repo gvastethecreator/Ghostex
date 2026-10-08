@@ -92,7 +92,7 @@ impl NativeChatView {
         } else {
             on.join(", ")
         };
-        json!({"label":"View","iconPath":"titlebar/eye.svg","detail":detail,"children":modes})
+        json!({"label":"View","iconPath":"titlebar/eye.svg","detail":detail,"openOnHover":false,"children":modes})
     }
 
     pub(crate) fn show_actions(
