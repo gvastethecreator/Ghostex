@@ -10,6 +10,7 @@ use gpui::{
     px, rems,
 };
 use gpui_component::input::Editor;
+use gpui_component::scroll::ScrollbarMode;
 
 use super::files_list::{ROW_STRIP_HEIGHT, header_icon, header_tile};
 use super::palette::DocsPalette;
@@ -160,7 +161,13 @@ impl GhostexGpuiApp {
                 self.native_docs
                     .project
                     .as_ref()
-                    .map(|project| project.project_path.join(file).to_string_lossy().into_owned())
+                    .map(|project| {
+                        project
+                            .project_path
+                            .join(file)
+                            .to_string_lossy()
+                            .into_owned()
+                    })
                     .unwrap_or_else(|| path.clone())
             }
         }
@@ -692,6 +699,9 @@ impl GhostexGpuiApp {
                     .flex_col()
                     .child(body)
                     .children(ruler)
+                    .child(super::markdown_body::render_body_scrollbar(
+                        &document.scroll,
+                    ))
                     .children(format_bar)
                     .into_any_element();
             }
@@ -728,6 +738,7 @@ impl GhostexGpuiApp {
                         // `Editor` brings the theme's code font, size and row height; the text
                         // view keeps the Docs mono font at the input text size and rows.
                         Editor::new(&editor)
+                            .scrollbar_show(ScrollbarMode::Always)
                             .appearance(false)
                             .h_full()
                             .font_family(p.mono_font.clone())

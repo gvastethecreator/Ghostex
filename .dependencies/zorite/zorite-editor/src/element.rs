@@ -3298,6 +3298,9 @@ fn shape_document(
     // Measured column widths, cached across frames: rebuilt only when the
     // tables' source text, the wrap width, the font epoch, or a live column
     // drag changes — measuring shaped every cell of every table per call.
+    // Local change (Ghostex Docs): the width a table fits its columns into, the
+    // band paint gives it (the row-handle gutter comes off the wrap width).
+    let table_avail = wrap_width.map(|w| (w - px(TABLE_GUTTER)).max(px(0.)));
     let region_cols: std::rc::Rc<Vec<Vec<Pixels>>> = {
         let cols_key = {
             use std::hash::{Hash, Hasher};
@@ -3306,6 +3309,7 @@ fn shape_document(
             // attr — no need to rehash the table text per frame.
             scan.generation.hash(&mut h);
             f32::from(base_font_size).to_bits().hash(&mut h);
+            table_avail.map(|w| f32::from(w).to_bits()).hash(&mut h);
             run_epoch.hash(&mut h);
             if let Some(r) = col_resize {
                 r.header_row.hash(&mut h);
@@ -3335,6 +3339,7 @@ fn shape_document(
                                 base_font_size,
                                 base_color,
                                 col_resize,
+                                table_avail,
                             )
                         })
                         .collect(),

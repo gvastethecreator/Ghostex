@@ -135,7 +135,8 @@ impl Render for DocsDemo {
                     .flex()
                     .flex_col()
                     .child(body)
-                    .children(ruler),
+                    .children(ruler)
+                    .child(markdown_body::render_body_scrollbar(&self.scroll)),
             )
     }
 }

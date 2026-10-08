@@ -970,6 +970,7 @@ impl EditorState {
             self.font_size,
             Hsla::default(),
             None,
+            None,
         );
         let Some(&w) = natural.get(col) else {
             return;
@@ -1139,8 +1140,10 @@ impl EditorState {
 }
 
 /// Content-fit column widths for a table region (W4c): each column sized to its
-/// widest cell (header measured bold) + padding, with a minimum. A table wider
-/// than the viewport is NOT scaled down — it scrolls horizontally in place.
+/// widest cell (header measured bold) + padding, with a minimum. Local change
+/// (Ghostex Docs): a content-measured table wider than `avail` narrows its widest
+/// columns to fit and their cells wrap; explicit `cols=` widths and a live drag
+/// still scroll horizontally in place.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn table_column_widths(
     lines: &[&str],
@@ -1150,6 +1153,7 @@ pub(crate) fn table_column_widths(
     font_size: Pixels,
     color: Hsla,
     col_resize: Option<TableColResize>,
+    avail: Option<Pixels>,
 ) -> Vec<Pixels> {
     // Reader parity: a row with MORE cells than the header widens the grid —
     // extra columns render (the short rows' last cells span the remainder)
@@ -1209,6 +1213,13 @@ pub(crate) fn table_column_widths(
     for w in &mut widths {
         *w = (*w).max(font_size * 6.);
     }
+    if region.col_widths_attr.is_none()
+        && let Some(avail) = avail
+        && widths.iter().copied().sum::<Pixels>() > avail
+    {
+        let floors = table_column_floors(lines, region, window, base_font, font_size, color, cols);
+        widths = fit_table_columns(&widths, &floors, avail);
+    }
     // Explicit widths — the marker's `cols=` list (drag-to-resize persisted),
     // then the live drag — override the measurement (floored so a column can't
     // vanish). Content-measured columns keep the 48px floor above.
@@ -1222,10 +1233,111 @@ pub(crate) fn table_column_widths(
     {
         widths[r.col] = px(r.width.max(24.));
     }
-    // No scale-to-fit: a table wider than the viewport keeps its natural
-    // columns and scrolls horizontally in place (Cditor-style) — see
-    // `EditorState::table_scroll_x`.
+    // Explicit widths (and the live drag) are not scaled to fit: a table wider
+    // than the viewport keeps them and scrolls horizontally in place
+    // (Cditor-style) — see `EditorState::table_scroll_x`.
     widths
+}
+
+/// Local change (Ghostex Docs): the narrowest each column can wrap to — its
+/// longest word (header measured bold, with room for its sort button) plus
+/// padding, never under the 10ch minimum.
+#[allow(clippy::too_many_arguments)]
+fn table_column_floors(
+    lines: &[&str],
+    region: &markdown_syntax::TableRegion,
+    window: &mut Window,
+    base_font: &Font,
+    font_size: Pixels,
+    color: Hsla,
+    cols: usize,
+) -> Vec<Pixels> {
+    let pad = px(TABLE_CELL_PAD);
+    let mut floors = vec![font_size * 6.; cols];
+    for li in region.lines.clone() {
+        if li == region.lines.start + 1 {
+            continue;
+        }
+        let header = li == region.lines.start;
+        let mut font = base_font.clone();
+        if header {
+            font.weight = gpui::FontWeight::BOLD;
+        }
+        let sort = if header { font_size * 1.5 } else { px(0.) };
+        for (c, cell) in markdown_syntax::table_cells(lines[li])
+            .iter()
+            .enumerate()
+            .take(cols)
+        {
+            for word in cell.split_whitespace() {
+                let run = TextRun {
+                    len: word.len(),
+                    font: font.clone(),
+                    color,
+                    background_color: None,
+                    underline: None,
+                    strikethrough: None,
+                };
+                let w = window
+                    .text_system()
+                    .shape_line(
+                        SharedString::from(word.to_string()),
+                        font_size,
+                        &[run],
+                        None,
+                    )
+                    .width();
+                floors[c] = floors[c].max(w + pad * 2. + px(2.) + sort);
+            }
+        }
+    }
+    floors
+}
+
+/// Local change (Ghostex Docs): fits natural column `widths` into `avail` by
+/// capping the widest columns at one shared width (never below their `floors`),
+/// so narrow columns keep their natural width and only the long ones wrap. When
+/// even the floors overflow, the table keeps them and scrolls horizontally.
+fn fit_table_columns(widths: &[Pixels], floors: &[Pixels], avail: Pixels) -> Vec<Pixels> {
+    let floors: Vec<Pixels> = widths
+        .iter()
+        .zip(floors)
+        .map(|(w, f)| (*f).min(*w))
+        .collect();
+    if floors.iter().copied().sum::<Pixels>() >= avail {
+        return floors;
+    }
+    // Water-fill: a column its natural width or its floor decides is fixed;
+    // the rest share what is left equally.
+    let mut fixed: Vec<Option<Pixels>> = vec![None; widths.len()];
+    loop {
+        let used: Pixels = fixed.iter().flatten().copied().sum();
+        let open = fixed.iter().filter(|f| f.is_none()).count();
+        if open == 0 {
+            break;
+        }
+        let share = (avail - used) / open as f32;
+        let mut changed = false;
+        for c in 0..widths.len() {
+            if fixed[c].is_some() {
+                continue;
+            }
+            if widths[c] <= share {
+                fixed[c] = Some(widths[c]);
+                changed = true;
+            } else if floors[c] >= share {
+                fixed[c] = Some(floors[c]);
+                changed = true;
+            }
+        }
+        if !changed {
+            for f in fixed.iter_mut().filter(|f| f.is_none()) {
+                *f = Some(share.floor());
+            }
+            break;
+        }
+    }
+    fixed.into_iter().map(Option::unwrap_or_default).collect()
 }
 
 /// Horizontal inset (px) of a table cell's text from its column's left edge.

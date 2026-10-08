@@ -71,7 +71,7 @@ pub(crate) fn manage_docs_path<'a>(
             .chat_file_name
             .clone()
             .ok_or_else(unavailable)?;
-        if Path::new(address) != root.join(&inner) {
+        if comparable_path(Path::new(address)) != comparable_path(&root.join(&inner)) {
             return Err(unavailable().to_string());
         }
         return Ok(ManageDocsPath {
@@ -670,7 +670,28 @@ pub(crate) fn nearest_existing_ancestor(path: &Path) -> Option<&Path> {
 }
 
 pub(crate) fn path_is_inside_or_equal(candidate: &Path, root: &Path) -> bool {
-    candidate == root || candidate.starts_with(root)
+    let (candidate, root) = (comparable_path(candidate), comparable_path(root));
+    candidate == root || candidate.starts_with(&root)
+}
+
+/// `path` spelled without the Windows verbatim prefix, for comparing only (never for opening).
+///
+/// CDXC:Docs 2026-10-09 WHY: `fs::canonicalize` returns `\\?\C:\x` on Windows while an outside
+/// file's grant routes under `C:\x` (CDXC:Docs 2026-10-08 in manage_docs_chat_files.rs), and Rust
+/// compares the two prefixes as different components, so a file the user had open read as outside
+/// its own grant ("Reopen this file from its chat link…"). Both sides of a confinement check drop
+/// the prefix, at any length, so either spelling of a root matches the other.
+fn comparable_path(path: &Path) -> PathBuf {
+    let Some(text) = path.to_str() else {
+        return path.to_path_buf();
+    };
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{rest}"))
+    } else if let Some(rest) = text.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        path.to_path_buf()
+    }
 }
 
 pub(crate) fn system_time_epoch_millis_string(time: std::time::SystemTime) -> String {

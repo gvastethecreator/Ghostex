@@ -161,7 +161,11 @@ pub(crate) fn manage_chat_file_is_address(path: &str) -> bool {
 /// so sibling stylesheets and images resolve inside its granted folder. Never shown to anyone.
 pub(crate) fn manage_chat_file_resource_address(project_id: &str, address: &str) -> Option<String> {
     let authorization = ManageChatFileAuthorization::for_address(project_id, Path::new(address))?;
-    let record_exists = |id: &str| authorization_directory().join(format!("{id}.json")).is_file();
+    let record_exists = |id: &str| {
+        authorization_directory()
+            .join(format!("{id}.json"))
+            .is_file()
+    };
     // A file opened before 2026-10-08 keeps the mount it was granted under (its `\\?\` root).
     let id = Some(authorization.id())
         .filter(|id| record_exists(id))
@@ -213,12 +217,18 @@ pub(crate) fn resolve_manage_chat_file(
         Some((id, bytes))
     })?;
     let record: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    let authorization = ManageChatFileAuthorization {
+    let mut authorization = ManageChatFileAuthorization {
         file_name: record.get("fileName")?.as_str()?.to_string(),
         project_id: record.get("projectId")?.as_str()?.to_string(),
         root: PathBuf::from(record.get("root")?.as_str()?),
     };
-    (authorization.project_id == project_id && authorization.id() == id).then_some(authorization)
+    if authorization.project_id != project_id || authorization.id() != id {
+        return None;
+    }
+    // A grant saved before 2026-10-08 hashes (and so must be checked) under its `\\?\` root, but
+    // routes under the plain one every outside-file address now uses.
+    authorization.root = simplified_path(&authorization.root);
+    Some(authorization)
 }
 
 /// The real absolute path a resource-origin path names (a link inside an outside HTML file, or an
