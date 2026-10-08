@@ -10,7 +10,9 @@
 //! does not depend on `gx-core`, so they are here too; when the two crates grow a shared base
 //! they should come from one place.
 
-use crate::menus::context::status::{AccountUsageWindow, AgentAccount, ContextDetailStatus};
+use crate::menus::context::status::{
+    AccountUsageWindow, AgentAccount, CodexRateLimitWindow, ContextDetailStatus,
+};
 use crate::menus::context::time::date_parse;
 use crate::menus::context::usage::format_reset_countdown;
 use crate::menus::picker::js::{js_number, js_round};
@@ -117,6 +119,19 @@ fn format_window_duration(minutes: f64) -> String {
     format!("{}m", js_number(minutes))
 }
 
+/// Which row a window Codex reported in its rollout belongs to.
+///
+/// CDXC:AgentProviders 2026-10-09 WHY:
+/// A Codex plan with only a weekly limit reports it as `primary` and sends no `secondary`, so reading the slot alone put the weekly window under the 5h rows and left the 7d rows empty; with no linked account to read instead, Codex's default status line (account email, 7d limit, 7d reset, account resets) had no value at all and stayed a skeleton. The window's own duration decides, as `account_window_kind` does for accounts; the slot only decides a window that reports no recognised duration.
+fn codex_window_kind(window: &CodexRateLimitWindow, primary: bool) -> UsageWindowKind {
+    match window.window_minutes {
+        Some(minutes) if minutes == 300.0 => UsageWindowKind::FiveHour,
+        Some(minutes) if minutes >= 10_080.0 => UsageWindowKind::SevenDay,
+        _ if primary => UsageWindowKind::FiveHour,
+        _ => UsageWindowKind::SevenDay,
+    }
+}
+
 /// `sessionUsageWindow`: the window this session's own agent last reported.
 fn session_usage_window(
     status: &ContextDetailStatus,
@@ -147,11 +162,11 @@ fn session_usage_window(
         }
     }
     let codex = status.codex.as_ref().and_then(|codex| {
-        if kind == UsageWindowKind::FiveHour {
-            codex.primary
-        } else {
-            codex.secondary
-        }
+        [(codex.primary, true), (codex.secondary, false)]
+            .into_iter()
+            .find_map(|(window, primary)| {
+                window.filter(|window| codex_window_kind(window, primary) == kind)
+            })
     });
     if let Some(codex) = codex {
         if codex.used_percentage.is_some_and(f64::is_finite) {
