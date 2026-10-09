@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetFocus, SetFocus};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetActiveWindow, GetFocus, SetFocus};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GA_ROOT, GWL_EXSTYLE, GetAncestor,
     GetWindowLongPtrW, HWND_MESSAGE, HWND_TOP, IsChild, IsWindow, KillTimer, LWA_ALPHA,
@@ -425,6 +425,14 @@ pub(super) fn focus_native_view(native_view: *mut c_void) {
 pub(super) fn focus_gpui_root_view(native_view: *mut c_void) {
     let hwnd: HWND = native_view.cast();
     if hwnd.is_null() {
+        return;
+    }
+    /*
+    CDXC:FocusRouting 2026-10-09 WHY:
+    `SetFocus` on a window that is not active activates it, so this in-window handoff (meant to pull the keys out of a Chromium child) moved the keyboard across windows. With an app modal open, the chat composer the closing sidebar menu had refocused reported its focus a moment later and this call activated the main window: Rename Session's selected title lost the caret to the chat box, and History (Quick Access), which closes when it loses focus, vanished after a split second. Like macOS's `makeFirstResponder`, it now only moves focus inside a window that is already active (or when no window of the app is); the window's own activation (a click, the modal closing) brings the keys back.
+    */
+    let active = unsafe { GetActiveWindow() };
+    if !active.is_null() && active != unsafe { GetAncestor(hwnd, GA_ROOT) } {
         return;
     }
     super::shell::clear_active_native_view();
