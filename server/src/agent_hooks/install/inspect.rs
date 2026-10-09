@@ -4,9 +4,9 @@ use serde_json::{json, Value};
 
 use crate::agent_hooks::codex_status_line::codex_status_line_names_model;
 use crate::agent_hooks::config::{
-    all_hook_events, hook_format, hook_marker, pi_extension_path_is_loader_visible, HookDefinition,
-    HookFormat, HookPaths, CODEX_INTERRUPT_HOOK_TIMEOUT_SECONDS, OPENCODE_PLUGIN_MARKER,
-    OPENCODE_PLUGIN_SPEC,
+    all_hook_events, hook_format, hook_marker, nested_event_timeout,
+    pi_extension_path_is_loader_visible, HookDefinition, HookFormat, HookPaths,
+    CODEX_INTERRUPT_HOOK_TIMEOUT_SECONDS, OPENCODE_PLUGIN_MARKER, OPENCODE_PLUGIN_SPEC,
 };
 use crate::agent_hooks::plugin_sources::{command_for_agent, current_plugin_marker};
 use crate::agent_hooks::probing::{path_string, read_file_text};
@@ -191,6 +191,20 @@ fn inspect_json_hook_config(
     let stale_ghostex_hook_present = json_contains_stale_ghostex_owned_hook_command(&data, command);
     let codex_interrupt_timeout_current =
         definition.agent_id != "codex" || codex_interrupt_hook_timeout_is_current(&data, command);
+    let grok_timeout_current = !cfg!(windows)
+        || definition.agent_id != "grok"
+        || all_hook_events("grok").iter().all(|event| {
+            data.get("hooks")
+                .and_then(|hooks| hooks.get(*event))
+                .and_then(Value::as_array)
+                .is_some_and(|entries| {
+                    hook_entries_contain(entries, &|hook| {
+                        is_hook_command(hook, command)
+                            && hook.get("timeout").and_then(Value::as_i64)
+                                == nested_event_timeout("grok", event)
+                    })
+                })
+        });
     // CDXC:AgentHooks 2026-09-03 WHY: a Claude install is only current once
     // its statusLine runs the Ghostex script, so an older install reads as
     // updateRequired and the Update Hooks button (or daemon repair) adds it.
@@ -214,6 +228,7 @@ fn inspect_json_hook_config(
                 hook_format(definition.agent_id),
             )
             && codex_interrupt_timeout_current
+            && grok_timeout_current
             && claude_statusline_current
             && cursor_statusline_current
             && codex_status_line_current

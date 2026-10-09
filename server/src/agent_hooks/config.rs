@@ -265,6 +265,9 @@ pub(crate) const CODEX_INTERRUPT_HOOK_TIMEOUT_SECONDS: i64 = 3;
 
 pub(crate) fn nested_timeout(agent_id: &str) -> Option<i64> {
     match agent_id {
+        // Grok includes its Windows shell startup in this budget; even a direct
+        // native hook exceeded 11 seconds on Windows during diagnosis.
+        "grok" if cfg!(windows) => Some(30),
         "codex" | "grok" | "zcode" | "empryo" => Some(5),
         "command-code" | "devin" => Some(10),
         "gemini" => Some(10000),

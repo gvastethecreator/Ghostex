@@ -5,15 +5,15 @@ use std::{io::Read, path::Path};
 /// Windows command hooks must read JSON from stdin directly; passing it through Windows PowerShell 5.1 native argv strips JSON quotes.
 /// Installation still uses the existing explicit install and Codex trust flow.
 ///
-/// CDXC:AgentHooks 2026-10-04 WHY:
-/// Claude Code runs its hooks through the same shell as its statusLine (Git Bash, or PowerShell without Git), so Claude's hooks take the statusline's both-shell form (`statusline::agent_statusline_command`): gxserver named by its space-free short path, arguments single-quoted, no powershell.exe. Its SessionStart hook is how gxserver learns a new chat's Claude session id, and through PowerShell it arrived after the first statusline, holding the chat's model pill back by up to a second. Other agents keep the powershell.exe form, because their CLIs may run hooks through cmd.exe, which keeps single quotes literally.
+/// CDXC:AgentHooks 2026-10-09 WHY:
+/// Claude Code and Grok run hooks through PowerShell or Git Bash, so both use the statusline's both-shell form: gxserver's space-free short path and single-quoted arguments. Grok's nested powershell.exe wrapper exceeded its 5s hook budget even outside Ghostex; Claude's wrapper delayed SessionStart behind its first statusline. Other agents keep the wrapper because their CLIs may use cmd.exe, which keeps single quotes literally.
 pub(crate) fn command(agent: &str, notify_path: &Path) -> String {
     let executable = std::env::current_exe().unwrap_or_default();
     let notify = notify_path.to_string_lossy();
-    if let Some(executable) =
-        bare_command_path(&executable).filter(|_| agent == "claude" && !notify.contains('\''))
+    if let Some(executable) = bare_command_path(&executable)
+        .filter(|_| matches!(agent, "claude" | "grok") && !notify.contains('\''))
     {
-        return format!("{executable} agent-hook-notify-native '{notify}' 'claude'");
+        return format!("{executable} agent-hook-notify-native '{notify}' '{agent}'");
     }
     let quote = |text: &str| format!("'{}'", text.replace('\'', "''"));
     format!(
