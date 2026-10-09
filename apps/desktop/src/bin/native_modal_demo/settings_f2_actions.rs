@@ -117,7 +117,7 @@ pub(super) fn extend_sidebar_state(message: &mut Value) {
         json!([])
     } else {
         json!([
-            { "beadsDirectory": "", "beadsDisplayKey": "ZMX", "name": "Ghostex", "path": "/Users/you/dev/ghostex", "projectId": "project-ghostex", "worktreeCommand": "bun install" },
+            { "beadsDirectory": "", "beadsDisplayKey": "ZMX", "name": "Ghostex", "path": "/Users/you/dev/ghostex", "projectId": "project-ghostex", "worktreeCommand": "bun install", "workMode": true, "workspaceId": "work" },
             { "beadsDirectory": "/Users/you/dev/infra/.beads", "beadsDisplayKey": "INF", "name": "Infra Control Plane", "path": "/Users/you/dev/platform/infra-control-plane", "projectId": "project-infra", "worktreeCommand": "pnpm install" },
             { "beadsDirectory": "", "beadsDisplayKey": "WEB", "name": "Customer Web", "path": "/Users/you/dev/products/customer-web-application", "projectId": "project-web", "worktreeCommand": "" },
             { "beadsDirectory": "", "beadsDisplayKey": "OPS", "name": "Operations Dashboard", "path": "/Users/you/dev/internal/tools/operations-dashboard", "projectId": "project-ops", "worktreeCommand": "bun run setup" }

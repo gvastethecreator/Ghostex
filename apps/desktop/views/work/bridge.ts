@@ -15,6 +15,7 @@ type WorkResponse = {
 
 const RESPONSE_EVENT = "ghostex-work-response";
 const OPEN_EVENT = "ghostex-work-open";
+const REFRESH_EVENT = "ghostex-work-refresh";
 const BRIDGE_RETRY_MS = 25;
 /** CEF installs the bridge right after the page's first load; past this the page is not in the app. */
 const BRIDGE_WAIT_MS = 10_000;
@@ -93,6 +94,12 @@ export function workRequest<T>(
     };
     send();
   });
+}
+
+/** The app made a ticket (its Create Linear Ticket dialog): the list should read itself again. */
+export function onWorkRefresh(listener: () => void): () => void {
+  window.addEventListener(REFRESH_EVENT, listener);
+  return () => window.removeEventListener(REFRESH_EVENT, listener);
 }
 
 /** A session card's chip asked the app to open one ticket while the page is showing. */

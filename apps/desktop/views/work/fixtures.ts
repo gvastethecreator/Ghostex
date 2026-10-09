@@ -629,6 +629,8 @@ export async function answerFromFixtures(
         ) ?? ITEMS[0];
       return details(item as WorkItem);
     }
+    case "work.createTicket":
+      return { opened: true };
     case "work.startChat":
       return {
         projectId: params.projectId,

@@ -122,6 +122,34 @@ impl GhostexGpuiApp {
                 );
             }
             "work.startChat" => self.start_work_view_chat(request_id, &request, cx),
+            // CDXC:WorkMode 2026-10-09 DECISION:
+            // User: "We need a button to create a linear ticket to start work in the ... dropdown in the project header (also can be created from the 'Work' page)". New ticket opens the same native dialog, for the project the page is filtered to, or with the dialog's Project picker over the window's work-mode projects; the page refreshes when a ticket is made (`work_view_ticket_created`).
+            "work.createTicket" => {
+                let projects = self.work_view_projects();
+                let wanted = text(&request, "projectId").filter(|wanted| {
+                    projects
+                        .iter()
+                        .any(|project| project["projectId"] == *wanted)
+                });
+                let answer = if projects.is_empty() {
+                    Err("Turn on Work mode for a project to create tickets from here.".to_string())
+                } else {
+                    let message = match wanted {
+                        Some(project_id) => {
+                            let name = projects
+                                .iter()
+                                .find(|project| project["projectId"] == project_id)
+                                .and_then(|project| project["name"].as_str())
+                                .map(str::to_string);
+                            json!({ "projectId": project_id, "projectName": name })
+                        }
+                        None => json!({ "projects": projects }),
+                    };
+                    self.open_gpui_create_linear_ticket_modal(&message, cx);
+                    Ok(json!({ "opened": true }))
+                };
+                self.answer_work_view_request(&request_id, answer, cx);
+            }
             "work.openChat" => {
                 let opened = match (text(&request, "projectId"), text(&request, "sessionId")) {
                     (Some(project_id), Some(session_id)) => self.gx_store_focus_activated_session(

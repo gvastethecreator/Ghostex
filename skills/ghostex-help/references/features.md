@@ -109,7 +109,9 @@ the rule that marks it done (for example "The pull request has a label" with
 `READY-FOR-QC`), then **Save steps**; **Reset to default** goes back to the
 default flow. **Open chat** shows the session linked to the ticket;
 **Start chat** starts one in a new worktree on the ticket's branch, linked to it,
-and sends nothing; its arrow picks the agent and the project. The Work view is
+and sends nothing; its arrow picks the agent and the project. **New ticket** at
+the top creates a Linear ticket (see Create Linear Ticket under Git and
+worktrees) and the list picks it up right away. The Work view is
 part of the desktop app; the web version opens a chip's link instead.
 
 Right-click a view tab to choose where that view appears and what happens to it.
@@ -2208,8 +2210,8 @@ deleted from the sidebar.
 
 Work mode links a project's sessions to the work they belong to. It is on by
 default for projects in a Work workspace and off in a Personal one; right-click
-a project and choose Work Mode, or run `ghostex work-mode on` in its folder, to
-set it yourself, and a project keeps a choice you made when it moves to another
+a project and choose Work Mode, turn on **Work mode** for the project in Settings >
+Projects, or run `ghostex work-mode on` in its folder, to set it yourself, and a project keeps a choice you made when it moves to another
 workspace (otherwise it takes the new workspace's default). In a
 work-mode project, a session linked to a GitHub pull request, a GitHub issue, a
 Linear issue or a Linear project gets a second line on its card: the PR with its
@@ -2231,7 +2233,10 @@ Clean up (remove the session's worktree and park the session; a worktree with
 uncommitted changes is kept) or Keep, once per PR. A
 session on a branch other than main is titled by that branch, without your name
 and the ticket ID, until you rename it. Linear status needs a Linear API key: set
-one per workspace in Settings > Workspaces, or run `ghostex work-mode linear-key`
+one per workspace in Settings > Workspaces; a project that needs a different key
+gets its own under **Linear API key** in Settings > Projects once its Work mode is
+on (the line under it says whether the project uses its own key, its workspace's
+or the shared one, and Remove goes back to the workspace's). Or run `ghostex work-mode linear-key`
 and paste it (that sets the Personal workspace's key, which a workspace without
 its own uses; `--project-id <id>` sets one for a single project, `--clear`
 removes it). GitHub status comes from `gh`, so sign in
@@ -2239,7 +2244,9 @@ with `gh auth login`. `ghostex work-mode status` says what is set up.
 
 To start a piece of work from a new ticket, open the project's "…" menu and choose
 Create Linear Ticket… (it shows once the project is in work mode and has a Linear
-key). Give it a title and, if you like, a description, a team and a Linear
+key), or click **New ticket** at the top of the Work view, which opens the same
+dialog for the repo the list is filtered to and otherwise lets you pick the
+project. Give it a title and, if you like, a description, a team and a Linear
 project; it is assigned to you unless you turn that off. With Start work now on,
 Ghostex creates the ticket and starts the agent you pick in a new worktree on the
 branch Linear suggests for it, linked to the ticket. Nothing is sent to the agent:
@@ -2311,7 +2318,7 @@ repos for new work, where new work runs, the default Linear team and the team
 instructions. **Never work without a ticket** is always on.
 
 Related settings: Settings > Projects > Global Defaults (worktree command,
-docs directory), `hideProjectHeaderDiffStats`,
+docs directory), Settings > Projects > Work mode and Linear API key, `hideProjectHeaderDiffStats`,
 `showProjectEditorDiffFileCount`,
 `showUntrackedProjectDiffWhenNoTrackedChanges`. Work mode: `ghostex work-mode
 on|off|status|linear-key|create-ticket|start`, `ghostex link-session`. Team

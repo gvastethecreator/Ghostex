@@ -8,6 +8,7 @@ import {
   IconGitPullRequest,
   IconHash,
   IconLayoutSidebar,
+  IconPlus,
   IconRefresh,
   IconSearch,
   IconX,
@@ -120,6 +121,8 @@ export function WorkListView({
   onFiltersChange,
   onRefresh,
   onOpen,
+  onNewTicket,
+  newTicketError,
   now,
 }: {
   data: WorkListData | null;
@@ -129,6 +132,9 @@ export function WorkListView({
   onFiltersChange: (filters: WorkFilters) => void;
   onRefresh: () => void;
   onOpen: (item: WorkItem) => void;
+  /** Opens the app's native Create Linear Ticket dialog (apps/desktop/src/app/work_view/bridge.rs). */
+  onNewTicket: () => void;
+  newTicketError: string | null;
   now: number;
 }) {
   const items = data?.items ?? [];
@@ -172,7 +178,24 @@ export function WorkListView({
           </div>
           <h1 className="w-title">Ongoing work</h1>
         </div>
+        <div className="w-headrow-spacer" />
+        {projects.length > 0 ? (
+          <Button
+            className="work-new-ticket"
+            title="Create a Linear ticket"
+            onClick={onNewTicket}
+          >
+            <IconPlus size={14} />
+            New ticket
+          </Button>
+        ) : null}
       </div>
+      {newTicketError ? (
+        <div className="w-notice is-error work-new-ticket-error">
+          <IconAlertTriangle size={14} />
+          <span>{newTicketError}</span>
+        </div>
+      ) : null}
 
       <div className="w-toolbar">
         <label className="w-search work-search">

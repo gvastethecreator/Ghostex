@@ -4,6 +4,7 @@ import {
   installFixtureAnswers,
   isFixtureMode,
   onWorkOpen,
+  onWorkRefresh,
   workRequest,
 } from "./work/bridge";
 import { itemRef, refKey } from "./work/format";
@@ -52,6 +53,7 @@ function WorkApp() {
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [newTicketError, setNewTicketError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const listRequest = useRef(0);
   const detailsRequest = useRef(0);
@@ -152,6 +154,10 @@ function WorkApp() {
 
   useEffect(() => onWorkOpen(openFromChip), [openFromChip]);
 
+  // A ticket made in the app's dialog (New ticket below, or a project's "…" menu) is new to Linear,
+  // so the list skips gxserver's cache.
+  useEffect(() => onWorkRefresh(() => loadList(true)), [loadList]);
+
   useEffect(() => {
     const tick = window.setInterval(() => setNow(Date.now()), 30_000);
     const refresh = window.setInterval(() => {
@@ -180,6 +186,19 @@ function WorkApp() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // The app opens its own Create Linear Ticket dialog: for the repo the list is filtered to, the
+  // only project, or with the dialog's Project picker.
+  const newTicket = () => {
+    const projects = list?.projects ?? [];
+    const projectId =
+      filters.projectId ||
+      (projects.length === 1 ? projects[0]?.projectId : undefined);
+    setNewTicketError(null);
+    void workRequest("work.createTicket", { projectId }).catch(
+      (error: unknown) => setNewTicketError(errorText(error)),
+    );
+  };
 
   const openUrl = (url: string) => {
     void workRequest("work.openUrl", { url }).catch(() => undefined);
@@ -222,6 +241,8 @@ function WorkApp() {
           onFiltersChange={setFilters}
           onRefresh={() => loadList(true)}
           onOpen={(item) => openRef(itemRef(item), item)}
+          onNewTicket={newTicket}
+          newTicketError={newTicketError}
           now={now}
         />
       ) : (

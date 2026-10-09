@@ -1,11 +1,13 @@
 //! The Projects page (packages/core-ui/settings-modal/tabs/projects.tsx (deleted 2026-10-01)): Files (the Docs folders
 //! list), Global Defaults, then the Project section for the project chosen in the searchable
 //! selector (worktree command, ticket key, Beads directory, Docs directory, each saved with its
-//! own button) and that project's custom view settings (views.rs).
+//! own button, plus its Work mode switch and Linear key: work_mode.rs) and that project's custom
+//! view settings (views.rs).
 //!
 //! CDXC:Projects 2026-06-19-12:11 SEE-ALSO: the page edits selected-project metadata only and never offers project deletion.
 mod picker;
 mod views;
+mod work_mode;
 
 use super::super::super::native_modal_kit::*;
 use super::super::fields::{
@@ -241,6 +243,8 @@ pub(crate) struct ProjectsTab {
     /// The placeholder each input shows now (they follow the Global Defaults).
     placeholders: HashMap<SharedString, String>,
     preview_applied: bool,
+    /// The selected project's Work mode switch and Linear key (work_mode.rs).
+    work: work_mode::ProjectWorkModeState,
 }
 
 impl ProjectsTab {
@@ -262,6 +266,7 @@ impl ProjectsTab {
             view_drafts_project: String::new(),
             placeholders: HashMap::new(),
             preview_applied: false,
+            work: work_mode::ProjectWorkModeState::default(),
         }
     }
 
@@ -384,7 +389,10 @@ impl ProjectsTab {
                     store.scroll_to_section(SettingsTabId::Projects, "projectSettings", cx)
                 });
             }
-            "projects-inherited" | "projects-views" => {
+            "projects-inherited"
+            | "projects-views"
+            | "projects-work-mode"
+            | "projects-work-mode-own" => {
                 let store = self.store.clone();
                 store.update(cx, |store, cx| {
                     store.scroll_to_section(SettingsTabId::Projects, "projectSettings", cx)
@@ -827,6 +835,7 @@ impl ProjectsTab {
             None,
             Some(picker),
         ));
+        rows.extend(self.work_mode_rows(p, projects, project, window, cx));
 
         // CDXC:Projects 2026-06-15-03:21 SEE-ALSO: the worktree command is the first editable project field; ticket key and Beads directory follow.
         let command_inherited =

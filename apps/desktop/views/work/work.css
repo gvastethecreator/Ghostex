@@ -159,6 +159,10 @@ a:hover {
   gap: 10px;
 }
 
+.w-headrow-spacer {
+  flex: 1;
+}
+
 .w-eyebrow {
   font-size: 12px;
   color: var(--w-text-2);

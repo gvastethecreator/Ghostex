@@ -3,15 +3,20 @@
 //!
 //! States: `workspaces-team` (the Work workspace connected as the team's owner, Slack and the
 //! team's Linear key set), `workspaces-team-flow` (the same, opened at the Team flow section),
-//! `workspaces-join` (the Work workspace not connected yet).
+//! `workspaces-join` (the Work workspace not connected yet). The Projects page's Work mode rows:
+//! `projects-work-mode` (the Ghostex project in the Work workspace, using that workspace's Linear
+//! key) and `projects-work-mode-own` (the same project with its own key).
 use serde_json::{Value, json};
 
 pub(super) fn owns(state: &str) -> bool {
-    state.starts_with("workspaces-")
+    state.starts_with("workspaces-") || state.starts_with("projects-work-mode")
 }
 
 pub(super) fn open_message(state: &str) -> Option<Value> {
     owns(state).then(|| match state {
+        _ if state.starts_with("projects-work-mode") => {
+            json!({ "initialTab": "projects", "initialSection": "projectSettings" })
+        }
         "workspaces-team-flow" => {
             json!({ "initialTab": "workspaces", "initialSection": "workspace-work-team-flow" })
         }
@@ -107,9 +112,21 @@ fn team_flow_steps() -> Value {
 pub(super) fn rpc(state: &str, path: &str, params: &Value) -> Option<Result<Value, String>> {
     Some(Ok(match path {
         "/api/readWorkspaces" => workspaces(),
+        "/api/readWorkModeStatus" if state == "projects-work-mode-own" => json!({
+            "linearKeys": { "shared": true, "workspaces": ["work"], "projectOverrides": ["project-ghostex"] }
+        }),
         "/api/readWorkModeStatus" => {
-            json!({ "linearKeys": { "shared": true, "workspaces": ["work"] } })
+            json!({ "linearKeys": { "shared": true, "workspaces": ["work"], "projectOverrides": [] } })
         }
+        "/api/setProjectWorkMode" => json!({
+            "projectId": params.get("projectId").cloned().unwrap_or(Value::Null),
+            "workMode": params.get("enabled").cloned().unwrap_or(Value::Null),
+        }),
+        "/api/setLinearApiKey" => json!({
+            "configured": true,
+            "projectId": params.get("projectId").cloned().unwrap_or(Value::Null),
+            "account": { "name": "Yahia", "organization": "ShortPoint" },
+        }),
         "/api/agentAccounts" => json!({ "accounts": [] }),
         "/api/readTeamSyncStatus" => team_status(state),
         "/api/readSlackFlowSettings" | "/api/setSlackFlowSettings" => slack_flow(),

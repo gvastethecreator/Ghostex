@@ -1,5 +1,6 @@
 //! Native GPUI Create Linear Ticket dialog: a work-mode project's "…" menu → Create Linear
-//! Ticket…. It creates the ticket in Linear and, when Start work now is on, starts an agent on
+//! Ticket…, or the Work page's New ticket button (with a Project picker when the page shows several
+//! work-mode projects). It creates the ticket in Linear and, when Start work now is on, starts an agent on
 //! the ticket's branch in a new worktree, linked to the ticket.
 //!
 //! CDXC:WorkMode 2026-10-09 WHY:
@@ -55,6 +56,9 @@ pub(crate) type CreateLinearTicketModalHost = Rc<dyn Fn(CreateLinearTicketModalC
 pub(crate) struct CreateLinearTicketModalConfig {
     pub(crate) project_id: String,
     pub(crate) project_name: String,
+    /// `(projectId, name)` of the work-mode projects to pick from, when it was opened from the Work
+    /// page showing several; empty for a project's own "…" menu, which names its project.
+    pub(crate) projects: Vec<(String, String)>,
     /// `(agentId, name)`, the New session launcher's agents.
     pub(crate) agents: Vec<(String, String)>,
     pub(crate) selected_agent: usize,
@@ -69,6 +73,8 @@ pub(crate) struct GpuiCreateLinearTicketModalWindow {
     palette: ModalPalette,
     project_id: String,
     project_name: String,
+    projects: Vec<Choice>,
+    project_select: ModalSelect,
     title_input: Entity<InputState>,
     description_input: Entity<TextareaState>,
     title: String,
@@ -136,6 +142,8 @@ impl GpuiCreateLinearTicketModalWindow {
             palette: config.palette,
             project_id: config.project_id,
             project_name: config.project_name,
+            projects: config.projects,
+            project_select: ModalSelect::new(),
             title_input,
             description_input,
             title: String::new(),
@@ -164,10 +172,15 @@ impl GpuiCreateLinearTicketModalWindow {
     }
 
     fn load_teams(&self, window: &mut Window, cx: &mut Context<Self>) {
-        let params = json!({ "projectId": self.project_id });
+        let project_id = self.project_id.clone();
+        let params = json!({ "projectId": project_id });
         cx.spawn_in(window, async move |this, cx| {
             let result = gx_rpc(None, "/api/listLinearTeams", params).await;
             let _ = this.update_in(cx, |this, window, cx| {
+                // A project picked again while this was loading has its own load.
+                if this.project_id != project_id {
+                    return;
+                }
                 this.teams_loading = false;
                 match result {
                     Ok(answer) => {
@@ -234,6 +247,7 @@ impl GpuiCreateLinearTicketModalWindow {
     }
 
     fn close_selects(&mut self) {
+        self.project_select.close();
         self.team_select.close();
         self.linear_project_select.close();
         self.agent_select.close();
@@ -375,7 +389,11 @@ impl GpuiCreateLinearTicketModalWindow {
 
     fn on_escape_action(&mut self, _: &Escape, window: &mut Window, cx: &mut Context<Self>) {
         cx.stop_propagation();
-        if self.team_select.open || self.linear_project_select.open || self.agent_select.open {
+        if self.project_select.open
+            || self.team_select.open
+            || self.linear_project_select.open
+            || self.agent_select.open
+        {
             self.close_selects();
             cx.notify();
             return;
@@ -389,12 +407,14 @@ impl GpuiCreateLinearTicketModalWindow {
             (0, self.teams.len()),
             (1, self.linear_projects.len() + 1),
             (2, self.agents.len()),
+            (3, self.projects.len()),
         ];
         for (which, count) in lists {
             let select = match which {
                 0 => &mut self.team_select,
                 1 => &mut self.linear_project_select,
-                _ => &mut self.agent_select,
+                2 => &mut self.agent_select,
+                _ => &mut self.project_select,
             };
             match select.handle_key(key, count) {
                 ModalSelectKey::Consumed => {
@@ -418,10 +438,26 @@ impl GpuiCreateLinearTicketModalWindow {
         cx.stop_propagation();
     }
 
-    /// `which`: 0 team, 1 Linear project (row 0 is "No Linear project"), 2 agent.
+    /// `which`: 0 team, 1 Linear project (row 0 is "No Linear project"), 2 agent, 3 project.
     fn choose(&mut self, which: u8, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.close_selects();
         match which {
+            3 => {
+                if let Some((project_id, name)) = self.projects.get(index).cloned()
+                    && project_id != self.project_id
+                {
+                    // Teams and Linear projects come from the project's own Linear key.
+                    self.project_id = project_id;
+                    self.project_name = name;
+                    self.teams.clear();
+                    self.team_index = None;
+                    self.teams_loading = true;
+                    self.linear_projects.clear();
+                    self.linear_project_index = None;
+                    self.error = None;
+                    self.load_teams(window, cx);
+                }
+            }
             0 => {
                 if self.team_index != Some(index) {
                     self.team_index = Some(index);
@@ -436,6 +472,12 @@ impl GpuiCreateLinearTicketModalWindow {
 
     fn toggle(&mut self, which: u8, window: &mut Window, cx: &mut Context<Self>) {
         let (select, selected) = match which {
+            3 => (
+                &self.project_select,
+                self.projects
+                    .iter()
+                    .position(|(id, _)| *id == self.project_id),
+            ),
             0 => (&self.team_select, self.team_index),
             1 => (
                 &self.linear_project_select,
@@ -450,7 +492,8 @@ impl GpuiCreateLinearTicketModalWindow {
             match which {
                 0 => self.team_select.toggle(selected),
                 1 => self.linear_project_select.toggle(selected),
-                _ => self.agent_select.toggle(selected),
+                2 => self.agent_select.toggle(selected),
+                _ => self.project_select.toggle(selected),
             }
         }
         cx.notify();
@@ -536,11 +579,26 @@ impl GpuiCreateLinearTicketModalWindow {
                 .map(|(_, label)| label.clone())
                 .unwrap_or_else(|| NO_LINEAR_PROJECT.to_string()),
         );
-        let mut body = v_flex()
-            .w_full()
-            .flex_1()
-            .min_h_0()
-            .gap(px(16.0))
+        let mut body = v_flex().w_full().flex_1().min_h_0().gap(px(16.0));
+        // CDXC:WorkMode 2026-10-09 DECISION:
+        // User: a Linear ticket can be created from the project header's "…" menu "(also can be created from the 'Work' page)". The Work page opens this same dialog; when it shows several work-mode projects and is not filtered to one, the dialog asks which project the ticket's work belongs to.
+        if self.projects.len() > 1 {
+            let project_value = self
+                .projects
+                .iter()
+                .find(|(id, _)| *id == self.project_id)
+                .map(|(_, name)| name.clone());
+            body = body.child(h_flex().w_full().child(self.select_field(
+                "Project",
+                &self.project_select,
+                "create-linear-ticket-project",
+                project_value,
+                "Choose a project",
+                3,
+                cx,
+            )));
+        }
+        body = body
             .child(
                 v_flex()
                     .w_full()
@@ -637,16 +695,26 @@ impl GpuiCreateLinearTicketModalWindow {
 
     fn render_open_menu(&self, window: &Window, cx: &mut Context<Self>) -> Option<AnyElement> {
         let p = self.palette;
-        let (select, id, labels, selected, which) = if self.team_select.open {
+        let (select, id, labels, selected, which) = if self.project_select.open {
+            (
+                &self.project_select,
+                "create-linear-ticket-project-menu",
+                self.projects
+                    .iter()
+                    .map(|(_, name)| name.clone())
+                    .collect::<Vec<_>>(),
+                self.projects
+                    .iter()
+                    .position(|(id, _)| *id == self.project_id),
+                3u8,
+            )
+        } else if self.team_select.open {
             (
                 &self.team_select,
                 "create-linear-ticket-team-menu",
-                self.teams
-                    .iter()
-                    .map(|(_, label)| label.clone())
-                    .collect::<Vec<_>>(),
+                self.teams.iter().map(|(_, label)| label.clone()).collect(),
                 self.team_index,
-                0u8,
+                0,
             )
         } else if self.linear_project_select.open {
             let mut labels = vec![NO_LINEAR_PROJECT.to_string()];

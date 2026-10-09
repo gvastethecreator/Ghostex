@@ -25,4 +25,7 @@ impl GhostexGpuiApp {
     pub(crate) fn open_work_item(&mut self, _item: Value, _cx: &mut Context<Self>) -> bool {
         false
     }
+
+    /// There is no Work page here to refresh after the Create Linear Ticket dialog.
+    pub(crate) fn work_view_ticket_created(&mut self, _cx: &mut Context<Self>) {}
 }

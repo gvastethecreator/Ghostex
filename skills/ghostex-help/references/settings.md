@@ -484,6 +484,8 @@ How to use this file:
 - **Ticket key** `ticketKey` (Settings UI row without a settings key; use `ghostex settings open`): Three-letter prefix used for Linear-style ticket numbers on the Project board.
 - **Beads directory** `beadsDirectory` (Settings UI row without a settings key; use `ghostex settings open`): Absolute path the Project board reads its Beads workspace (.beads) from.
 - **Docs directory** `docsDirectory` (Settings UI row without a settings key; use `ghostex settings open`): Extra folder this project's Files view shows, in addition to its own docs.
+- **Work mode** `projectWorkMode` (Settings UI row without a settings key; use `ghostex settings open`): Turn work mode on or off for this project: Linear tickets, GitHub pull requests and the Work view.
+- **Project Linear API key** `projectLinearApiKey` (Settings UI row without a settings key; use `ghostex settings open`): A Linear key for this project only, used instead of its workspace's or the shared key.
 ### Portless
 
 - **Portless** `portlessEnabled` (boolean, default false): Route project dev servers through named local addresses instead of raw ports.

@@ -10199,6 +10199,28 @@
       "agentWritable": false
     },
     {
+      "key": "projectWorkMode",
+      "title": "Work mode",
+      "subtitle": "Turn work mode on or off for this project: Linear tickets, GitHub pull requests and the Work view.",
+      "tab": "projects",
+      "tabTitle": "Projects",
+      "section": "projectSettings",
+      "sectionTitle": "Project settings",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "projectLinearApiKey",
+      "title": "Project Linear API key",
+      "subtitle": "A Linear key for this project only, used instead of its workspace's or the shared key.",
+      "tab": "projects",
+      "tabTitle": "Projects",
+      "section": "projectSettings",
+      "sectionTitle": "Project settings",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
       "key": "portlessEnabled",
       "title": "Portless",
       "subtitle": "Route project dev servers through named local addresses instead of raw ports.",

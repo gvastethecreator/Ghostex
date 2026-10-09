@@ -5,7 +5,8 @@ use crate::app::window::*;
 use crate::*;
 
 impl GhostexGpuiApp {
-    /// Opens the dialog for the `createLinearTicket` modal: `projectId` and `projectName`. An open
+    /// Opens the dialog for the `createLinearTicket` modal: `projectId` and `projectName`, plus
+    /// `projects` (`[{ projectId, name }]`) when the Work page offers several to pick from. An open
     /// without a project is dropped.
     pub(crate) fn open_gpui_create_linear_ticket_modal(
         &mut self,
@@ -20,18 +21,47 @@ impl GhostexGpuiApp {
                 .filter(|value| !value.is_empty())
                 .map(str::to_string)
         };
-        let Some(project_id) = text("projectId") else {
+        let projects: Vec<(String, String)> = message
+            .get("projects")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|project| {
+                let project_id = project.get("projectId")?.as_str()?.to_string();
+                let name = project
+                    .get("name")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or(&project_id)
+                    .to_string();
+                Some((project_id, name))
+            })
+            .collect();
+        let Some(project_id) =
+            text("projectId").or_else(|| projects.first().map(|(id, _)| id.clone()))
+        else {
             return;
         };
+        let project_name = text("projectName")
+            .or_else(|| {
+                projects
+                    .iter()
+                    .find(|(id, _)| *id == project_id)
+                    .map(|(_, name)| name.clone())
+            })
+            .unwrap_or_else(|| "this project".to_string());
         let (agents, selected_agent) = self.create_linear_ticket_agents();
         let config = CreateLinearTicketModalConfig {
             project_id,
-            project_name: text("projectName").unwrap_or_else(|| "this project".to_string()),
+            project_name,
+            projects,
             agents,
             selected_agent,
             palette: self.gpui_native_modal_palette(),
         };
         let host = self.native_app_modal_host(cx, move |app, command, cx| {
+            if !matches!(command, CreateLinearTicketModalCommand::Cancel) {
+                app.work_view_ticket_created(cx);
+            }
             match command {
                 CreateLinearTicketModalCommand::Started {
                     project_id,

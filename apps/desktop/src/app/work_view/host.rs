@@ -84,6 +84,43 @@ impl GhostexGpuiApp {
         true
     }
 
+    /// The Create Linear Ticket dialog made a ticket (from the Work page's New ticket or a
+    /// project's "…" menu): a loaded Work page reads its list again so the ticket shows.
+    pub(crate) fn work_view_ticket_created(&mut self, cx: &mut gpui::Context<Self>) {
+        if self
+            .project_workarea_runtime_cef_surfaces
+            .contains_key(&ProjectWorkareaCefSurfaceSlotKey::Work)
+        {
+            self.dispatch_project_workarea_json_event(
+                ProjectWorkareaCefSurfaceSlotKey::Work,
+                "ghostex-work-refresh",
+                "{}",
+                cx,
+            );
+        }
+    }
+
+    /// The work-mode projects the window shows, as `{ projectId, name }` for the Create Linear
+    /// Ticket dialog's Project picker.
+    pub(crate) fn work_view_projects(&self) -> Vec<Value> {
+        let mut projects: Vec<Value> = Vec::new();
+        for group in self
+            .native_sidebar
+            .snapshot
+            .iter()
+            .flat_map(|snapshot| snapshot.groups.iter())
+        {
+            if let Some(project_id) = group.work_mode_project_id()
+                && !projects
+                    .iter()
+                    .any(|project| project["projectId"] == project_id)
+            {
+                projects.push(serde_json::json!({ "projectId": project_id, "name": group.title }));
+            }
+        }
+        projects
+    }
+
     pub(crate) fn render_work_view_surface(&mut self, cx: &mut gpui::Context<Self>) -> AnyElement {
         let slot_key = ProjectWorkareaCefSurfaceSlotKey::Work;
         if let Some(surface) = self.project_workarea_runtime_cef_surface_for_render(slot_key) {
