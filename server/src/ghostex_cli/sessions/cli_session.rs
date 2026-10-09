@@ -112,6 +112,8 @@ pub(super) fn to_cli_session(
      * git state of its own, and an older daemon simply omits the key.
      */
     insert_js(&mut map, "gitStatus", &[p("gitStatus")]);
+    // CDXC:WorkMode 2026-10-09 SEE-ALSO: mobile_summary.rs forwards `work` too; the phone's Copy submenu (apps/mobile/app/src/screens/sessions-screen/sidebar-menus.ts) copies the PR, Linear and issue links from it. Present only for a session of a work-mode project.
+    insert_non_null(&mut map, "work", p("work"));
     // Host-timer chrome for the mobile session menus; absent when the
     // presentation snapshot does not carry resolved timer projections.
     insert_js(&mut map, "closeAfterDone", &[p("closeAfterDone")]);
