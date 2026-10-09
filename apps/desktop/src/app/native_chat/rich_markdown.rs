@@ -38,6 +38,37 @@ const TABLE_CLOSE: &str = "\u{E000}/table";
 const IMAGE_OPEN: &str = "\u{E000}image:";
 const MARK: char = '\u{E000}';
 
+/// How many bodies [`escaped_raw_html`] remembers.
+const ESCAPED_BODIES: usize = 256;
+
+thread_local! {
+    /// Bodies already run through `escape_raw_html`: each source with its escaped text.
+    static ESCAPED: std::cell::RefCell<Vec<(String, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// `content` with its raw HTML escaped (`escape_raw_html`), remembered across frames.
+///
+/// CDXC:SessionChat 2026-10-09 WHY: escaping parses the whole body as Markdown, and the transcript renders every visible row on every frame; a 41,000-character pasted prompt made each frame of a scroll re-parse it. A body the transcript keeps showing is the same string frame after frame, so its escaped text is looked up instead.
+fn escaped_raw_html(content: String) -> String {
+    if !content.contains('<') {
+        return content;
+    }
+    ESCAPED.with_borrow_mut(|escaped| {
+        if let Some(ix) = escaped.iter().position(|(source, _)| *source == content) {
+            let entry = escaped.remove(ix);
+            let text = entry.1.clone();
+            escaped.push(entry);
+            return text;
+        }
+        let text = ghostex_gx_chat_core::transcript::raw_html::escape_raw_html(&content);
+        if escaped.len() >= ESCAPED_BODIES {
+            escaped.remove(0);
+        }
+        escaped.push((content, text.clone()));
+        text
+    })
+}
+
 /// Hovering anywhere over a table is what brings its actions up.
 const TABLE_GROUP: &str = "native-chat-table";
 
@@ -549,7 +580,7 @@ impl NativeChatView {
         cx: &gpui::Context<Self>,
     ) -> AnyElement {
         // Card and notice text reaches this without the core's message pass; the rule is idempotent.
-        let content = ghostex_gx_chat_core::transcript::raw_html::escape_raw_html(&content);
+        let content = escaped_raw_html(content);
         if !content.contains('\u{E000}') {
             return self.text_view(id, content, references, p, cx);
         }
