@@ -254,21 +254,7 @@ impl GhostexGpuiApp {
             .px(px(WORKAREA_HEADER_EDGE_PADDING))
             .border_b_1()
             .border_color(p.border)
-            .child(
-                header_tile(
-                    "native-docs-open-file",
-                    header_icon("titlebar/file-search.svg", false, p),
-                    false,
-                    false,
-                    p,
-                )
-                .tooltip(|window, cx| {
-                    titlebar_tooltip("Open file: type a name or paste a path", window, cx)
-                })
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.native_docs_open_file_prompt(window, cx);
-                })),
-            )
+            // CDXC:Docs 2026-10-09 DECISION: User: "remove this button in files list top bar" (the Open file button, which only focused the "Search or paste a path" box under it). The box is still reached by clicking it, by Cmd/Ctrl+F in Files and by the Open File hotkey.
             .child(
                 header_tile(
                     "native-docs-toggle-all",

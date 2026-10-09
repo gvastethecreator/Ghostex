@@ -204,7 +204,12 @@ impl GhostexGpuiApp {
         editor.update(cx, |editor, cx| editor.set_search(matches, active, cx));
     }
 
-    fn native_docs_step_find(&mut self, delta: isize, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn native_docs_step_find(
+        &mut self,
+        delta: isize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(find) = self.native_docs.find.as_mut() else {
             return;
         };
@@ -391,6 +396,10 @@ impl GhostexGpuiApp {
                 .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                     if event.keystroke.key == "escape" {
                         this.native_docs_hide_find(window, cx);
+                        cx.stop_propagation();
+                    } else if event.keystroke.key == "f3" {
+                        let back = event.keystroke.modifiers.shift;
+                        this.native_docs_step_find(if back { -1 } else { 1 }, window, cx);
                         cx.stop_propagation();
                     }
                 }))

@@ -161,6 +161,11 @@ impl GhostexGpuiApp {
                 .track_focus(&focus)
                 .key_context("NativeDocs")
                 .on_key_down(cx.listener(Self::native_docs_key_down))
+                .on_action(cx.listener(
+                    |this, _: &crate::app::actions::FindInFocusedTerminal, window, cx| {
+                        this.native_docs_find_shortcut(window, cx);
+                    },
+                ))
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(|this, _, window, cx| {
@@ -210,6 +215,17 @@ impl GhostexGpuiApp {
         cx: &mut Context<Self>,
     ) {
         let modifiers = event.keystroke.modifiers;
+        // F3 and Shift+F3 step through the open document's matches while its find bar is up.
+        if event.keystroke.key == "f3"
+            && !modifiers.control
+            && !modifiers.platform
+            && !modifiers.alt
+            && self.native_docs_find_visible()
+        {
+            self.native_docs_step_find(if modifiers.shift { -1 } else { 1 }, window, cx);
+            cx.stop_propagation();
+            return;
+        }
         if event.keystroke.key == "escape" && !modifiers.modified() {
             if self.native_docs_find_visible() {
                 self.native_docs_hide_find(window, cx);
@@ -246,20 +262,32 @@ impl GhostexGpuiApp {
                 cx.stop_propagation();
             }
             "f" => {
-                // An open Markdown document claims the shortcut for its own Find and Replace;
-                // otherwise it shows the files search.
-                let markdown = self
-                    .native_docs
-                    .active_document()
-                    .is_some_and(|document| document.live.is_some());
-                if markdown && !self.native_docs_search_focused(window, cx) {
-                    self.native_docs_show_find(window, cx);
-                } else {
-                    self.native_docs_show_search(window, cx);
-                }
+                self.native_docs_find_shortcut(window, cx);
                 cx.stop_propagation();
             }
             _ => {}
+        }
+    }
+
+    /// Cmd+F (Ctrl+F on Windows and Linux) in the Files view. An open Markdown document claims it
+    /// for its own Find and Replace; otherwise it shows the files search. A text or code file's
+    /// editor answers it first with its own search panel.
+    ///
+    /// CDXC:Docs 2026-10-09 WHY:
+    /// The app binds Cmd/Ctrl+F globally to its find action (`FindInFocusedTerminal`, main.rs), and GPUI dispatches a matched binding before any key-down listener. The root's handler finds in a browser, a chat or a terminal and otherwise swallows the key, so the Files view's own Ctrl+F handler never ran ("cmd/ctrl + f does nothing"). The Files view therefore answers the action itself, below the root; the key-down path stays for the floating files list's window, which has no handler for the action.
+    pub(crate) fn native_docs_find_shortcut(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let markdown = self
+            .native_docs
+            .active_document()
+            .is_some_and(|document| document.live.is_some());
+        if markdown && !self.native_docs_search_focused(window, cx) {
+            self.native_docs_show_find(window, cx);
+        } else {
+            self.native_docs_show_search(window, cx);
         }
     }
 

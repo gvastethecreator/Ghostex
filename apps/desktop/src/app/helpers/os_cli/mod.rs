@@ -30,6 +30,8 @@ pub(crate) mod spaceo_job;
 pub(crate) mod spaceo_status;
 #[cfg(target_os = "windows")]
 pub(crate) mod windows_notifications;
+#[cfg(target_os = "windows")]
+pub(crate) mod windows_open_with;
 
 pub(crate) use agent_folder_trust::*;
 pub(crate) use app_state_persistence::*;
@@ -55,3 +57,5 @@ pub(crate) use spaceo_job::*;
 pub(crate) use spaceo_status::*;
 #[cfg(target_os = "windows")]
 pub(crate) use windows_notifications::*;
+#[cfg(target_os = "windows")]
+pub(crate) use windows_open_with::*;
