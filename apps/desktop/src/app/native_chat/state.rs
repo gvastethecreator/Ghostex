@@ -147,6 +147,9 @@ pub(crate) struct NativeChatView {
     /// The find the row being drawn gives its text views, set only while a searched row is drawn
     /// (search.rs, `begin_row_find`).
     pub(super) row_find: Option<gpui_component::text::TextFind>,
+    /// Where the transcript's `#123` references link to: the project's GitHub issues URL, or `None`
+    /// when its `origin` is not on GitHub (markdown_links.rs).
+    pub(super) issue_link_base: Option<gpui::SharedString>,
     /// Open or closed as this pane last asked the shared runtime, held until its snapshot agrees.
     pub(super) search_pending_open: Option<bool>,
     /// Keyboard zoom (Cmd+= / Cmd+- / Cmd+0): this pane's temporary size (zoom.rs).
@@ -382,6 +385,7 @@ impl NativeChatView {
             search_subscription: None,
             search_scrolled_revision: -1,
             row_find: None,
+            issue_link_base: None,
             search_pending_open: None,
             zoom: Default::default(),
             draft: String::new(),

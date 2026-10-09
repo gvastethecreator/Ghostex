@@ -169,7 +169,19 @@ impl ChatOptionMenu {
         });
     }
 
+    /// CDXC:SessionChat 2026-10-09 WHY:
+    /// GPUI reports a window's activation from a task queued after the platform event, so when a press moves key status from a submenu back to its parent panel (clicking View or Switch Account again to close it), the submenu's "inactive" report runs before the parent's "active" one and every panel still read inactive: the whole menu closed as a click-away instead of the row's toggle closing only its submenu. The platform's key window is already the parent by then, so it is asked first.
     fn any_window_active(&self, cx: &mut Context<Self>) -> bool {
+        if cx
+            .active_window()
+            .is_some_and(|active| {
+                self.windows
+                    .iter()
+                    .any(|handle| handle.window_id() == active.window_id())
+            })
+        {
+            return true;
+        }
         self.windows.iter().any(|handle| {
             handle
                 .update(cx, |_, window, _| window.is_window_active())

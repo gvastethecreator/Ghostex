@@ -69,6 +69,7 @@ impl Render for NativeChatView {
         super::zoom::register(cx);
         self.last_render = Some(web_time::Instant::now());
         self.schedule_row_detail_sync(window, cx);
+        self.refresh_issue_links(cx);
         self.note_drawn_in(window, cx);
         if self.maximized_window.is_none() && !self.transcript_only {
             self.ensure_input(window, cx);

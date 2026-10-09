@@ -93,7 +93,7 @@ fn is_local_snapshot(event: &Event) -> bool {
 /// This is that store inside the app, fed by its own socket to the local daemon. It owns focus: local selections are its intents, the sidebar row highlight reads it (local_focus.rs), and the workspace's tab list and active project are published from it (focus_publish.rs). It always runs; only the disk logging is gated.
 #[derive(Default)]
 pub(crate) struct GxStoreHost {
-    pub(super) core: Core,
+    pub(crate) core: Core,
     pub(super) client: Option<GxClient>,
     transport: Option<GxStoreTransport>,
     /// Bumped by every client start, so a pump task or a restart timer of an earlier client can

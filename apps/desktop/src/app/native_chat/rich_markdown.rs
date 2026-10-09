@@ -391,6 +391,7 @@ impl NativeChatView {
         TextView::markdown(id, content)
             .parse_synchronously(true)
             .when_some(self.row_find.clone(), |view, find| view.find(find))
+            .when_some(self.issue_link_base.clone(), |view, base| view.issue_links(base))
             .min_w_0()
             .max_w(gpui::relative(1.0))
             .link_presentation(move |href, label| {

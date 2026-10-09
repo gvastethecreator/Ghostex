@@ -147,3 +147,70 @@ pub(super) fn presentations(
         })
         .collect()
 }
+
+impl NativeChatView {
+    /// CDXC:SessionChat 2026-10-09 DECISION:
+    /// User: "for the #123 thing please make those show as links at all times when mentioned and clicking on them should open that pr (when not 6 or 8 chars for the #1234 text (in the gpui chat view". A `#` and digits in prose (whole token, not in code, not a six- or eight-digit hex colour, which keeps its swatch) links to `https://github.com/<owner>/<repo>/issues/<n>` of the project's `origin`, which GitHub redirects to the pull request when it is one; a project without a GitHub origin keeps it plain text. The detection is `issue_references` in gpui-component's text code.
+    ///
+    /// The origin comes from the sidebar store's project row (gxserver's cached `gitRemoteOriginUrl`), read in a deferred call because the app entity may be mid-update while the chat renders.
+    pub(super) fn refresh_issue_links(&self, cx: &mut gpui::Context<Self>) {
+        let Some(app) = self.config.app.clone() else {
+            return;
+        };
+        let key = ghostex_gx_core::ProjectKey {
+            machine: if self.config.machine_id == crate::app::gx_chat::LOCAL_MACHINE_ID {
+                ghostex_gx_core::MachineId::Local
+            } else {
+                ghostex_gx_core::MachineId::Remote(self.config.machine_id.clone())
+            },
+            project_id: self.config.project_id.clone(),
+        };
+        let chat = cx.weak_entity();
+        cx.defer(move |cx| {
+            let Some(app) = app.upgrade() else {
+                return;
+            };
+            let base = app
+                .read(cx)
+                .gx_store
+                .core
+                .presentation()
+                .project(&key)
+                .and_then(|project| project.git_remote_origin_url.value())
+                .and_then(|origin| github_issues_url(origin))
+                .map(gpui::SharedString::from);
+            let _ = chat.update(cx, |chat, cx| {
+                if chat.issue_link_base != base {
+                    chat.issue_link_base = base;
+                    cx.notify();
+                }
+            });
+        });
+    }
+}
+
+/// `https://github.com/<owner>/<repo>/issues/` for a GitHub `origin` written as
+/// `git@github.com:owner/repo.git`, `ssh://git@github.com/owner/repo.git` or
+/// `https://github.com/owner/repo(.git)`; `None` for any other host.
+fn github_issues_url(origin: &str) -> Option<String> {
+    let origin = origin.trim();
+    let path = match origin.strip_prefix("git@github.com:") {
+        Some(path) => path,
+        None => {
+            let (_, rest) = origin.split_once("://")?;
+            let (authority, path) = rest.split_once('/')?;
+            let host = authority.rsplit('@').next()?.split(':').next()?;
+            if !host.eq_ignore_ascii_case("github.com") && !host.eq_ignore_ascii_case("www.github.com")
+            {
+                return None;
+            }
+            path
+        }
+    };
+    let path = path.split(['?', '#']).next()?;
+    let mut segments = path.split('/').filter(|segment| !segment.is_empty());
+    let owner = segments.next()?;
+    let repository = segments.next()?;
+    let repository = repository.strip_suffix(".git").unwrap_or(repository);
+    (!repository.is_empty()).then(|| format!("https://github.com/{owner}/{repository}/issues/"))
+}
