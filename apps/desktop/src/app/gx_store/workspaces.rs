@@ -18,8 +18,6 @@ pub(crate) struct WorkspaceTile {
     pub(crate) name: String,
     pub(crate) letter: String,
     pub(crate) color: String,
-    /// The tile's menu, as the sidebar menu JSON.
-    pub(crate) menu: Value,
 }
 
 impl GhostexGpuiApp {
@@ -180,11 +178,18 @@ impl GhostexGpuiApp {
             name: workspace.name.clone(),
             letter: workspace.letter.clone(),
             color: workspace.color.clone(),
-            menu: ghostex_gx_core::menu_to_json(&ghostex_gx_core::workspace_menu(
-                state,
-                &workspace.workspace_id,
-            )),
         })
+    }
+
+    /// The tile's menu, as the sidebar menu JSON. Built when it opens, because its new-window
+    /// buttons depend on which workspaces the other windows show at that moment.
+    pub(crate) fn gx_store_workspace_menu(&self, cx: &gpui::Context<Self>) -> Option<Value> {
+        let state = self.gx_store_workspaces_state()?;
+        let workspace = self.gx_store_window_workspace()?;
+        let in_windows = self.workspaces_shown_in_other_windows(cx);
+        Some(ghostex_gx_core::menu_to_json(
+            &ghostex_gx_core::workspace_menu(state, &workspace.workspace_id, &in_windows),
+        ))
     }
 
     /// The workspace tile's menu commands and a project's Move to workspace rows.
@@ -223,6 +228,8 @@ impl GhostexGpuiApp {
                 true
             }
             Some("openWorkspaceWindow") => {
+                // The row's new-window button does not close the menu by itself.
+                self.dismiss_native_sidebar_menu(cx);
                 if let Some(workspace_id) = text("workspaceId") {
                     self.open_workspace_in_new_window(&workspace_id, cx);
                 }

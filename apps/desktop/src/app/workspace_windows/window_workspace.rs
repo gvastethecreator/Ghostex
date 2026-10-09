@@ -231,6 +231,23 @@ impl GhostexGpuiApp {
             .is_some()
     }
 
+    /// The workspaces the other open windows show.
+    pub(crate) fn workspaces_shown_in_other_windows(&self, cx: &gpui::Context<Self>) -> Vec<String> {
+        let own = cx.entity_id();
+        let apps: Vec<gpui::WeakEntity<GhostexGpuiApp>> = WORKSPACE_WINDOWS.with(|windows| {
+            windows
+                .borrow()
+                .iter()
+                .filter(|entry| entry.app.entity_id() != own && !entry.closing)
+                .map(|entry| entry.app.clone())
+                .collect()
+        });
+        apps.into_iter()
+            .filter_map(|app| app.upgrade())
+            .filter_map(|app| app.read(cx).gx_store_resolved_window_workspace_id())
+            .collect()
+    }
+
     /// Another window that shows `workspace_id`, brought forward; `None` when none does.
     pub(crate) fn other_window_showing_workspace(
         &self,

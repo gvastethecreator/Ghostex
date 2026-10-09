@@ -45,7 +45,6 @@ impl GhostexGpuiApp {
             .map(rgb)
             .map(gpui::Hsla::from)
             .unwrap_or(appearance.muted);
-        let menu = tile.menu.clone();
         let tooltip = tile.name.clone();
         let tooltip_span = super::tooltips::SidebarTooltipSpan::sidebar(self.sidebar_width, scale);
         Some(
@@ -110,8 +109,11 @@ impl GhostexGpuiApp {
                                 )
                             },
                         )
-                        .on_click(cx.listener(move |_, event: &gpui::ClickEvent, window, cx| {
+                        .on_click(cx.listener(move |app, event: &gpui::ClickEvent, window, cx| {
                             cx.stop_propagation();
+                            let Some(menu) = app.gx_store_workspace_menu(cx) else {
+                                return;
+                            };
                             Self::show_native_sidebar_menu(
                                 &menu,
                                 event.position(),

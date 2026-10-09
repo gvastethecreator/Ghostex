@@ -2,18 +2,26 @@
 //!
 //! CDXC:Workspaces 2026-10-09 DECISION:
 //! User (mockups 01 and 07): the workspace tile's menu lists the workspaces (the current one
-//! checked), "Open <name> in a new window", "Workspace settings…" and "New workspace…"; right-click
-//! a project → "Move to workspace ▸" lists the other workspaces and "New workspace…", next to the
-//! Work mode switch.
+//! checked), "Workspace settings…" and "New workspace…"; right-click a project → "Move to
+//! workspace ▸" lists the other workspaces and "New workspace…", next to the Work mode switch.
+//! User, later the same day: "remove this window item, instead add a child button on the right side
+//! of workspaces that aren't currently the selected one AND don't already have a window open. When
+//! that one is clicked then we open that in a new window". This supersedes the "Open <name> in a
+//! new window" row.
 
 use ghostex_gx_protocol::SidebarWorkspacesState;
 use serde_json::json;
 
 use super::commands::MenuCommand;
-use super::item::MenuItem;
+use super::item::{MenuItem, MenuSecondary};
 
-/// The workspace tile's menu for a window showing `current`.
-pub fn workspace_menu(state: &SidebarWorkspacesState, current: &str) -> Vec<MenuItem> {
+/// The workspace tile's menu for a window showing `current`; `in_windows` are the workspaces some
+/// window already shows, which get no new-window button.
+pub fn workspace_menu(
+    state: &SidebarWorkspacesState,
+    current: &str,
+    in_windows: &[String],
+) -> Vec<MenuItem> {
     let mut menu = vec![MenuItem::heading("Workspaces")];
     for workspace in state.ordered() {
         let mut row = MenuItem::row(
@@ -30,19 +38,19 @@ pub fn workspace_menu(state: &SidebarWorkspacesState, current: &str) -> Vec<Menu
         )
         .with_checked(workspace.workspace_id == current);
         row.icon_color = Some(workspace.color.clone());
+        if workspace.workspace_id != current && !in_windows.contains(&workspace.workspace_id) {
+            row.secondary = Some(MenuSecondary {
+                icon: "external-link".to_string(),
+                label: String::new(),
+                command: MenuCommand::host(json!({
+                    "type": "openWorkspaceWindow",
+                    "workspaceId": workspace.workspace_id,
+                })),
+            });
+        }
         menu.push(row);
     }
     menu.push(MenuItem::separator());
-    if let Some(workspace) = state.workspaces.get(current) {
-        menu.push(MenuItem::row(
-            &format!("Open {} in a new window", workspace.name),
-            "external-link",
-            MenuCommand::host(json!({
-                "type": "openWorkspaceWindow",
-                "workspaceId": workspace.workspace_id,
-            })),
-        ));
-    }
     menu.push(MenuItem::row(
         "Workspace settings…",
         "settings",

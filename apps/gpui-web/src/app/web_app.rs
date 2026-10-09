@@ -258,6 +258,13 @@ impl GhostexGpuiApp {
     ) -> bool {
         false
     }
+    /// A page cannot open another window, so every workspace counts as shown and the workspace
+    /// menu offers no new-window buttons.
+    pub(crate) fn workspaces_shown_in_other_windows(&self, _cx: &Context<Self>) -> Vec<String> {
+        self.gx_store_workspaces_state()
+            .map(|state| state.workspaces.keys().cloned().collect())
+            .unwrap_or_default()
+    }
     pub(crate) fn other_window_showing_workspace(
         &self,
         _workspace_id: &str,

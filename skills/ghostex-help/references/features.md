@@ -360,8 +360,9 @@ Personal, holding all your projects and Spaces. The workspace button is the
 letter tile at the left end of the Space row (with Spaces off, it shows in that
 row once you have a second workspace). Click it to switch this window to
 another workspace (if another window already shows it, that window comes
-forward instead), to open the workspace in a new window, to open Workspace
-settings, or to make a New workspace. Switching reopens the session this window
+forward instead), to open Workspace settings, or to make a New workspace. A
+workspace that no window shows yet has a new-window button at the right end of
+its row, which opens it in a new window. Switching reopens the session this window
 last had open in that workspace (or its first project with no session, or
 nothing if it is empty), and puts to sleep the open views of projects outside
 it; their tabs stay and reload when you come back. To move a project,
@@ -2504,7 +2505,8 @@ example an agent testing something in one window while you work in another.
 New Window is also in Quick Access's Commands tab and at the end of the
 sidebar's More Options menu. A new window opens on the project and workspace of the window
 you opened it from, with no session open, a little down and to the right of it
-(the workspace button's menu opens a chosen workspace in a new window); drag
+(the new-window button on a workspace's row in the workspace button's menu opens
+that workspace in a new window); drag
 it to another screen or Space. Each window has its own sidebar selection,
 sessions on screen, panes, view panel and views, Commands panel and Browser
 tabs. Projects, sessions, settings, themes and hotkeys are shared: a session
