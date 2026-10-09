@@ -86,6 +86,7 @@ impl GhostexGpuiApp {
         menu_width: f32,
         rows: &[Value],
         suffix: &str,
+        flyout_bounds: &super::TerminalBarPopupBounds,
         cx: &mut gpui::Context<Self>,
     ) -> AnyElement {
         let mut flyout = div()
@@ -118,7 +119,8 @@ impl GhostexGpuiApp {
                 )
                 .blur_radius(px(22.0)),
             ])
-            .occlude();
+            .occlude()
+            .child(super::terminal_agent_bar_popup_bounds_probe(flyout_bounds));
         for (index, row) in rows.iter().enumerate() {
             if row["separator"] == true {
                 flyout = flyout.child(super::terminal_agent_bar_menu_separator());
