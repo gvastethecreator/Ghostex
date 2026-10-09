@@ -831,8 +831,8 @@ collapsed even at the bottom of the conversation until you click it, and
 collapses again when you click elsewhere.
 An empty collapsed composer shows only the first placeholder line, and scrolling
 keeps the same toolbar buttons visible.
-Six- and eight-digit hex colors (#RRGGBB, #RRGGBBAA) in messages, inline code, and tables have a small rounded color swatch
-beside the value on desktop and web; shorter ones such as #1234 stay plain text. Copying keeps the original text.
+Hex colors (#RRGGBB, #RRGGBBAA, and the short #RGB and #RGBA when they contain a letter, such as #fa0) in messages, inline code, and tables have a small rounded color swatch
+beside the value on desktop and web; an all-digit number such as #1234 is not a color and stays plain text (or links to the project's GitHub issue). Copying keeps the original text.
 Mermaid diagrams an agent writes (a ```mermaid block) are drawn as diagrams in
 the desktop and mobile chats once the block is complete. Source switches to the
 diagram's text and Copy copies it. On desktop, the expand button opens a larger
