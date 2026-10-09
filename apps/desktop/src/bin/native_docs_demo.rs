@@ -9,6 +9,7 @@
 //!     GHOSTEX_NATIVE_DOCS_DEMO_SIZE=<w>x<h>               (logical px, default 1100x900)
 //!     GHOSTEX_NATIVE_DOCS_DEMO_SCROLL=<px>                (scroll the document down by this much)
 //!     GHOSTEX_NATIVE_DOCS_DEMO_CARET=<line>               (1-based line to put the caret on)
+//!     GHOSTEX_NATIVE_DOCS_DEMO_KEYS="<keystroke> ..."     (pressed in order through the keymap once loaded)
 //!     GHOSTEX_NATIVE_DOCS_DEMO_BASE=<absolute path>       (a HEAD version for the git stripe)
 //!     GHOSTEX_NATIVE_MODAL_DEMO_BACKGROUND=1              (open without taking focus)
 
@@ -192,90 +193,115 @@ fn main() {
                 show: true,
                 ..Default::default()
             };
-            cx.open_window(options, move |window, cx| {
-                window.set_window_title("Native Docs demo");
-                let palette = DocsPalette::resolve(
-                    false,
-                    light,
-                    ui_fonts::UI_FONT.to_string(),
-                    gpui::rgb(if light { 0xffffff } else { 0x0e0e0e }).into(),
-                );
-                let style = editor_style::syntax_style(&palette);
-                let live = cx.new(|cx| {
-                    let mut editor = EditorState::new(window, cx).with_text(text.clone());
-                    editor.set_tab_indent(2);
-                    editor.set_labels(editor_style::labels(), cx);
-                    if !source {
-                        editor.set_markdown_style(style, cx);
-                    }
-                    if let Some(line) = caret_line {
-                        let offset = text
-                            .split_inclusive('\n')
-                            .take(line.saturating_sub(1))
-                            .map(str::len)
-                            .sum::<usize>();
-                        editor.set_cursor(offset, cx);
-                    }
-                    editor
-                });
-                let cache = blocks::SharedCache::default();
-                let expand: app::native_docs::mermaid_widget::MermaidExpand =
-                    std::rc::Rc::new(|source, _| {
-                        eprintln!("expand diagram: {} bytes", source.len())
-                    });
-                blocks::install(
-                    &live,
-                    &cache,
-                    doc_path.clone(),
-                    light,
-                    editor_style::mermaid_colors(&palette),
-                    expand,
-                    cx,
-                );
-                let root = root.clone();
-                let scope = ManageDocsResourceScope::new(
-                    Arc::new(move || {
-                        Some(vec![ManageDocsResourceRoot {
-                            allowed_relative_roots: vec![String::new()],
-                            mount_segment: String::new(),
-                            path: root.clone(),
-                        }])
-                    }),
-                    Arc::new(|_| None),
-                );
-                let view = cx.new(|cx: &mut Context<DocsDemo>| {
-                    let subscription = cx.subscribe(&live, |this, _, event: &EditorEvent, cx| {
-                        if matches!(event, EditorEvent::Changed) {
-                            this.refresh(cx);
+            let window = cx
+                .open_window(options, move |window, cx| {
+                    window.set_window_title("Native Docs demo");
+                    let palette = DocsPalette::resolve(
+                        false,
+                        light,
+                        ui_fonts::UI_FONT.to_string(),
+                        gpui::rgb(if light { 0xffffff } else { 0x0e0e0e }).into(),
+                    );
+                    let style = editor_style::syntax_style(&palette);
+                    let live = cx.new(|cx| {
+                        let mut editor = EditorState::new(window, cx).with_text(text.clone());
+                        editor.set_tab_indent(2);
+                        editor.set_labels(editor_style::labels(), cx);
+                        if !source {
+                            editor.set_markdown_style(style, cx);
                         }
+                        if let Some(line) = caret_line {
+                            let offset = text
+                                .split_inclusive('\n')
+                                .take(line.saturating_sub(1))
+                                .map(str::len)
+                                .sum::<usize>();
+                            editor.set_cursor(offset, cx);
+                        }
+                        editor
                     });
-                    let mut demo = DocsDemo {
-                        live: live.clone(),
-                        scroll: ScrollHandle::new(),
-                        palette,
-                        source,
-                        base: base.clone(),
-                        changes: None,
-                        cache,
-                        doc_path: doc_path.clone(),
-                        scope,
-                        scrolled: false,
-                        _subscription: subscription,
-                    };
-                    demo.refresh(cx);
-                    demo
-                });
-                if !background {
-                    window.activate_window();
-                }
-                // A caret line puts the caret there with the editor focused (its table tools,
-                // raw source on the caret line).
-                if caret_line.is_some() {
-                    live.update(cx, |editor, cx| editor.focus(window, cx));
-                }
-                cx.new(|cx| Root::new(view, window, cx))
-            })
-            .expect("open the demo window");
+                    let cache = blocks::SharedCache::default();
+                    let expand: app::native_docs::mermaid_widget::MermaidExpand =
+                        std::rc::Rc::new(|source, _| {
+                            eprintln!("expand diagram: {} bytes", source.len())
+                        });
+                    blocks::install(
+                        &live,
+                        &cache,
+                        doc_path.clone(),
+                        light,
+                        editor_style::mermaid_colors(&palette),
+                        expand,
+                        cx,
+                    );
+                    let root = root.clone();
+                    let scope = ManageDocsResourceScope::new(
+                        Arc::new(move || {
+                            Some(vec![ManageDocsResourceRoot {
+                                allowed_relative_roots: vec![String::new()],
+                                mount_segment: String::new(),
+                                path: root.clone(),
+                            }])
+                        }),
+                        Arc::new(|_| None),
+                    );
+                    let view = cx.new(|cx: &mut Context<DocsDemo>| {
+                        let subscription =
+                            cx.subscribe(&live, |this, _, event: &EditorEvent, cx| {
+                                if matches!(event, EditorEvent::Changed) {
+                                    this.refresh(cx);
+                                }
+                            });
+                        let mut demo = DocsDemo {
+                            live: live.clone(),
+                            scroll: ScrollHandle::new(),
+                            palette,
+                            source,
+                            base: base.clone(),
+                            changes: None,
+                            cache,
+                            doc_path: doc_path.clone(),
+                            scope,
+                            scrolled: false,
+                            _subscription: subscription,
+                        };
+                        demo.refresh(cx);
+                        demo
+                    });
+                    if !background {
+                        window.activate_window();
+                    }
+                    // A caret line puts the caret there with the editor focused (its table tools,
+                    // raw source on the caret line).
+                    if caret_line.is_some() {
+                        live.update(cx, |editor, cx| editor.focus(window, cx));
+                    }
+                    cx.new(|cx| Root::new(view, window, cx))
+                })
+                .expect("open the demo window");
+            // Keystrokes through the keymap, as a keyboard would send them (posted window messages
+            // cannot carry Ctrl or Shift).
+            let keys = env("GHOSTEX_NATIVE_DOCS_DEMO_KEYS");
+            if !keys.is_empty() {
+                let handle: gpui::AnyWindowHandle = window.into();
+                cx.spawn(async move |cx| {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_secs(3))
+                        .await;
+                    for key in keys.split_whitespace() {
+                        let Ok(keystroke) = gpui::Keystroke::parse(key) else {
+                            continue;
+                        };
+                        let _ = cx.update_window(handle, |_, window, cx| {
+                            window.dispatch_keystroke(keystroke, cx);
+                        });
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(120))
+                            .await;
+                    }
+                })
+                .detach();
+            }
             cx.activate(!background);
         });
 }

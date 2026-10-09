@@ -88,6 +88,14 @@ actions!(
         WordRight,
         SelectWordLeft,
         SelectWordRight,
+        SelectHome,
+        SelectEnd,
+        DocStart,
+        DocEnd,
+        SelectDocStart,
+        SelectDocEnd,
+        DeleteWordLeft,
+        DeleteWordRight,
         Indent,
         Outdent,
         Bold,
@@ -151,7 +159,47 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("cmd-shift-h", Highlight, ctx),
         KeyBinding::new("ctrl-shift-h", Highlight, ctx),
         KeyBinding::new("escape", Dismiss, ctx),
+        // Local change (Ghostex Docs): the line and document keys every editor has. `secondary` is
+        // Cmd on macOS and Ctrl on Windows and Linux.
+        KeyBinding::new("shift-home", SelectHome, ctx),
+        KeyBinding::new("shift-end", SelectEnd, ctx),
+        KeyBinding::new("secondary-home", DocStart, ctx),
+        KeyBinding::new("secondary-end", DocEnd, ctx),
+        KeyBinding::new("secondary-shift-home", SelectDocStart, ctx),
+        KeyBinding::new("secondary-shift-end", SelectDocEnd, ctx),
     ]);
+    bind_platform_keys(cx);
+}
+
+/// Local change (Ghostex Docs): word and line movement on each platform's own keys.
+///
+/// CDXC:Docs 2026-10-09 DECISION:
+/// User: "holding ctrl and pressing left/right arrow in the native file editor doesn't work to select 1 word at a time pls fix. same for shift + home / end pls fix". On Windows and Linux the Files editor takes Ctrl+Left/Right to move by word, Ctrl+Shift+Left/Right to select by word and Ctrl+Backspace/Delete to delete a word; Home/End and Shift+Home/End, and Ctrl+Home/End with and without Shift, work on every platform. macOS keeps Option for words and adds its own Cmd+Left/Right (line), Cmd+Up/Down (document) and Option+Backspace/Delete.
+fn bind_platform_keys(cx: &mut App) {
+    let ctx = Some(CONTEXT);
+    if cfg!(target_os = "macos") {
+        cx.bind_keys([
+            KeyBinding::new("cmd-left", Home, ctx),
+            KeyBinding::new("cmd-right", End, ctx),
+            KeyBinding::new("cmd-shift-left", SelectHome, ctx),
+            KeyBinding::new("cmd-shift-right", SelectEnd, ctx),
+            KeyBinding::new("cmd-up", DocStart, ctx),
+            KeyBinding::new("cmd-down", DocEnd, ctx),
+            KeyBinding::new("cmd-shift-up", SelectDocStart, ctx),
+            KeyBinding::new("cmd-shift-down", SelectDocEnd, ctx),
+            KeyBinding::new("alt-backspace", DeleteWordLeft, ctx),
+            KeyBinding::new("alt-delete", DeleteWordRight, ctx),
+        ]);
+    } else {
+        cx.bind_keys([
+            KeyBinding::new("ctrl-left", WordLeft, ctx),
+            KeyBinding::new("ctrl-right", WordRight, ctx),
+            KeyBinding::new("ctrl-shift-left", SelectWordLeft, ctx),
+            KeyBinding::new("ctrl-shift-right", SelectWordRight, ctx),
+            KeyBinding::new("ctrl-backspace", DeleteWordLeft, ctx),
+            KeyBinding::new("ctrl-delete", DeleteWordRight, ctx),
+        ]);
+    }
 }
 
 /// Which inline color [`EditorState::color_selection`] sets.
@@ -2333,6 +2381,12 @@ impl EditorState {
     }
 
     fn home(&mut self, _: &Home, _: &mut Window, cx: &mut Context<Self>) {
+        let target = self.home_target();
+        self.move_to(target, cx);
+    }
+
+    /// Where Home goes from the caret.
+    fn home_target(&self) -> usize {
         let (row, col) = self.row_col(self.cursor_offset());
         let starts = self.line_starts();
         // Smart Home on a gutter line (list/task/quote): the marker is hidden
@@ -2340,12 +2394,75 @@ impl EditorState {
         // the raw line start would reveal the marker and let typing break it.
         // A second Home (at or inside the prefix) goes to the true start.
         let plen = self.hidden_prefix_len(row);
-        let target = if plen > 0 && col > plen {
+        if plen > 0 && col > plen {
             starts[row] + plen
         } else {
             starts[row]
-        };
-        self.move_to(target, cx);
+        }
+    }
+
+    /// Local change (Ghostex Docs): Shift+Home selects to where Home goes.
+    fn select_home(&mut self, _: &SelectHome, _: &mut Window, cx: &mut Context<Self>) {
+        self.goal_x = None;
+        let target = self.home_target();
+        self.select_to(target, cx);
+    }
+
+    /// Local change (Ghostex Docs): Shift+End selects to the end of the line.
+    fn select_end(&mut self, _: &SelectEnd, _: &mut Window, cx: &mut Context<Self>) {
+        self.goal_x = None;
+        let (row, _) = self.row_col(self.cursor_offset());
+        self.select_to(self.line_end(row), cx);
+    }
+
+    /// Local change (Ghostex Docs): Ctrl+Home (Cmd+Up on macOS).
+    fn doc_start(&mut self, _: &DocStart, _: &mut Window, cx: &mut Context<Self>) {
+        self.move_to(0, cx);
+    }
+
+    /// Local change (Ghostex Docs): Ctrl+End (Cmd+Down on macOS).
+    fn doc_end(&mut self, _: &DocEnd, _: &mut Window, cx: &mut Context<Self>) {
+        self.move_to(self.content.len(), cx);
+    }
+
+    fn select_doc_start(&mut self, _: &SelectDocStart, _: &mut Window, cx: &mut Context<Self>) {
+        self.goal_x = None;
+        self.select_to(0, cx);
+    }
+
+    fn select_doc_end(&mut self, _: &SelectDocEnd, _: &mut Window, cx: &mut Context<Self>) {
+        self.goal_x = None;
+        self.select_to(self.content.len(), cx);
+    }
+
+    /// Local change (Ghostex Docs): Ctrl+Backspace (Option+Backspace on macOS) deletes back to the
+    /// previous word's start, or the selection when there is one, as one undo step.
+    fn delete_word_left(
+        &mut self,
+        _: &DeleteWordLeft,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.selected_range.is_empty() {
+            let off = self.cursor_offset();
+            self.selected_range = self.prev_word(off)..off;
+        }
+        self.replace_text_in_range(None, "", window, cx);
+    }
+
+    /// Local change (Ghostex Docs): Ctrl+Delete (Option+Delete on macOS) deletes to the next
+    /// word's end, or the selection when there is one, as one undo step.
+    fn delete_word_right(
+        &mut self,
+        _: &DeleteWordRight,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.selected_range.is_empty() {
+            let off = self.cursor_offset();
+            self.selected_range = off..self.next_word(off);
+        }
+        self.replace_text_in_range(None, "", window, cx);
     }
 
     /// The hidden marker prefix length of logical `row` — list/task/quote
@@ -5605,6 +5722,14 @@ impl Render for EditorState {
             .on_action(cx.listener(Self::down))
             .on_action(cx.listener(Self::home))
             .on_action(cx.listener(Self::end))
+            .on_action(cx.listener(Self::select_home))
+            .on_action(cx.listener(Self::select_end))
+            .on_action(cx.listener(Self::doc_start))
+            .on_action(cx.listener(Self::doc_end))
+            .on_action(cx.listener(Self::select_doc_start))
+            .on_action(cx.listener(Self::select_doc_end))
+            .on_action(cx.listener(Self::delete_word_left))
+            .on_action(cx.listener(Self::delete_word_right))
             .on_action(cx.listener(Self::select_left))
             .on_action(cx.listener(Self::select_right))
             .on_action(cx.listener(Self::select_up))
