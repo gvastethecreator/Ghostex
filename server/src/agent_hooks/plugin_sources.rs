@@ -485,13 +485,20 @@ export default function ghostexAmpSessionPlugin(amp: PluginAPI) {
         .replace("__NOTIFY_HOOK_PATH_JSON__", &notify_json)
 }
 
-/// CDXC:AgentHooks 2026-10-05 WHY:
-/// Native Windows cannot spawn the notify hook script, so the Pi, OMP and Amp extensions hand it to this gxserver's `agent-hook-notify-native`, as Claude's Windows hook command and OpenCode's v2 plugin do. Before this a session of any of them on native Windows reported nothing: no session id, no working or done state.
+/// CDXC:AgentHooks 2026-10-09 WHY:
+/// Native Windows cannot spawn the notify hook script, so the Pi, OMP, Amp and OpenCode extensions hand it to this gxserver's `agent-hook-notify-native`. Other platforms invoke the script directly and must not embed an unused executable path: moving gxserver would otherwise make source inspection report a working plugin as stale.
 fn gxserver_path_json() -> String {
-    let gxserver = std::env::current_exe()
-        .map(|path| path_string(&path))
-        .unwrap_or_default();
-    serde_json::to_string(&gxserver).unwrap_or_else(|_| "\"\"".to_string())
+    #[cfg(windows)]
+    {
+        let gxserver = std::env::current_exe()
+            .map(|path| path_string(&path))
+            .unwrap_or_default();
+        serde_json::to_string(&gxserver).unwrap_or_else(|_| "\"\"".to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        "\"\"".to_string()
+    }
 }
 
 fn build_pi_extension_source(notify_hook_path: &Path) -> String {
