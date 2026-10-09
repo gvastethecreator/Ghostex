@@ -60,6 +60,22 @@ pub(crate) fn bare_command_path(path: &Path) -> Option<String> {
 
 pub(crate) fn notify(args: Vec<String>) -> anyhow::Result<()> {
     let agent = args.get(1).map(String::as_str).unwrap_or("codex");
+    let (sender, receiver) = mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let mut input = String::new();
+        let result = std::io::stdin()
+            .take(1024 * 1024)
+            .read_to_string(&mut input)
+            .map(|_| input);
+        let _ = sender.send(result);
+    });
+    let input = receiver.recv_timeout(Duration::from_millis(1000));
+    // CDXC:AgentHooks 2026-10-07 WHY: Cursor CLI runs Windows hooks as `$OutputEncoding = [System.Text.Encoding]::UTF8; Get-Content <payload> -Raw | & { $input | <command> }`, and that encoding writes a UTF-8 BOM before the JSON in pwsh and Windows PowerShell alike; serde rejected it ("expected value at line 1 column 1"), so no Cursor hook ever reached gxserver and Cursor chats never found their transcript.
+    let parsed = input
+        .as_ref()
+        .ok()
+        .and_then(|result| result.as_deref().ok())
+        .and_then(|text| serde_json::from_str::<Value>(text.trim_start_matches('\u{feff}')).ok());
     let state = [
         "VSMUX_SESSION_STATE_FILE",
         "GHOSTEX_SESSION_STATE_FILE",
@@ -80,7 +96,17 @@ pub(crate) fn notify(args: Vec<String>) -> anyhow::Result<()> {
             .iter()
             .any(|key| std::env::var(key).map_or(true, |value| value.is_empty())))
     {
+        // Like the bash notify script, a hook outside Ghostex still gives its agent the canned response.
+        print_canned_response(agent, parsed.as_ref().unwrap_or(&Value::Null));
         return Ok(());
+    }
+    let input = input??;
+    let mut payload = match parsed {
+        Some(payload) => payload,
+        None => serde_json::from_str(input.trim_start_matches('\u{feff}'))?,
+    };
+    if let Some(object) = payload.as_object_mut() {
+        object.entry("agent").or_insert_with(|| json!(agent));
     }
     let script = std::fs::read_to_string(
         args.first()
@@ -88,21 +114,6 @@ pub(crate) fn notify(args: Vec<String>) -> anyhow::Result<()> {
     )?;
     let directory = super::install::notify_hook_state_directory(&script)
         .ok_or_else(|| anyhow::anyhow!("Missing hook state directory"))?;
-    let (sender, receiver) = mpsc::sync_channel(1);
-    std::thread::spawn(move || {
-        let mut input = String::new();
-        let result = std::io::stdin()
-            .take(1024 * 1024)
-            .read_to_string(&mut input)
-            .map(|_| input);
-        let _ = sender.send(result);
-    });
-    let input = receiver.recv_timeout(Duration::from_millis(1000))??;
-    // CDXC:AgentHooks 2026-10-07 WHY: Cursor CLI runs Windows hooks as `$OutputEncoding = [System.Text.Encoding]::UTF8; Get-Content <payload> -Raw | & { $input | <command> }`, and that encoding writes a UTF-8 BOM before the JSON in pwsh and Windows PowerShell alike; serde rejected it ("expected value at line 1 column 1"), so no Cursor hook ever reached gxserver and Cursor chats never found their transcript.
-    let mut payload: Value = serde_json::from_str(input.trim_start_matches('\u{feff}'))?;
-    if let Some(object) = payload.as_object_mut() {
-        object.entry("agent").or_insert_with(|| json!(agent));
-    }
     let answer = super::run_notify_hook(vec![
         state,
         payload.to_string(),
@@ -115,6 +126,11 @@ pub(crate) fn notify(args: Vec<String>) -> anyhow::Result<()> {
         println!("{answer}");
         return Ok(());
     }
+    print_canned_response(agent, &payload);
+    Ok(())
+}
+
+fn print_canned_response(agent: &str, payload: &Value) {
     if agent != "antigravity" {
         if payload["hook_event_name"] == "Interrupt" {
             println!("{{}}");
@@ -122,7 +138,6 @@ pub(crate) fn notify(args: Vec<String>) -> anyhow::Result<()> {
             println!("{{\"continue\":true}}");
         }
     }
-    Ok(())
 }
 
 /// Resolved over the live registry PATH, so a CLI installed while gxserver runs is not reported missing.
