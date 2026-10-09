@@ -663,12 +663,34 @@ impl GhostexGpuiApp {
             .when(menu_open, |this| {
                 // Dismissal lives on the anchor, not the menu: the ⋯ button is
                 // inside the anchor, so its own click never counts as an
-                // outside press and the toggle keeps working. Anything else,
-                // including a menu row, closes the menu.
-                this.on_mouse_down_out(cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
-                    this.close_terminal_agent_action_bar_menu(cx);
-                }))
-                .child(self.render_terminal_agent_bar_menu(surface, session_id, suffix, cx))
+                // outside press and the toggle keeps working. The menu and its
+                // flyout are drawn outside the 28px anchor, so GPUI reports a
+                // press on them as outside too, in the capture phase, before
+                // the row's own handler: the Switch Account row, which must
+                // keep the menu up, closed it. A press inside the menu or the
+                // flyout is therefore not a dismissal; the rows close the menu
+                // themselves when they should.
+                let menu_bounds = TerminalBarPopupBounds::default();
+                let flyout_bounds = TerminalBarPopupBounds::default();
+                let (inside_menu, inside_flyout) = (menu_bounds.clone(), flyout_bounds.clone());
+                this.on_mouse_down_out(cx.listener(
+                    move |this, event: &MouseDownEvent, _window, cx| {
+                        if inside_menu.get().contains(&event.position)
+                            || inside_flyout.get().contains(&event.position)
+                        {
+                            return;
+                        }
+                        this.close_terminal_agent_action_bar_menu(cx);
+                    },
+                ))
+                .child(self.render_terminal_agent_bar_menu(
+                    surface,
+                    session_id,
+                    suffix,
+                    &menu_bounds,
+                    &flyout_bounds,
+                    cx,
+                ))
             })
             .into_any_element()
     }
@@ -678,6 +700,8 @@ impl GhostexGpuiApp {
         surface: TerminalAgentBarSurface,
         session_id: TerminalSessionId,
         suffix: &str,
+        menu_bounds: &TerminalBarPopupBounds,
+        flyout_bounds: &TerminalBarPopupBounds,
         cx: &mut gpui::Context<Self>,
     ) -> AnyElement {
         let switchable_agents = self
@@ -720,7 +744,8 @@ impl GhostexGpuiApp {
                 )
                 .blur_radius(px(22.0)),
             ])
-            .occlude();
+            .occlude()
+            .child(terminal_agent_bar_popup_bounds_probe(menu_bounds));
 
         for row in TERMINAL_AGENT_BAR_MENU_ROWS {
             match row {
@@ -744,7 +769,13 @@ impl GhostexGpuiApp {
             if accounts_target.is_some() {
                 if let Some((_, rows)) = self.agents_terminal_action_bar_account_page.clone() {
                     menu = menu.child(
-                        self.render_terminal_agent_bar_account_page(menu_width, &rows, suffix, cx),
+                        self.render_terminal_agent_bar_account_page(
+                            menu_width,
+                            &rows,
+                            suffix,
+                            flyout_bounds,
+                            cx,
+                        ),
                     );
                 }
             } else if !switchable_agents.is_empty() {
@@ -753,6 +784,7 @@ impl GhostexGpuiApp {
                     menu_width,
                     &switchable_agents,
                     suffix,
+                    flyout_bounds,
                     cx,
                 ));
             }
@@ -821,6 +853,7 @@ impl GhostexGpuiApp {
         menu_width: f32,
         switchable_agents: &[GpuiSwitchableSessionAgent],
         suffix: &str,
+        flyout_bounds: &TerminalBarPopupBounds,
         cx: &mut gpui::Context<Self>,
     ) -> AnyElement {
         let mut submenu = div()
@@ -852,7 +885,8 @@ impl GhostexGpuiApp {
                 )
                 .blur_radius(px(22.0)),
             ])
-            .occlude();
+            .occlude()
+            .child(terminal_agent_bar_popup_bounds_probe(flyout_bounds));
         for (index, agent) in switchable_agents.iter().enumerate() {
             let agent_id = agent.agent_id.clone();
             let icon = agent
@@ -1431,6 +1465,19 @@ fn terminal_agent_bar_menu_group_label(label: &'static str) -> AnyElement {
         .text_size(px(11.0))
         .text_color(terminal_agent_bar_session_id_color())
         .child(label)
+        .into_any_element()
+}
+
+/// Where a popup of the ⋯ menu was last painted, so the anchor's dismissal can tell a press on it
+/// from a press elsewhere.
+type TerminalBarPopupBounds = std::rc::Rc<std::cell::Cell<gpui::Bounds<gpui::Pixels>>>;
+
+/// An invisible child that records its parent's painted bounds.
+fn terminal_agent_bar_popup_bounds_probe(bounds: &TerminalBarPopupBounds) -> AnyElement {
+    let bounds = bounds.clone();
+    gpui::canvas(move |painted, _, _| bounds.set(painted), |_, _, _, _| {})
+        .absolute()
+        .size_full()
         .into_any_element()
 }
 
