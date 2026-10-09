@@ -542,7 +542,11 @@ fn plan_session(
         .and_then(|o| o.selection.model.as_ref())
         .map(|m| m.value.clone())
         .unwrap_or_default();
-    let switch_account = if notice.kind == "usageLimit" && policy.at_limit == LimitAction::Switch {
+    // A session on its own login keeps waiting for its limit to reset instead of moving to an account (CDXC:AgentProviders 2026-10-09 in launch.rs).
+    let switch_account = if notice.kind == "usageLimit"
+        && policy.at_limit == LimitAction::Switch
+        && !launch::session_uses_own_login(provider, &session)
+    {
         ranked(
             &registry,
             snapshot,

@@ -120,6 +120,9 @@ pub(crate) fn launcher_account_page(
     items
 }
 
+/// What a session's flyout shows instead of accounts when its agent's command picks its own login.
+pub(crate) const OWN_LOGIN: &str = "Uses its own login (set in the agent's command)";
+
 /// A session's Switch Account flyout from a read list: the accounts of the session's provider,
 /// each with its usage, the current one ticked, none pickable while the session works.
 pub(crate) fn session_account_page(
@@ -128,6 +131,15 @@ pub(crate) fn session_account_page(
     working: bool,
     hide_account_emails: bool,
 ) -> Vec<MenuItem> {
+    if data
+        .session
+        .as_ref()
+        .is_some_and(|session| session.uses_own_login)
+    {
+        let mut items = vec![disabled(OWN_LOGIN.to_string())];
+        items.extend(session_page_tail());
+        return items;
+    }
     let provider = data
         .session
         .as_ref()

@@ -233,7 +233,7 @@ pub fn agent_launcher_items_with_accounts(
                     "launch",
                     Some(&agent.agent_id),
                 )),
-                secondary: account_provider(agent.agent_id.as_str(), icon).map(|provider| {
+                secondary: agent.account_provider().map(|provider| {
                     super::item::MenuSecondary {
                         icon: "user".to_string(),
                         // The count arrives with the account list; until then the pill is blank.

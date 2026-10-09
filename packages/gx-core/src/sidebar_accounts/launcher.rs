@@ -19,8 +19,8 @@
 use serde_json::{json, Map, Value};
 
 use crate::sidebar_menu::{
-    account_provider, agent_launcher_items_with_accounts, run_in_box_agents_page,
-    run_in_box_locations_page, LauncherAgent, MenuHost,
+    agent_launcher_items_with_accounts, run_in_box_agents_page, run_in_box_locations_page,
+    LauncherAgent, MenuHost,
 };
 
 use super::data::AccountsState;
@@ -244,7 +244,7 @@ impl LauncherAccounts {
 }
 
 fn agent_provider(agent: &LauncherAgent) -> Option<&'static str> {
-    account_provider(&agent.agent_id, agent.icon.as_deref())
+    agent.account_provider()
 }
 
 /// `update([], true)`: the menu goes away once a launch is under way.

@@ -376,6 +376,10 @@ pub struct ReadSessionChatResult {
     pub available_agents: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub switchable_agents: Option<Value>,
+    /// Whether the session runs on its own login and offers no account; reads alone carry it,
+    /// and `None` (an older daemon, or a frame) leaves what the core already knows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uses_own_login: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork_info: Option<ChatForkInfo>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

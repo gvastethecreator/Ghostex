@@ -13,6 +13,19 @@ pub struct LauncherAgent {
     pub agent_id: String,
     pub name: String,
     pub icon: Option<String>,
+    /// The HUD's `usesOwnLogin`: the agent's command picks its own login, so the launcher offers
+    /// no account and starts it without one.
+    pub uses_own_login: bool,
+}
+
+impl LauncherAgent {
+    /// The provider whose accounts the launcher offers for this agent, if any.
+    pub fn account_provider(&self) -> Option<&'static str> {
+        if self.uses_own_login {
+            return None;
+        }
+        super::account_provider(&self.agent_id, self.icon.as_deref())
+    }
 }
 
 /// One Saved Action that can sit on a project header.

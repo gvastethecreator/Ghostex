@@ -24,7 +24,13 @@ pub struct AccountProviders {
 }
 
 /// `provider` and `panelProvider`.
+///
+/// A session on its own login has neither (CDXC:AgentProviders 2026-10-09 in
+/// server/src/accounts/launch.rs), so the chat shows no Switch Account panel or switch card for it.
 pub fn account_providers(state: &ChatState) -> AccountProviders {
+    if state.session.uses_own_login {
+        return AccountProviders::default();
+    }
     let agent = state.session.agent.as_deref();
     let switch = switch_progress(state)
         .map(|progress| progress.provider)

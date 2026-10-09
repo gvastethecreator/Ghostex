@@ -465,6 +465,7 @@ fn empty_result() -> ReadSessionChatResult {
         session_agent_id: None,
         available_agents: None,
         switchable_agents: None,
+        uses_own_login: None,
         fork_info: None,
         subagent: None,
         error: None,

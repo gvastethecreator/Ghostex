@@ -232,6 +232,11 @@ pub fn apply_draft_agent_carriage(state: &mut ChatState, result: &ReadSessionCha
         .switchable_agents
         .clone()
         .filter(|value| value.as_array().is_none_or(|rows| !rows.is_empty()));
+    // Snapshots synthesized from a read, and older daemons, leave it out: only a read that says
+    // so changes it, so a frame never brings the account panel back.
+    if let Some(uses_own_login) = result.uses_own_login {
+        state.session.uses_own_login = uses_own_login;
+    }
 }
 
 /// Applies one authoritative result: a seed read, a resync read, a snapshot, or the cached
