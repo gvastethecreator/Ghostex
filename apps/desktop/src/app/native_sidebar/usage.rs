@@ -88,7 +88,7 @@ impl GhostexGpuiApp {
         cx: &mut gpui::Context<Self>,
     ) -> Option<AnyElement> {
         use crate::app::window::frosted_host::{
-            FrostedHostKind, frosted_hosting_active, hide_frosted_host,
+            FrostedHostKind, frosted_hosting_active, hide_frosted_host_over,
         };
         let frosted = frosted_hosting_active() && window_glass_active_in(window);
         // The frosted window's hover counts only while the strip draws there: once it is hidden it
@@ -98,7 +98,8 @@ impl GhostexGpuiApp {
                 || self.native_sidebar.usage_peek_hovered
                 || (frosted && self.native_sidebar.usage_frosted_hovered));
         if !(showing && frosted) {
-            hide_frosted_host(FrostedHostKind::SidebarUsage, cx);
+            // Only this window's peek: the host is shared with the other workspace windows.
+            hide_frosted_host_over(FrostedHostKind::SidebarUsage, window.window_handle(), cx);
         }
         if !showing {
             return None;
