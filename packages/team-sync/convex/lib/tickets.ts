@@ -67,3 +67,10 @@ export function titleFromText(text: string): string {
   const clean = sentence.replace(/\s+/g, " ").trim();
   return clean.length <= 80 ? clean : `${clean.slice(0, 79).trimEnd()}…`;
 }
+
+const LINEAR_PROJECT_LINK = /https?:\/\/linear\.app\/[^/\s>|]+\/project\/[A-Za-z0-9-]+/g;
+
+/** Linear project links in `text` (a release the thread names), in order. */
+export function findLinearProjectLinks(text: string): string[] {
+  return [...new Set([...text.matchAll(LINEAR_PROJECT_LINK)].map((match) => match[0]))];
+}

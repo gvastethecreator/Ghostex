@@ -4,7 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { upsertMessage } from "./slackIntake";
-import { findThread, upsertThread } from "./slackThreads";
+import { findThread, threadsForTicket, upsertThread } from "./slackThreads";
 import { readTeamFlow } from "./teamFlow";
 
 /** A member whose Ghostex sent no heartbeat (every 2 minutes) for this long counts as offline. */
@@ -175,13 +175,14 @@ export const recordWorkingThread = internalMutation({
 export type QueuedWork =
   | { action: "start"; commandId: Id<"commands">; assigned: boolean; online: boolean; memberName: string | null }
   | { action: "message"; commandId: Id<"commands">; assigned: boolean; online: boolean; memberName: string | null }
-  | { action: "cloud"; sessionUrl: string | null; memberName: string | null };
+  /** The ticket's cloud session is still starting, so there is no session to send to yet. */
+  | { action: "cloudStarting"; memberName: string | null };
 
 /**
  * Step 4's decision, made in one transaction so two requests for a ticket never start two sessions: the ticket's session exists → a `message` command to the Ghostex that runs it; none → a `start` command to the requester's Ghostex and the ticket's session row.
  *
  * CDXC:TeamSync 2026-10-09 DECISION:
- * User: one working session per ticket; "the session exists → send it your message", none → start it in the cloud or locally. A command waits in Convex while its Ghostex is off and starts when it is back.
+ * User: one working session per ticket; "the session exists → send it your message", none → start it in the cloud or locally. A command waits in Convex while its Ghostex is off and starts when it is back. A cloud session gets the message too: the Ghostex that started it sends it through its cloud runner (server/src/team_sync/cloud_runner.rs), since only that requester's Claude login can reach it.
  */
 export const queueTicketWork = internalMutation({
   args: {
@@ -204,17 +205,20 @@ export const queueTicketWork = internalMutation({
       .sort((left, right) => right.createdAt - left.createdAt)[0];
     if (live) {
       const owner = live.memberId ? await ctx.db.get(live.memberId) : null;
-      if (live.runPlace === "cloud") {
-        return { action: "cloud", sessionUrl: live.sessionUrl ?? null, memberName: owner?.name ?? null };
+      if (live.runPlace === "cloud" && !live.sessionUrl) {
+        return { action: "cloudStarting", memberName: owner?.name ?? null };
       }
+      const session =
+        live.runPlace === "cloud"
+          ? { runPlace: "cloud", sessionUrl: live.sessionUrl }
+          : live.sessionId
+            ? { runPlace: "local", projectId: live.projectId ?? null, sessionId: live.sessionId }
+            : null;
       const commandId = await ctx.db.insert("commands", {
         teamId: request.teamId,
         memberId: live.memberId,
         type: "slack.request",
-        payload: {
-          ...args.messagePayload,
-          session: live.sessionId ? { projectId: live.projectId ?? null, sessionId: live.sessionId } : null,
-        },
+        payload: { ...args.messagePayload, session },
         source: "slack",
         status: live.memberId ? "pending" : "unassigned",
         slackUserId: live.slackUserId,
@@ -417,10 +421,7 @@ export const resolvePostTarget = internalQuery({
     for (const ticket of candidates) {
       const working = await workingThreadOf(ctx, member.teamId, ticket);
       if (!working) continue;
-      const threads = await ctx.db
-        .query("slackThreads")
-        .withIndex("by_team_ticket", (q) => q.eq("teamId", member.teamId).eq("ticket", ticket))
-        .collect();
+      const threads = await threadsForTicket(ctx, member.teamId, ticket);
       return {
         ticket,
         workingThread: { channelId: working.channelId, threadTs: working.threadTs },

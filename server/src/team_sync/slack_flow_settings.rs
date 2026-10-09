@@ -102,6 +102,9 @@ pub(crate) fn slack_manifest(
                     "app_mentions:read",
                     "channels:history",
                     "groups:history",
+                    // Channel names for the Work page's Slack threads (conversations.info).
+                    "channels:read",
+                    "groups:read",
                     "chat:write",
                     "chat:write.customize",
                     "reactions:write",

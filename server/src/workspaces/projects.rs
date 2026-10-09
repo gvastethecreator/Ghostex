@@ -17,6 +17,40 @@ pub(crate) fn stored_project_workspace_id(project: &Value) -> Option<&str> {
         .filter(|id| !id.is_empty())
 }
 
+/// Whether a project shows in every workspace: the Ghostex config folder's project, where every
+/// Help chat (and the Cloud Boxes setup chat) lives.
+///
+/// CDXC:Workspaces 2026-10-09 DECISION:
+/// User: the Help-chat project must not flip workspaces each time Help is opened from a different
+/// window; make it visible in every workspace. It is recognised by its folder (the Ghostex config
+/// folder the desktop roots it at), so no client has to mark it and installs that already have it
+/// need no migration; its own `workspaceId` still decides its Linear key and Claude account.
+pub(crate) fn project_in_every_workspace(project: &Value) -> bool {
+    static CONFIG_DIR: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    let config_dir = CONFIG_DIR.get_or_init(|| {
+        comparable_path(
+            &ghostex_paths::GhostexPaths::resolve()
+                .config_dir
+                .to_string_lossy(),
+        )
+    });
+    !config_dir.is_empty()
+        && project
+            .get("path")
+            .and_then(Value::as_str)
+            .is_some_and(|path| comparable_path(path) == *config_dir)
+}
+
+fn comparable_path(path: &str) -> String {
+    let path = path.trim().replace('\\', "/");
+    let path = path.trim_end_matches('/');
+    if cfg!(windows) || cfg!(target_os = "macos") {
+        path.to_lowercase()
+    } else {
+        path.to_string()
+    }
+}
+
 /// The workspace a project belongs to: a worktree project follows its parent checkout, and an
 /// id the workspaces document no longer has reads as the default workspace.
 pub(crate) fn project_workspace_id(
@@ -168,15 +202,24 @@ pub(crate) fn reapply_workspace_defaults(
 }
 
 /// Puts a project a client just added into the workspace it names (`params.workspaceId`, the
-/// window's workspace), so it shows in the window it was added from. Returns the project as it is
-/// now.
+/// window's workspace, or a workspace name from the CLI), so it shows in the window it was added
+/// from; with none it stays in the default workspace. A worktree project of a registered checkout
+/// takes its parent's workspace instead. Returns the project as it is now.
+///
+/// CDXC:Workspaces 2026-10-09 DECISION:
+/// User: new projects land in the window's workspace from every path (Add Project, a clone from
+/// Add Project, worktree projects, and `ghostex` CLI project creation, which uses Personal when it
+/// has no window to go by).
 pub(crate) fn place_added_project(
     repository: &DomainRepository<'_>,
     db: &rusqlite::Connection,
     project: Value,
     params: &Map<String, Value>,
 ) -> Result<Value, DomainStateError> {
-    let Some(workspace_id) = params
+    if project_parent_id(&project).is_some() {
+        return place_worktree_project(repository, db, project);
+    }
+    let Some(reference) = params
         .get("workspaceId")
         .and_then(Value::as_str)
         .map(str::trim)
@@ -185,13 +228,132 @@ pub(crate) fn place_added_project(
         return Ok(project);
     };
     let workspaces = read_sidebar_workspaces(db)?;
-    if !workspace_exists(&workspaces, workspace_id) {
+    let Some(workspace_id) = find_workspace_id(&workspaces, reference) else {
         return Ok(project);
-    }
+    };
     Ok(
-        place_project_in_workspace(repository, &workspaces, &project, workspace_id)?
+        place_project_in_workspace(repository, &workspaces, &project, &workspace_id)?
             .unwrap_or(project),
     )
+}
+
+fn project_parent_id(project: &Value) -> Option<&str> {
+    project
+        .get("worktree")
+        .and_then(|worktree| worktree.get("parentProjectId"))
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+}
+
+/// A worktree project takes its parent checkout's workspace and Work mode (as the parent has it:
+/// from its workspace or set by hand), unless its own switch was set by hand. Returns the project
+/// as it is now.
+///
+/// CDXC:WorkMode 2026-10-09 WHY:
+/// Work mode is read from the project's own row (`project_work_mode`), and work happens in
+/// worktree projects, so a ticket's worktree in a Work workspace (or under a Personal project with
+/// Work mode turned on by hand) needs the parent's value written on it or its cards lose their
+/// work chips.
+pub(crate) fn place_worktree_project(
+    repository: &DomainRepository<'_>,
+    db: &rusqlite::Connection,
+    project: Value,
+) -> Result<Value, DomainStateError> {
+    let Some(parent) = project_parent_id(&project)
+        .map(|parent_id| repository.get_project(parent_id))
+        .transpose()?
+        .flatten()
+    else {
+        return Ok(project);
+    };
+    let workspaces = read_sidebar_workspaces(db)?;
+    let workspace_id = match stored_project_workspace_id(&parent) {
+        Some(id) if workspace_exists(&workspaces, id) => id.to_string(),
+        _ => DEFAULT_WORKSPACE_ID.to_string(),
+    };
+    let mut launch_settings = project
+        .get("launchSettings")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let before = launch_settings.clone();
+    if workspace_id == DEFAULT_WORKSPACE_ID {
+        launch_settings.remove("workspaceId");
+    } else {
+        launch_settings.insert("workspaceId".into(), json!(workspace_id));
+    }
+    if !project_work_mode_set_by_hand(&project) {
+        let parent_settings = parent.get("launchSettings");
+        for key in ["workMode", "workModeFromWorkspace"] {
+            match parent_settings.and_then(|settings| settings.get(key)) {
+                Some(value) => {
+                    launch_settings.insert(key.into(), value.clone());
+                }
+                None => {
+                    launch_settings.remove(key);
+                }
+            }
+        }
+    }
+    if launch_settings == before {
+        return Ok(project);
+    }
+    let mut update = Map::new();
+    update.insert(
+        "projectId".into(),
+        project.get("projectId").cloned().unwrap_or(Value::Null),
+    );
+    update.insert("launchSettings".into(), Value::Object(launch_settings));
+    repository.update_project(&update)
+}
+
+/// The project `reference` names: a project id, else a project name (any case, when only one
+/// project has it), else a folder path inside a project (the deepest project wins).
+pub(crate) fn resolve_project_reference(
+    repository: &DomainRepository<'_>,
+    reference: &str,
+) -> Result<String, DomainStateError> {
+    let reference = reference.trim();
+    if reference.is_empty() {
+        return Err(DomainStateError::bad_request("Pass the project."));
+    }
+    let projects = repository.list_projects()?;
+    let id_of = |project: &Value| {
+        project
+            .get("projectId")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    };
+    if let Some(id) = projects.iter().filter_map(id_of).find(|id| id == reference) {
+        return Ok(id);
+    }
+    let named: Vec<&Value> = projects
+        .iter()
+        .filter(|project| {
+            project
+                .get("name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| name.trim().eq_ignore_ascii_case(reference))
+        })
+        .collect();
+    match named.as_slice() {
+        [only] => {
+            return id_of(only).ok_or_else(|| DomainStateError::bad_request("No project id."))
+        }
+        [_, _, ..] => {
+            return Err(DomainStateError::bad_request(format!(
+                "Several projects are named \"{reference}\"; pass its id or folder."
+            )))
+        }
+        [] => {}
+    }
+    let mut params = Map::new();
+    params.insert("path".into(), json!(reference));
+    let project =
+        crate::work_mode::resolve_work_mode_project(repository, &params).map_err(|_| {
+            DomainStateError::bad_request(format!("No project matched \"{reference}\"."))
+        })?;
+    id_of(&project).ok_or_else(|| DomainStateError::bad_request("No project id."))
 }
 
 /// The Claude account the workspace of `project` picked for its agents, if any.

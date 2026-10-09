@@ -1,5 +1,11 @@
 //! Slack command flow routes (crate::team_sync): the team flow settings, the Slack app manifest,
 //! and `ghostex slack post`. Every one uses this computer's member token, so they are full-local.
+//!
+//! CDXC:TeamSync 2026-10-09 WHY:
+//! The Slack flow settings are `readSlackFlowSettings`/`setSlackFlowSettings`, not
+//! `readTeamFlow`/`setTeamFlow`: `/api/readTeamFlow` is the Work page's team-flow steps
+//! (route_http/work_items.rs), and this router runs first, so sharing the path sent the Work page's
+//! reads here.
 
 use serde_json::{Map, Value};
 
@@ -13,8 +19,8 @@ type TeamSlackOperation = fn(&GxserverPaths, &Map<String, Value>) -> Result<Valu
 
 fn paths_operation(path: &str) -> Option<TeamSlackOperation> {
     Some(match path {
-        "/api/readTeamFlow" => team_sync::read_team_flow,
-        "/api/setTeamFlow" => team_sync::set_team_flow,
+        "/api/readSlackFlowSettings" => team_sync::read_team_flow,
+        "/api/setSlackFlowSettings" => team_sync::set_team_flow,
         "/api/readSlackManifest" => team_sync::slack_manifest,
         _ => return None,
     })

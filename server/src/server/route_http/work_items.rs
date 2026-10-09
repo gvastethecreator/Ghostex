@@ -7,6 +7,9 @@ use serde_json::{json, Map, Value};
 
 use crate::domain::DomainStateError;
 use crate::protocol::rpc_success;
+use crate::team_sync::{
+    apply_team_ticket_summaries, refresh_team_ticket_summaries, team_tickets_by_workspace,
+};
 use crate::work_mode::{
     build_work_list, load_work_projects, read_work_item, refresh_work_feeds, resolve_team_flow,
     store_team_flow, team_flow_rule_catalog, validate_team_flow_steps, work_feed_plan,
@@ -20,6 +23,8 @@ use super::*;
 const WORK_LIST_WAIT: Duration = Duration::from_secs(8);
 /// How long one ticket's details may take before the page gets an error it can retry.
 const WORK_ITEM_WAIT: Duration = Duration::from_secs(20);
+/// How long the list waits for a Work workspace's team to count each row's Slack threads.
+const TEAM_SUMMARY_WAIT: Duration = Duration::from_secs(3);
 
 pub(super) async fn route_work_items_http(
     request: RouteHttpRequest,
@@ -118,9 +123,31 @@ async fn list_work_items(
         });
         refreshing = tokio::time::timeout(WORK_LIST_WAIT, refresh).await.is_err();
     }
-    let mut list = tokio::task::spawn_blocking(move || build_work_list(&projects, &plan))
+    let mut list = {
+        let projects = projects.clone();
+        tokio::task::spawn_blocking(move || build_work_list(&projects, &plan))
+            .await
+            .map_err(task_error)?
+    };
+    // A Work workspace's team adds each row's Slack-thread count; a slow team only delays the
+    // counts, which the next read picks up from the cache.
+    let groups = team_tickets_by_workspace(&projects, &list);
+    if !groups.is_empty() {
+        let paths = state.paths.clone();
+        let refresh = tokio::task::spawn_blocking(move || {
+            refresh_team_ticket_summaries(&paths, &groups, force);
+        });
+        refreshing |= tokio::time::timeout(TEAM_SUMMARY_WAIT, refresh)
+            .await
+            .is_err();
+        let paths = state.paths.clone();
+        list = tokio::task::spawn_blocking(move || {
+            apply_team_ticket_summaries(&paths, &projects, &mut list);
+            list
+        })
         .await
         .map_err(task_error)?;
+    }
     list["refreshing"] = json!(refreshing);
     Ok(list)
 }

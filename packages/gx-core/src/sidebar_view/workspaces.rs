@@ -6,8 +6,9 @@
 //! project follows its parent checkout's.
 //!
 //! CDXC:Workspaces 2026-10-09 WHY:
-//! Only this computer's section is filtered: the window's workspace is one of this computer's
-//! workspaces, and a remote machine's section keeps showing all of that machine. A daemon without
+//! Only this computer's projects are filtered one by one: the window's workspace is one of this
+//! computer's workspaces, and a remote machine's projects carry that machine's own workspace ids,
+//! so a remote machine's tab is placed whole instead (`window_machine_tabs`). A daemon without
 //! workspaces (no `sidebarWorkspaces`) is never filtered.
 
 use std::borrow::Cow;
@@ -19,7 +20,7 @@ use ghostex_gx_protocol::{
 use crate::keys::MachineId;
 use crate::presentation_store::{LoadedPresentation, PresentationStore};
 
-use super::inputs::SidebarInputs;
+use super::inputs::{MachineTabInput, SidebarInputs};
 
 /// One machine's workspaces and the one this window shows there.
 pub struct WindowWorkspace<'a> {
@@ -40,7 +41,10 @@ impl<'a> WindowWorkspace<'a> {
     /// Whether a project belongs to the window's workspace.
     pub fn shows_project(&self, loaded: &LoadedPresentation, project_id: &str) -> bool {
         match loaded.project(project_id) {
-            Some(project) => project_workspace_id(self.state, loaded, project) == self.workspace_id,
+            Some(project) => {
+                project.every_workspace
+                    || project_workspace_id(self.state, loaded, project) == self.workspace_id
+            }
             // Rows the presentation does not hold (chats, placeholders) are in every workspace.
             None => true,
         }
@@ -99,4 +103,31 @@ pub fn window_spaces<'a>(
         .order
         .retain(|space_id| filtered.spaces.contains_key(space_id));
     Some(Cow::Owned(filtered))
+}
+
+/// The machine tabs a window shows: this computer always, and a remote machine only in the
+/// workspace it was put in on this computer (Personal until moved with Move to workspace on its
+/// tab). Every tab while this computer's daemon has no workspaces.
+///
+/// CDXC:Workspaces 2026-10-09 DECISION:
+/// User: remote machines' sidebar sections follow the window's workspace too. A remote machine's
+/// projects carry that machine's workspace ids, which do not match this computer's, so the rule is
+/// the simplest correct one: the machine's tab shows in the workspace it was assigned to on this
+/// computer, assignable with Move to workspace on the tab, defaulting to Personal.
+pub fn window_machine_tabs(
+    store: &PresentationStore,
+    window_workspace_id: Option<&str>,
+    tabs: &[MachineTabInput],
+) -> Vec<MachineTabInput> {
+    let Some(state) = store
+        .machine(&MachineId::Local)
+        .and_then(|machine| machine.side_state().workspaces.as_ref())
+    else {
+        return tabs.to_vec();
+    };
+    let window = state.resolve(window_workspace_id);
+    tabs.iter()
+        .filter(|tab| tab.is_local() || state.machine_workspace(&tab.machine_id) == window)
+        .cloned()
+        .collect()
 }

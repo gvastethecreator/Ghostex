@@ -13,9 +13,10 @@ use crate::{
     sidebar_spaces::rehome_sidebar_spaces_for_workspaces,
     work_mode::{store_linear_api_key, LinearKeyScope},
     workspaces::{
-        create_workspace_in, delete_workspace_in, move_project_to_workspace,
-        read_sidebar_workspaces, reapply_workspace_defaults, update_workspace_in, workspace_kind,
-        write_sidebar_workspaces, DEFAULT_WORKSPACE_ID,
+        assign_machine_workspace_in, create_workspace_in, delete_workspace_in, find_workspace_id,
+        move_project_to_workspace, read_sidebar_workspaces, reapply_workspace_defaults,
+        resolve_project_reference, update_workspace_in, workspace_kind, write_sidebar_workspaces,
+        DEFAULT_WORKSPACE_ID,
     },
 };
 
@@ -64,10 +65,10 @@ pub(super) async fn route_workspaces_http(
                 request_id,
                 &body_json,
                 |repository, db, params, _| {
-                    let workspace_id = required_text(params, "workspaceId")?;
-                    let (workspaces, kind_changed) = {
+                    let (workspaces, kind_changed, workspace_id) = {
                         let _event_sequence = lock_presentation_event_sequence(&state)?;
                         let current = read_sidebar_workspaces(db)?;
+                        let workspace_id = required_workspace(&current, params)?;
                         let next = update_workspace_in(&current, &workspace_id, params)?;
                         let workspaces = write_sidebar_workspaces(db, &next)?;
                         if workspaces != current {
@@ -75,7 +76,7 @@ pub(super) async fn route_workspaces_http(
                         }
                         let kind_changed = workspace_kind(&current, &workspace_id)
                             != workspace_kind(&workspaces, &workspace_id);
-                        (workspaces, kind_changed)
+                        (workspaces, kind_changed, workspace_id)
                     };
                     if kind_changed {
                         let changed =
@@ -95,10 +96,10 @@ pub(super) async fn route_workspaces_http(
                 request_id,
                 &body_json,
                 |repository, db, params, _| {
-                    let workspace_id = required_text(params, "workspaceId")?;
-                    let workspaces = {
+                    let (workspaces, workspace_id) = {
                         let _event_sequence = lock_presentation_event_sequence(&state)?;
                         let current = read_sidebar_workspaces(db)?;
+                        let workspace_id = required_workspace(&current, params)?;
                         let next = delete_workspace_in(&current, &workspace_id)?;
                         let workspaces = write_sidebar_workspaces(db, &next)?;
                         broadcast_workspaces(&state, db, &workspaces)?;
@@ -107,7 +108,7 @@ pub(super) async fn route_workspaces_http(
                         {
                             broadcast_spaces(&state, db, spaces)?;
                         }
-                        workspaces
+                        (workspaces, workspace_id)
                     };
                     // Its projects fall back to the default workspace and take its default.
                     let changed =
@@ -131,9 +132,16 @@ pub(super) async fn route_workspaces_http(
                 request_id,
                 &body_json,
                 |repository, db, params, _| {
-                    let project_id = required_text(params, "projectId")?;
-                    let workspace_id = required_text(params, "workspaceId")?;
+                    let project_id = match required_text(params, "projectId") {
+                        Ok(project_id) => project_id,
+                        // `ghostex workspace move-project` names the project by id, name or folder.
+                        Err(error) => match params.get("project").and_then(Value::as_str) {
+                            Some(reference) => resolve_project_reference(repository, reference)?,
+                            None => return Err(error),
+                        },
+                    };
                     let workspaces = read_sidebar_workspaces(db)?;
+                    let workspace_id = required_workspace(&workspaces, params)?;
                     let changed = move_project_to_workspace(
                         repository,
                         &workspaces,
@@ -154,6 +162,28 @@ pub(super) async fn route_workspaces_http(
             spawn_work_mode_refresh(&state);
             response
         }
+        "/api/moveMachineToWorkspace" => handle_domain_http(
+            &state,
+            endpoint.path,
+            request_id,
+            &body_json,
+            |_, db, params, _| {
+                let machine_id = required_text(params, "machineId")?;
+                let _event_sequence = lock_presentation_event_sequence(&state)?;
+                let current = read_sidebar_workspaces(db)?;
+                let workspace_id = required_workspace(&current, params)?;
+                let next = assign_machine_workspace_in(&current, &machine_id, &workspace_id)?;
+                let workspaces = write_sidebar_workspaces(db, &next)?;
+                if workspaces != current {
+                    broadcast_workspaces(&state, db, &workspaces)?;
+                }
+                Ok(json!({
+                    "machineId": machine_id,
+                    "workspaceId": workspace_id,
+                    "sidebarWorkspaces": workspaces,
+                }))
+            },
+        ),
         _ => {
             return Err(RouteHttpRequest {
                 state,
@@ -260,6 +290,17 @@ fn broadcast_spaces(
         "type": "sidebarSpacesChanged",
     }));
     Ok(())
+}
+
+/// `workspaceId` as a workspace id or name (the CLI passes names), resolved against `workspaces`.
+fn required_workspace(
+    workspaces: &Value,
+    params: &Map<String, Value>,
+) -> Result<String, DomainStateError> {
+    let reference = required_text(params, "workspaceId")?;
+    find_workspace_id(workspaces, &reference).ok_or_else(|| {
+        DomainStateError::bad_request(format!("No workspace matched \"{reference}\"."))
+    })
 }
 
 fn required_text(params: &Map<String, Value>, key: &str) -> Result<String, DomainStateError> {

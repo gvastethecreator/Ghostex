@@ -107,16 +107,30 @@ impl GhostexGpuiApp {
             );
             return;
         };
+        let name = project_name_from_path(&cwd);
+        // A folder that is already a project stays in its own workspace; a new one joins this
+        // window's (`gx_store_window_for_existing_project`).
+        let existing = self.gx_store_local_project_at_path(&cwd).is_some();
+        let add_params = json!({ "name": name, "path": cwd });
+        let add_params = if existing {
+            add_params
+        } else {
+            self.gx_store_with_window_workspace(add_params)
+        };
         cx.spawn(async move |this, cx| {
-            let name = project_name_from_path(&cwd);
-            let registered = gx_rpc(
-                None,
-                "/api/addProjectPath",
-                json!({ "name": name, "path": cwd }),
-            )
-            .await;
+            let registered = gx_rpc(None, "/api/addProjectPath", add_params).await;
             let Some(project_id) = registered.ok().as_ref().and_then(project_id_of) else {
                 let _ = this.update(cx, |this, cx| this.gx_store_open_terminal_failed(cx));
+                return;
+            };
+            // The window that shows the project's workspace runs the rest.
+            let Ok(this) = this.update(cx, |this, cx| {
+                if existing {
+                    this.gx_store_window_for_existing_project(&project_id, cx)
+                } else {
+                    cx.entity().downgrade()
+                }
+            }) else {
                 return;
             };
             let _ = this.update(cx, |this, cx| {
@@ -189,22 +203,31 @@ impl GhostexGpuiApp {
             .filter(|path| !path.trim().is_empty())
             .map(str::to_string)
             .collect();
+        // A folder that is already a project stays in its own workspace and is shown there; a new
+        // one joins this window's workspace (`gx_store_window_for_existing_project`).
+        let opens: Vec<(Value, bool)> = paths
+            .into_iter()
+            .map(|path| {
+                let existing = self.gx_store_local_project_at_path(&path).is_some();
+                let params = json!({ "name": project_name_from_path(&path), "path": path });
+                if existing {
+                    (params, true)
+                } else {
+                    (self.gx_store_with_window_workspace(params), false)
+                }
+            })
+            .collect();
         cx.spawn(async move |this, cx| {
-            let mut focus_project_id = None;
+            let mut focus_project = None;
             let mut failed = 0usize;
-            for path in paths {
-                let result = gx_rpc(
-                    None,
-                    "/api/addProjectPath",
-                    json!({ "name": project_name_from_path(&path), "path": path }),
-                )
-                .await;
+            for (params, existing) in opens {
+                let result = gx_rpc(None, "/api/addProjectPath", params).await;
                 match result.ok().as_ref().and_then(project_id_of) {
-                    Some(project_id) => focus_project_id = Some(project_id),
+                    Some(project_id) => focus_project = Some((project_id, existing)),
                     None => failed += 1,
                 }
             }
-            let _ = this.update(cx, |this, cx| {
+            let target = this.update(cx, |this, cx| {
                 if failed > 0 {
                     this.gx_store_create_toast(
                         "error",
@@ -213,10 +236,19 @@ impl GhostexGpuiApp {
                         cx,
                     );
                 }
-                if let Some(project_id) = focus_project_id {
-                    this.gx_store_focus_project_group(&project_id, cx);
+                match &focus_project {
+                    Some((project_id, true)) => {
+                        Some(this.gx_store_window_for_existing_project(project_id, cx))
+                    }
+                    Some((_, false)) => Some(cx.entity().downgrade()),
+                    None => None,
                 }
             });
+            if let (Ok(Some(target)), Some((project_id, _))) = (target, focus_project) {
+                let _ = target.update(cx, |this, cx| {
+                    this.gx_store_focus_project_group(&project_id, cx)
+                });
+            }
         })
         .detach();
     }
@@ -290,18 +322,17 @@ impl GhostexGpuiApp {
             None,
             Some(&draft),
         );
+        // The config folder's project shows in every workspace (gxserver
+        // `project_in_every_workspace`), so it is not placed in this window's.
+        let add_params = json!({ "name": "Ghostex", "path": project_path.clone() });
         cx.spawn(async move |this, cx| {
             let project_id = match known_project {
                 Some(project_id) => Some(project_id),
-                None => gx_rpc(
-                    None,
-                    "/api/addProjectPath",
-                    json!({ "name": "Ghostex", "path": project_path }),
-                )
-                .await
-                .ok()
-                .as_ref()
-                .and_then(project_id_of),
+                None => gx_rpc(None, "/api/addProjectPath", add_params)
+                    .await
+                    .ok()
+                    .as_ref()
+                    .and_then(project_id_of),
             };
             let Some(project_id) = project_id else {
                 let _ = this.update(cx, |this, cx| {
@@ -404,18 +435,17 @@ impl GhostexGpuiApp {
             Some(AGENTBOX_SETUP_PROMPT),
             None,
         );
+        // The config folder's project shows in every workspace (gxserver
+        // `project_in_every_workspace`), so it is not placed in this window's.
+        let add_params = json!({ "name": "Ghostex", "path": project_path.clone() });
         cx.spawn(async move |this, cx| {
             let project_id = match known_project {
                 Some(project_id) => Some(project_id),
-                None => gx_rpc(
-                    None,
-                    "/api/addProjectPath",
-                    json!({ "name": "Ghostex", "path": project_path }),
-                )
-                .await
-                .ok()
-                .as_ref()
-                .and_then(project_id_of),
+                None => gx_rpc(None, "/api/addProjectPath", add_params)
+                    .await
+                    .ok()
+                    .as_ref()
+                    .and_then(project_id_of),
             };
             let Some(project_id) = project_id else {
                 let _ = this.update(cx, |this, cx| {

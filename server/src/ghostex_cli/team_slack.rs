@@ -29,7 +29,7 @@ pub(super) fn flow_command(rest: &[String], flags: &Flags) -> CliResult<()> {
     let action = rest.first().map(String::as_str).unwrap_or("show");
     let mut params = workspace_params(flags)?;
     match action {
-        "show" => call_and_print("/api/readTeamFlow", params, flags),
+        "show" => call_and_print("/api/readSlackFlowSettings", params, flags),
         "set" => {
             for (flag, key) in [
                 ("workingChannel", "workingChannelId"),
@@ -72,12 +72,12 @@ pub(super) fn flow_command(rest: &[String], flags: &Flags) -> CliResult<()> {
                     "Pass --working-channel, --watch-only, --default-run, --linear-team, --qc-owner or --instructions-file.".to_string(),
                 ));
             }
-            call_and_print("/api/setTeamFlow", params, flags)
+            call_and_print("/api/setSlackFlowSettings", params, flags)
         }
         "map" => {
             let channel = rest.get(1).ok_or_else(|| {
                 CliError::Other(
-                    "Pass the channel: ghostex team flow map <channel ID> --repo owner/name [--project name] [--linear-team KEY].".to_string(),
+                    "Pass the channel: ghostex team flow map <channel ID> --repo owner/name [--project name] [--linear-team KEY] [--linear-project name].".to_string(),
                 )
             })?;
             let mut mapping = Map::new();
@@ -86,13 +86,14 @@ pub(super) fn flow_command(rest: &[String], flags: &Flags) -> CliResult<()> {
                 ("repo", "repo"),
                 ("project", "project"),
                 ("linearTeam", "linearTeamKey"),
+                ("linearProject", "linearProject"),
             ] {
                 if let Some(value) = flags.string_value(flag) {
                     mapping.insert(key.to_string(), nullable(value));
                 }
             }
             params.insert("mapChannel".to_string(), Value::Object(mapping));
-            call_and_print("/api/setTeamFlow", params, flags)
+            call_and_print("/api/setSlackFlowSettings", params, flags)
         }
         "unmap" => {
             let channel = rest.get(1).ok_or_else(|| {
@@ -101,7 +102,7 @@ pub(super) fn flow_command(rest: &[String], flags: &Flags) -> CliResult<()> {
                 )
             })?;
             params.insert("unmapChannel".to_string(), json!(channel));
-            call_and_print("/api/setTeamFlow", params, flags)
+            call_and_print("/api/setSlackFlowSettings", params, flags)
         }
         other => Err(CliError::Other(format!(
             "Unknown flow command \"{other}\". Use show, set, map or unmap."

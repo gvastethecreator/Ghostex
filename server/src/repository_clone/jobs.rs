@@ -68,13 +68,17 @@ impl RepositoryCloneJobManager {
             ));
         }
         let job_id = Uuid::new_v4().to_string();
-        let job = json!({
+        let mut job = json!({
             "jobId": job_id,
             "message": "Cloning repository.",
             "preview": preview,
             "startedAt": now_iso(),
             "state": "running",
         });
+        // The workspace of the window the clone was started from, where the project lands.
+        if let Some(workspace_id) = params.get("workspaceId").and_then(Value::as_str) {
+            job["workspaceId"] = json!(workspace_id);
+        }
         self.jobs.lock().await.insert(job_id.clone(), job.clone());
         let jobs = self.jobs.clone();
         tokio::spawn(async move {
@@ -116,12 +120,15 @@ async fn run_clone_job(
     runtime: RepositoryCloneRuntime,
     job_id: String,
 ) {
-    let preview = {
+    let (preview, workspace_id) = {
         let jobs = jobs.lock().await;
-        jobs.get(&job_id)
-            .and_then(|job| job.get("preview"))
-            .cloned()
-            .unwrap_or_else(|| json!({}))
+        let job = jobs.get(&job_id);
+        (
+            job.and_then(|job| job.get("preview"))
+                .cloned()
+                .unwrap_or_else(|| json!({})),
+            job.and_then(|job| job.get("workspaceId")).cloned(),
+        )
     };
     let branch_specified = preview.get("branchName").and_then(Value::as_str).is_some();
     let clone_main_only = preview
@@ -200,7 +207,7 @@ async fn run_clone_job(
                 return;
             }
             mark_job_adding(&jobs, &job_id).await;
-            match add_cloned_project(&runtime, &preview) {
+            match add_cloned_project(&runtime, &preview, workspace_id.as_ref()) {
                 Ok(project) => {
                     if let Some(project_id) = project.get("projectId").and_then(Value::as_str) {
                         let _ = publish_cloned_project_presentation(&runtime, project_id);
@@ -387,6 +394,7 @@ fn publish_cloned_project_presentation(
 fn add_cloned_project(
     runtime: &RepositoryCloneRuntime,
     preview: &Value,
+    workspace_id: Option<&Value>,
 ) -> Result<Value, RepositoryCloneError> {
     let destination_path = preview
         .get("destinationPath")
@@ -416,7 +424,13 @@ fn add_cloned_project(
             .unwrap_or_else(|| json!("Repository")),
     );
     params.insert("path".to_string(), json!(normalized_path));
+    if let Some(workspace_id) = workspace_id {
+        params.insert("workspaceId".to_string(), workspace_id.clone());
+    }
     repository
         .create_project(&params)
+        .and_then(|project| {
+            crate::workspaces::place_added_project(&repository, &db, project, &params)
+        })
         .map_err(|error| RepositoryCloneError::dependency_unavailable(error.to_string()))
 }

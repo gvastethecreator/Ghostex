@@ -151,6 +151,14 @@ impl LauncherAccounts {
             if command.action == "retry" {
                 params.insert("refresh".to_string(), json!(true));
             }
+            // The project the launcher is for, so the list's default Claude account is the one a
+            // launch there would use (its workspace's account, `CDXC:Workspaces` in gxserver's
+            // accounts endpoint). The project id is the raw one of the machine the request goes to.
+            if let Some(project) =
+                crate::keys::ProjectKey::parse_sidebar_group_id(&command.group_id)
+            {
+                params.insert("projectId".to_string(), json!(project.project_id));
+            }
             steps.push(AccountMenuStep::Request(AccountsRequest {
                 target: group_accounts_target(&command.group_id),
                 params: Value::Object(params),

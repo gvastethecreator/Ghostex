@@ -25,11 +25,13 @@ use crate::worktree_sessions::{read_worktree_session_marker, slugify_branch_titl
 
 use super::*;
 
-/// The ticket a request names: exactly one Linear issue or one GitHub issue.
+/// The ticket a request names: exactly one Linear issue, one GitHub issue or one GitHub PR.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum WorkTicket {
     Linear(String),
     Github(u64),
+    /// A PR number (as text) or URL, as `gh pr view` takes it.
+    PullRequest(String),
 }
 
 impl WorkTicket {
@@ -40,15 +42,29 @@ impl WorkTicket {
             .map(str::trim)
             .filter(|text| !text.is_empty());
         let github = params.get("githubIssue").filter(|value| !value.is_null());
-        match (linear, github) {
-            (Some(text), None) => normalize_linear_identifier(text)
+        let pull_request = params.get("pullRequest").filter(|value| !value.is_null());
+        match (linear, github, pull_request) {
+            (None, None, Some(value)) => value
+                .as_u64()
+                .map(|number| number.to_string())
+                .or_else(|| {
+                    let text = value.as_str()?.trim().trim_start_matches('#');
+                    let valid = text.parse::<u64>().is_ok_and(|number| number > 0)
+                        || (text.starts_with("https://") && text.contains("/pull/"));
+                    valid.then(|| text.to_string())
+                })
+                .map(Self::PullRequest)
+                .ok_or_else(|| {
+                    DomainStateError::bad_request("pullRequest must be a PR number or URL.")
+                }),
+            (Some(text), None, None) => normalize_linear_identifier(text)
                 .map(Self::Linear)
                 .ok_or_else(|| {
                     DomainStateError::bad_request(format!(
                         "\"{text}\" is not a Linear issue ID like SPX-1245."
                     ))
                 }),
-            (None, Some(value)) => value
+            (None, Some(value), None) => value
                 .as_u64()
                 .or_else(|| {
                     value
@@ -61,7 +77,7 @@ impl WorkTicket {
                     DomainStateError::bad_request("githubIssue must be an issue number.")
                 }),
             _ => Err(DomainStateError::bad_request(
-                "Pass either linearIssue (SPX-1245) or githubIssue (218).",
+                "Pass one of linearIssue (SPX-1245), githubIssue (218) or pullRequest (412 or its URL).",
             )),
         }
     }
@@ -75,6 +91,9 @@ impl WorkTicket {
             }
             Self::Github(number) => {
                 request.insert("githubIssues".to_string(), json!([number]));
+            }
+            Self::PullRequest(selector) => {
+                request.insert("pullRequest".to_string(), json!(selector));
             }
         }
         request
@@ -94,6 +113,8 @@ impl WorkTicket {
                 targets.github_issues.contains(number)
                     || github_issue_in_branch(worktree_branch) == Some(*number)
             }
+            // Decided by the PR's plan, which knows its number and branch.
+            Self::PullRequest(_) => false,
         }
     }
 }
@@ -106,6 +127,10 @@ struct TicketWorkPlan {
     existing_worktree: Option<String>,
     /// The ticket's branch, when there is no such worktree.
     branch: Option<String>,
+    /// The links the new session gets.
+    links: Map<String, Value>,
+    /// `{ number, url }` when the ticket is a PR.
+    pull_request: Option<Value>,
 }
 
 pub(crate) async fn start_work_on_ticket(
@@ -157,12 +182,14 @@ pub(crate) async fn start_work_on_ticket(
         .unwrap_or_default()
         .to_string();
     // The session is live from here on: a link that fails to save is reported, not rolled back.
-    link_session_to_ticket(state, &project_id, &session_id, &ticket)?;
+    link_session_to_ticket(state, &project_id, &session_id, &plan.links)?;
     Ok(json!({
         "projectId": project_id,
         "sessionId": session_id,
         "branch": created.get("branch").cloned().unwrap_or(Value::Null),
         "worktreePath": created.get("worktreePath").cloned().unwrap_or(Value::Null),
+        "pullRequest": plan.pull_request.clone().unwrap_or(Value::Null),
+        "links": plan.links,
     }))
 }
 
@@ -198,6 +225,32 @@ fn plan_ticket_work(
             .unwrap_or_else(|| DEFAULT_PROMPT_AGENT_ID.to_string())
     });
 
+    let pull_request = match ticket {
+        WorkTicket::PullRequest(selector) => {
+            let project_path = project
+                .get("path")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let team_keys = project_linear_api_key(state, &project).and_then(|api_key| {
+                refresh_linear_team_keys(&api_key);
+                cached_linear_team_keys(linear_key_fingerprint(&api_key))
+            });
+            Some(plan_pull_request(
+                project_path,
+                team_keys.as_deref(),
+                selector,
+            )?)
+        }
+        _ => None,
+    };
+    let links = pull_request
+        .as_ref()
+        .map(|plan| plan.links.clone())
+        .unwrap_or_else(|| ticket.link_request());
+    let pull_request_value = pull_request
+        .as_ref()
+        .map(|plan| json!({ "number": plan.number, "url": plan.url }));
+
     let existing_worktree =
         repository
             .list_sessions(Some(project_id))?
@@ -207,9 +260,12 @@ fn plan_ticket_work(
                 if !Path::new(&marker.path).is_dir() {
                     return None;
                 }
-                ticket
-                    .is_linked(&work_targets(&project, session), &marker.branch)
-                    .then_some(marker.path)
+                let targets = work_targets(&project, session);
+                let linked = match &pull_request {
+                    Some(plan) => plan.is_linked(&targets, &marker.branch),
+                    None => ticket.is_linked(&targets, &marker.branch),
+                };
+                linked.then_some(marker.path)
             });
     if existing_worktree.is_some() {
         return Ok(TicketWorkPlan {
@@ -217,6 +273,8 @@ fn plan_ticket_work(
             agent_id,
             existing_worktree,
             branch: None,
+            links,
+            pull_request: pull_request_value,
         });
     }
 
@@ -243,12 +301,26 @@ fn plan_ticket_work(
                 .unwrap_or_default();
             github_issue_branch(cwd, *number)?
         }
+        WorkTicket::PullRequest(_) => {
+            let plan = pull_request
+                .as_ref()
+                .ok_or_else(|| DomainStateError::bad_request("The PR could not be read."))?;
+            plan.prepare_branch(
+                project
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+            )?;
+            plan.branch.clone()
+        }
     };
     Ok(TicketWorkPlan {
         project_id: project_id.to_string(),
         agent_id,
         existing_worktree: None,
         branch: Some(branch),
+        links,
+        pull_request: pull_request_value,
     })
 }
 
@@ -303,7 +375,7 @@ fn link_session_to_ticket(
     state: &AppState,
     project_id: &str,
     session_id: &str,
-    ticket: &WorkTicket,
+    request: &Map<String, Value>,
 ) -> Result<(), DomainStateError> {
     let db = open_gxserver_database(&state.paths).map_err(|error| DomainStateError {
         code: "internalError",
@@ -317,7 +389,7 @@ fn link_session_to_ticket(
         .get("runtimeSettings")
         .and_then(|settings| settings.get("workLinks"))
         .and_then(Value::as_object);
-    let links = merge_work_links(existing, &ticket.link_request())?;
+    let links = merge_work_links(existing, request)?;
     write_work_links(&db, project_id, session_id, &links)?;
     schedule_presentation_session_delta(state, &db, &repository, project_id, session_id)
 }

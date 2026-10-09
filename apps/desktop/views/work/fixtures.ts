@@ -3,7 +3,13 @@
  * and the desktop bridge's, so the page can be drawn and screenshotted without the app. Loaded
  * only in that mode.
  */
-import type { WorkItem, WorkItemDetails, WorkList, WorkReady } from "./types";
+import type {
+  WorkItem,
+  WorkItemDetails,
+  WorkList,
+  WorkReady,
+  WorkTeamDetails,
+} from "./types";
 
 const minutesAgo = (minutes: number) =>
   new Date(Date.now() - minutes * 60_000).toISOString();
@@ -341,14 +347,15 @@ function details(item: WorkItem): WorkItemDetails {
               {
                 id: "working-thread",
                 label: "Working thread",
-                status: "unknown",
-                detail: "not connected",
+                status: "done",
+                detail: "#kevin-the-bot",
+                url: "https://shortpoint.slack.com/archives/C0KEVIN/p1791500100000100",
               },
               {
                 id: "session",
                 label: "Session",
                 status: "done",
-                detail: "1 session",
+                detail: "3 sessions",
               },
               { id: "pr", label: "PR", status: "done", detail: "#6538" },
               {
@@ -362,7 +369,7 @@ function details(item: WorkItem): WorkItemDetails {
                 id: "video",
                 label: "Video",
                 status: "unknown",
-                detail: "not connected",
+                detail: "not recorded",
               },
               {
                 id: "qc-package",
@@ -373,8 +380,8 @@ function details(item: WorkItem): WorkItemDetails {
               {
                 id: "validation",
                 label: "Validation",
-                status: "unknown",
-                detail: "not connected",
+                status: "pending",
+                detail: "not posted",
               },
             ]
           : [
@@ -413,7 +420,7 @@ function details(item: WorkItem): WorkItemDetails {
                 id: "video",
                 label: "Video",
                 status: "unknown",
-                detail: "not connected",
+                detail: "not recorded",
               },
               {
                 id: "qc-package",
@@ -429,10 +436,175 @@ function details(item: WorkItem): WorkItemDetails {
               },
             ],
     },
+    team: item.id === "SPX-1234" ? TEAM_SPX_1234 : null,
     projects: LIST.projects,
     errors: [],
   };
 }
+
+const msAgo = (minutes: number) => Date.now() - minutes * 60_000;
+
+const TEAM_SPX_1234: WorkTeamDetails = {
+  connected: true,
+  teamName: "ShortPoint",
+  ticket: "SPX-1234",
+  threads: [
+    {
+      id: "t-working",
+      channelId: "C0KEVIN",
+      channelName: "kevin-the-bot",
+      threadTs: "1791500100.000100",
+      permalink:
+        "https://shortpoint.slack.com/archives/C0KEVIN/p1791500100000100",
+      role: "working",
+      isWorkingThread: true,
+      replyCount: 9,
+      hiddenReplyCount: 6,
+      lastMessageAt: msAgo(12),
+      messages: [
+        {
+          ts: "1",
+          botId: "B01",
+          authorName: "Ghostex",
+          isApp: true,
+          text: "*SPX-1234* · EasyPass Live mode disappears when a table is on the page\nRequested by @Yahia in #bugs. QC: @Rana",
+          files: [],
+          postedAt: msAgo(300),
+          media: [],
+        },
+        {
+          ts: "2",
+          botId: "B01",
+          authorName: "Claude · SPX-1234",
+          isApp: true,
+          text: "*2a* Root cause: the Table element remounts the page canvas on first layout, which drops Live mode. Fix in <https://github.com/shortpoint/shortpoint/pull/6538|#6538>.",
+          files: [],
+          postedAt: msAgo(60),
+          media: [],
+        },
+        {
+          ts: "3",
+          botId: "B01",
+          authorName: "Claude · SPX-1234",
+          isApp: true,
+          text: "*3a* Before/after video below. OK to build READY-FOR-QC and post the validation request?",
+          files: [
+            {
+              id: "F1",
+              name: "before-after.mp4",
+              mimetype: "video/mp4",
+              permalink: "https://shortpoint.slack.com/files/F1",
+            },
+          ],
+          postedAt: msAgo(20),
+          media: [],
+        },
+        {
+          ts: "4",
+          userId: "U0YAHIA",
+          authorName: "Yahia",
+          isApp: false,
+          text: "approved, go ahead",
+          files: [],
+          postedAt: msAgo(12),
+          media: [],
+        },
+      ],
+    },
+    {
+      id: "t-source",
+      channelId: "C0BUGS",
+      channelName: "bugs",
+      threadTs: "1791500000.000200",
+      permalink:
+        "https://shortpoint.slack.com/archives/C0BUGS/p1791500000000200",
+      role: "source",
+      isWorkingThread: false,
+      replyCount: 3,
+      hiddenReplyCount: 0,
+      lastMessageAt: msAgo(290),
+      messages: [
+        {
+          ts: "10",
+          userId: "U0RANA",
+          authorName: "Rana",
+          isApp: false,
+          text: "EasyPass Live mode disappears as soon as there's a Table element on the page. Happens in the sandbox and on `9.199`. Repro: <https://www.loom.com/share/5bbdeb480ba84e65b1b3de8c190e2003|loom.com/share/live-mode-table>",
+          files: [],
+          postedAt: msAgo(320),
+          media: [
+            {
+              kind: "loom",
+              url: "https://www.loom.com/share/5bbdeb480ba84e65b1b3de8c190e2003",
+              embedUrl:
+                "https://www.loom.com/embed/5bbdeb480ba84e65b1b3de8c190e2003",
+            },
+          ],
+        },
+        {
+          ts: "11",
+          userId: "U0OMAR",
+          authorName: "Omar",
+          isApp: false,
+          text: "Confirmed on 9.199.0.402, in Edge and Chrome. It comes back if you switch tabs.",
+          files: [
+            {
+              id: "F2",
+              name: "live-mode-gone.png",
+              mimetype: "image/png",
+              permalink: "https://shortpoint.slack.com/files/F2",
+            },
+          ],
+          postedAt: msAgo(313),
+          media: [],
+        },
+        {
+          ts: "12",
+          userId: "U0YAHIA",
+          authorName: "Yahia",
+          isApp: false,
+          text: "@Ghostex local fix this. We need a before/after video for QC.",
+          files: [],
+          postedAt: msAgo(305),
+          media: [],
+        },
+        {
+          ts: "13",
+          botId: "B01",
+          authorName: "Ghostex",
+          isApp: true,
+          text: "Working on this in <https://shortpoint.slack.com/archives/C0KEVIN/p1791500100000100|the working thread> in #kevin-the-bot. The result will be posted here.",
+          files: [],
+          postedAt: msAgo(304),
+          media: [],
+        },
+      ],
+    },
+  ],
+  sessions: [
+    {
+      id: "ts-omar",
+      memberName: "Omar",
+      isMe: false,
+      runPlace: "cloud",
+      status: "running",
+      sessionUrl: "https://claude.ai/code/session_01ABCDEF",
+      branch: "yahia/spx-1234-live-mode-table",
+      createdAt: msAgo(180),
+      updatedAt: msAgo(25),
+    },
+    {
+      id: "ts-yara",
+      memberName: "Yara",
+      isMe: false,
+      runPlace: "local",
+      status: "running",
+      branch: "yahia/spx-1234-live-mode-table",
+      createdAt: msAgo(240),
+      updatedAt: msAgo(90),
+    },
+  ],
+};
 
 export async function answerFromFixtures(
   action: string,

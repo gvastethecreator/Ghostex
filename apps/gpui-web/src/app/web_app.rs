@@ -248,12 +248,22 @@ impl GhostexGpuiApp {
     // Workspaces (`gx_store/workspaces.rs`): a page is one window with nothing to save it in, so
     // its workspace lasts for the page; it has no other windows and no Settings window.
     pub(crate) fn persist_window_workspace_id(&self) {}
+    pub(crate) fn switch_window_workspace(&mut self, workspace_id: String, cx: &mut Context<Self>) {
+        self.gx_store_set_window_workspace(Some(workspace_id), cx);
+    }
     pub(crate) fn focus_window_showing_workspace(
         &self,
         _workspace_id: &str,
         _cx: &mut Context<Self>,
     ) -> bool {
         false
+    }
+    pub(crate) fn other_window_showing_workspace(
+        &self,
+        _workspace_id: &str,
+        _cx: &mut Context<Self>,
+    ) -> Option<gpui::WeakEntity<Self>> {
+        None
     }
     pub(crate) fn open_workspace_in_new_window(
         &mut self,

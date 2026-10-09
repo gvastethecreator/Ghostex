@@ -28,6 +28,7 @@ import type * as slackRouting from "../slackRouting.js";
 import type * as slackThreads from "../slackThreads.js";
 import type * as teamFlow from "../teamFlow.js";
 import type * as teams from "../teams.js";
+import type * as workPage from "../workPage.js";
 
 import type {
   ApiFromModules,
@@ -56,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   slackThreads: typeof slackThreads;
   teamFlow: typeof teamFlow;
   teams: typeof teams;
+  workPage: typeof workPage;
 }>;
 
 /**

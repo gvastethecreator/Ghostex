@@ -144,7 +144,12 @@ const MOCK_TEAMS = [
   { id: "team-con", key: "CON", name: "Connectors" },
 ];
 
-function mockIssue(identifier: string, title: string, description: string | null) {
+/** `Release 10.4` is SPX's; a link to it ends in its slug id `a1b2c3d4e5f6`. */
+const MOCK_PROJECTS = [
+  { id: "project-104", name: "Release 10.4", slugId: "a1b2c3d4e5f6", url: "https://linear.app/mock/project/release-104-a1b2c3d4e5f6", teams: { nodes: [{ id: "team-spx" }] } },
+];
+
+function mockIssue(identifier: string, title: string, description: string | null, projectId?: string) {
   return {
     identifier,
     title,
@@ -152,6 +157,7 @@ function mockIssue(identifier: string, title: string, description: string | null
     branchName: `yahia/${identifier.toLowerCase()}-${slug(title)}`,
     description,
     team: { key: identifier.split("-")[0], name: MOCK_TEAMS.find((team) => team.key === identifier.split("-")[0])?.name ?? "Team" },
+    project: MOCK_PROJECTS.find((project) => project.id === projectId) ? { name: MOCK_PROJECTS.find((project) => project.id === projectId)!.name } : null,
     assignee: null,
     state: { name: "Todo" },
     labels: { nodes: [] },
@@ -163,13 +169,26 @@ function mockIssue(identifier: string, title: string, description: string | null
 const linearMock = httpAction(async (ctx, request) => {
   if (!enabled()) return new Response("Not found", { status: 404 });
   const body = (await request.json()) as { query: string; variables: Record<string, any> };
-  const kind = body.query.includes("issueCreate") ? "issueCreate" : body.query.includes("teams(") ? "teams" : "issue";
+  const kind = body.query.includes("issueCreate")
+    ? "issueCreate"
+    : body.query.includes("teams(first: 250)")
+      ? "teams"
+      : body.query.includes("projects(") || body.query.includes("project(")
+        ? "projects"
+        : "issue";
   const count = await ctx.runMutation(internal.devMocks.record, { service: "linear", method: kind, body: JSON.stringify(body) });
   if (kind === "teams") return json({ data: { teams: { nodes: MOCK_TEAMS } } });
+  if (kind === "projects") {
+    const vars = body.variables as { slug?: string; name?: string; id?: string };
+    const found = MOCK_PROJECTS.filter(
+      (project) => project.slugId === vars.slug || project.id === vars.id || project.name.toLowerCase() === vars.name?.toLowerCase(),
+    );
+    return json({ data: vars.id ? { project: found[0] ?? null } : { projects: { nodes: found } } });
+  }
   if (kind === "issueCreate") {
-    const input = body.variables.input as { teamId: string; title: string; description?: string };
+    const input = body.variables.input as { teamId: string; title: string; description?: string; projectId?: string };
     const key = MOCK_TEAMS.find((team) => team.id === input.teamId)?.key ?? "SPX";
-    const issue = mockIssue(`${key}-${1252 + count}`, input.title, input.description ?? null);
+    const issue = mockIssue(`${key}-${1252 + count}`, input.title, input.description ?? null, input.projectId);
     return json({ data: { issueCreate: { success: true, issue } } });
   }
   const id = String(body.variables.id ?? "");

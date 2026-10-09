@@ -575,15 +575,20 @@ impl GhostexGpuiApp {
     /// with usage) for the picker's count badges and account rows. The result
     /// is cached so a preloaded window opens with them already in place.
     pub(crate) fn refresh_gpui_new_thread_picker_accounts(&mut self, cx: &mut gpui::Context<Self>) {
+        // CDXC:Workspaces 2026-10-09 DECISION:
+        // User: the New Thread picker's "Default" mark follows the same rule as the sidebar
+        // launcher (the workspace's Claude account while it is still registered), so what every
+        // picker shows is what launches. The picker launches into the active project, so the list
+        // is asked for that project and gxserver reports the account a launch there would use.
+        let mut params = json!({ "operation": "list" });
+        if let Some(project_id) = self.gpui_app_modal_active_project_id() {
+            params["projectId"] = json!(project_id);
+        }
         let background = cx.background_executor().clone();
         cx.spawn(async move |this, cx| {
             let result: Result<Value, String> = background
                 .spawn(async move {
-                    gpui_gxserver_rpc_result(
-                        "/api/agentAccounts",
-                        &json!({ "operation": "list" }),
-                        Duration::from_secs(30),
-                    )
+                    gpui_gxserver_rpc_result("/api/agentAccounts", &params, Duration::from_secs(30))
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {

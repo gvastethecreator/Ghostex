@@ -44,10 +44,20 @@ pub(super) fn work_mode_command(args: &[String]) -> CliResult<()> {
         }
         "create-ticket" => create_ticket(&parsed.rest[1..], flags),
         "start" => {
-            let ticket = parsed.rest.get(1).ok_or_else(|| {
-                CliError::Other("Pass the ticket: ghostex work-mode start SPX-1245 (or #218).".to_string())
-            })?;
-            let result = start_work(ticket, flags)?;
+            let ticket = parsed
+                .rest
+                .get(1)
+                .map(String::as_str)
+                .or_else(|| flags.string_value("pr"))
+                .ok_or_else(|| {
+                    CliError::Other("Pass the ticket: ghostex work-mode start SPX-1245 (or #218, or --pr 412).".to_string())
+                })?;
+            let ticket = if flags.contains("pr") && !ticket.contains("/pull/") {
+                format!("pr:{}", ticket.trim_start_matches('#'))
+            } else {
+                ticket.to_string()
+            };
+            let result = start_work(&ticket, flags)?;
             print_json(&result);
             Ok(())
         }
@@ -97,12 +107,17 @@ fn create_ticket(rest: &[String], flags: &super::args::Flags) -> CliResult<()> {
     Ok(())
 }
 
-/// Starts an agent on a ticket (`SPX-1245`, or `#218` / `218` for a GitHub issue) in a worktree on
-/// the ticket's branch, linked to it, with nothing sent to the agent.
+/// Starts an agent on a ticket (`SPX-1245`, `#218` / `218` for a GitHub issue, `pr:412` or a PR
+/// link for a pull request) in a worktree on the ticket's branch, linked to it, with nothing sent
+/// to the agent.
 fn start_work(ticket: &str, flags: &super::args::Flags) -> CliResult<Value> {
     let mut params = project_selector(flags);
     let ticket = ticket.trim();
-    if let Ok(number) = ticket.trim_start_matches('#').parse::<u64>() {
+    if let Some(number) = ticket.strip_prefix("pr:") {
+        params.insert("pullRequest".to_string(), json!(number));
+    } else if ticket.contains("/pull/") {
+        params.insert("pullRequest".to_string(), json!(ticket));
+    } else if let Ok(number) = ticket.trim_start_matches('#').parse::<u64>() {
         params.insert("githubIssue".to_string(), json!(number));
     } else {
         params.insert("linearIssue".to_string(), json!(ticket));

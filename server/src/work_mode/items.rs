@@ -32,6 +32,8 @@ pub(crate) struct WorkProjectInput {
     pub(crate) linear_api_key: Option<String>,
     /// `owner/repo` of the project's GitHub `origin`.
     pub(crate) repo: Option<String>,
+    /// The workspace the project is in (a worktree project follows its parent checkout).
+    pub(crate) workspace_id: String,
 }
 
 /// The work-mode projects a request names (all of them when it names none).
@@ -44,8 +46,10 @@ pub(crate) fn load_work_projects(
         message: format!("SQLite gxserver state error: {error}"),
     })?;
     let repository = DomainRepository::new(&db, state.metadata.server_id.as_str());
+    let all_projects = repository.list_projects()?;
+    let workspaces = crate::workspaces::read_sidebar_workspaces(&db)?;
     let mut projects = Vec::new();
-    for project in repository.list_projects()? {
+    for project in all_projects.iter().cloned() {
         if !project_work_mode(&project) {
             continue;
         }
@@ -74,6 +78,11 @@ pub(crate) fn load_work_projects(
             sessions: repository.list_sessions_excluding_stopped(Some(&project_id))?,
             linear_api_key: project_linear_api_key(state, &project),
             repo: path.as_deref().and_then(work_repo_of),
+            workspace_id: crate::workspaces::project_workspace_id(
+                &workspaces,
+                &project,
+                &all_projects,
+            ),
             path,
             project_id,
             project,

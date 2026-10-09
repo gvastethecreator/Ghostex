@@ -61,6 +61,80 @@ impl GhostexGpuiApp {
         (resolved != state.default_id()).then(|| resolved.to_string())
     }
 
+    /// `params` for a route that adds a project, with this window's workspace on it, so the
+    /// project lands in the window it was added from (gxserver `place_added_project`).
+    pub(crate) fn gx_store_with_window_workspace(&self, mut params: Value) -> Value {
+        if let (Some(workspace_id), Some(object)) = (
+            self.gx_store_window_non_default_workspace_id(),
+            params.as_object_mut(),
+        ) {
+            object.insert("workspaceId".to_string(), json!(workspace_id));
+        }
+        params
+    }
+
+    /// Whether this computer's project `project_id` belongs to a workspace other than the one this
+    /// window shows. `false` for a project the store does not hold, and while the daemon has no
+    /// workspaces.
+    pub(crate) fn gx_store_project_outside_window_workspace(&self, project_id: &str) -> bool {
+        let store = self.gx_store.core.presentation();
+        let Some(workspace) = ghostex_gx_core::window_workspace(
+            store,
+            &self.gx_store.sidebar_list.last_inputs,
+            &MachineId::Local,
+        ) else {
+            return false;
+        };
+        store
+            .loaded(&MachineId::Local)
+            .filter(|loaded| loaded.project(project_id).is_some())
+            .is_some_and(|loaded| !workspace.shows_project(loaded, project_id))
+    }
+
+    /// The workspace this computer's project `project_id` belongs to; `None` while the daemon has
+    /// no workspaces, for a project the store does not hold, and for one shown in every workspace.
+    pub(crate) fn gx_store_local_project_workspace_id(&self, project_id: &str) -> Option<String> {
+        let state = self.gx_store_workspaces_state()?;
+        let loaded = self
+            .gx_store
+            .core
+            .presentation()
+            .loaded(&MachineId::Local)?;
+        let project = loaded.project(project_id)?;
+        (!project.every_workspace)
+            .then(|| ghostex_gx_core::project_workspace_id(state, loaded, project).to_string())
+    }
+
+    /// The window that shows an existing project opened from outside (a folder or terminal from
+    /// the OS): this one when it shows the project's workspace, else another window that shows it
+    /// (brought forward), else this one switched to that workspace.
+    ///
+    /// CDXC:Workspaces 2026-10-09 DECISION:
+    /// User: do not move an existing project between workspaces when it is opened from the OS
+    /// (folder or terminal) or by Help; Add Project from a window may keep moving it (that is an
+    /// explicit "add here"). For an OS open of a folder that is already a project, keep it in its
+    /// own workspace and show it there (switch the window that receives it to that workspace, or
+    /// use a window already showing that workspace if there is one). A brand-new folder still lands
+    /// in the receiving window's workspace.
+    pub(crate) fn gx_store_window_for_existing_project(
+        &mut self,
+        project_id: &str,
+        cx: &mut gpui::Context<Self>,
+    ) -> gpui::WeakEntity<Self> {
+        let own = cx.entity().downgrade();
+        let Some(workspace_id) = self.gx_store_local_project_workspace_id(project_id) else {
+            return own;
+        };
+        if self.gx_store_resolved_window_workspace_id().as_deref() == Some(workspace_id.as_str()) {
+            return own;
+        }
+        if let Some(other) = self.other_window_showing_workspace(&workspace_id, cx) {
+            return other;
+        }
+        self.switch_window_workspace(workspace_id, cx);
+        own
+    }
+
     pub(crate) fn gx_store_window_workspace(&self) -> Option<&SidebarWorkspace> {
         let state = self.gx_store_workspaces_state()?;
         let window_workspace_id = self.gx_store_window_workspace_id();
@@ -136,7 +210,15 @@ impl GhostexGpuiApp {
                     return true;
                 }
                 if !self.focus_window_showing_workspace(&workspace_id, cx) {
-                    self.gx_store_set_window_workspace(Some(workspace_id), cx);
+                    self.switch_window_workspace(workspace_id, cx);
+                }
+                true
+            }
+            Some("moveMachineToWorkspace") => {
+                if let (Some(machine_id), Some(workspace_id)) =
+                    (text("machineId"), text("workspaceId"))
+                {
+                    self.gx_store_move_machine_to_workspace(machine_id, workspace_id, cx);
                 }
                 true
             }
@@ -204,6 +286,51 @@ impl GhostexGpuiApp {
             }
         })
         .detach();
+    }
+
+    /// Move to workspace on a remote machine's tab: this computer's daemon keeps the assignment
+    /// (`sidebarWorkspaces.machineWorkspaces`) and every window follows it when it arrives
+    /// (gx-core `window_machine_tabs`).
+    fn gx_store_move_machine_to_workspace(
+        &mut self,
+        machine_id: String,
+        workspace_id: String,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let background = cx.background_executor().clone();
+        cx.spawn(async move |this, cx| {
+            let result = gxserver_rpc_result_task(
+                &background,
+                "/api/moveMachineToWorkspace",
+                json!({ "machineId": machine_id, "workspaceId": workspace_id }),
+                super::sidebar_lifecycle::rpc_timeout(),
+            )
+            .await;
+            if let Err(message) = result {
+                let _ = this.update(cx, |this, cx| {
+                    this.dispatch_gpui_workspace_action_toast(
+                        "error",
+                        "Couldn't move the machine",
+                        &message,
+                        cx,
+                    );
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// The tab menu's "Move to workspace ▸" for a remote machine, as sidebar menu JSON; `None`
+    /// while this computer's daemon has no workspaces or has only one.
+    pub(crate) fn gx_store_machine_workspace_menu(&self, machine_id: &str) -> Option<Value> {
+        let state = self.gx_store_workspaces_state()?;
+        if state.workspaces.len() < 2 {
+            return None;
+        }
+        let menu = ghostex_gx_core::menu_to_json(&[ghostex_gx_core::machine_workspace_menu(
+            state, machine_id,
+        )]);
+        menu.as_array()?.first().cloned()
     }
 
     /// "New workspace…": creates a Work workspace, moves the project the menu was opened on into

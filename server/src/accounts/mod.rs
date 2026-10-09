@@ -23,6 +23,6 @@ pub(crate) mod restart_verification;
 pub(crate) mod runtime;
 pub(crate) mod session_identity;
 pub(crate) mod setup;
-mod setup_terminal;
+pub(crate) mod setup_terminal;
 pub(crate) mod store;
 pub(crate) mod switch_progress;

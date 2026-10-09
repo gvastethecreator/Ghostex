@@ -143,6 +143,8 @@ export interface GxserverPresentationProject {
   workLinear?: true;
   /** The workspace this project belongs to (server/src/workspaces/); absent = the default workspace. */
   workspaceId?: string;
+  /** The project shows in every workspace (the Ghostex config folder's project, home of the Help chats); present only when true. */
+  everyWorkspace?: true;
   /*
   CDXC:Icons 2026-07-29 (discovered icons):
   The icon the PROJECT ITSELF ships, discovered server-side inside the checkout
@@ -574,6 +576,8 @@ export interface GxserverSidebarWorkspace {
 /** Projects and Spaces with no `workspaceId` belong to `defaultWorkspaceId`, which always exists. */
 export interface GxserverSidebarWorkspacesState {
   defaultWorkspaceId: string;
+  /** A remote machine's sidebar tab (this computer's settings id for it) → the workspace it shows in here; unlisted machines show in the default workspace. */
+  machineWorkspaces?: Readonly<Record<string, string>>;
   order: readonly string[];
   workspaces: Readonly<Record<string, GxserverSidebarWorkspace>>;
 }

@@ -207,6 +207,14 @@ pub struct PresentationProject {
     /// daemon). A worktree project follows its parent checkout's workspace.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<String>,
+    /// The project shows in every workspace (the Ghostex config folder's project, which holds the
+    /// Help chats). Present only when true.
+    #[serde(
+        default,
+        deserialize_with = "crate::de::null_as_default",
+        skip_serializing_if = "is_false"
+    )]
+    pub every_workspace: bool,
 }
 
 impl PresentationProject {

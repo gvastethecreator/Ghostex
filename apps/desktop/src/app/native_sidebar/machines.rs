@@ -24,6 +24,7 @@ impl GhostexGpuiApp {
                 let id = machine.id.clone();
                 let reconnect = id.clone();
                 let menu_id = id.clone();
+                let workspace_menu = (id != "local").then(|| self.gx_store_machine_workspace_menu(&id)).flatten();
                 let selected = snapshot.selected_machine_id == id;
                 let busy = ghostex_gx_core::machine_state_is_busy(&machine.state);
                 let failed = id != "local" && ghostex_gx_core::machine_state_is_failure(&machine.state);
@@ -45,11 +46,14 @@ impl GhostexGpuiApp {
                     .on_click(cx.listener(move |app, _, _, cx| { cx.stop_propagation(); app.dispatch_native_sidebar_ui(json!({"type": "selectMachine", "machineId": id}), cx); }))
                     .when(machine.id != "local", |row| row.on_mouse_down(MouseButton::Right, move |event, window, cx| {
                         cx.stop_propagation();
-                        let items = json!([
-                            {"label": "Hide Machine", "icon": "eye-off", "command": {"type": "machineAction", "action": "hide", "machineId": menu_id}},
-                            {"separator": true},
-                            {"label": "Configure Machines", "icon": "settings", "command": {"type": "machineAction", "action": "configure", "machineId": menu_id}}
-                        ]);
+                        let mut items = vec![json!({"label": "Hide Machine", "icon": "eye-off", "command": {"type": "machineAction", "action": "hide", "machineId": menu_id}})];
+                        // The tab's workspace on this computer (gx-core `machine_workspace_menu`).
+                        if let Some(workspace_menu) = workspace_menu.clone() {
+                            items.push(workspace_menu);
+                        }
+                        items.push(json!({"separator": true}));
+                        items.push(json!({"label": "Configure Machines", "icon": "settings", "command": {"type": "machineAction", "action": "configure", "machineId": menu_id}}));
+                        let items = serde_json::Value::Array(items);
                         Self::show_native_sidebar_menu(&items, event.position, scale, window, cx);
                     }))
             })).into_any_element())

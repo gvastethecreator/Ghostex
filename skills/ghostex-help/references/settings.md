@@ -531,6 +531,23 @@ How to use this file:
 - **Claude account** `workspaceClaudeAccount` (Settings UI row without a settings key; use `ghostex settings open`): Which of your Claude accounts agents in this workspace's projects use.
 - **Browser sign-ins** `workspaceBrowserSignins` (Settings UI row without a settings key; use `ghostex settings open`): Each workspace's Browser keeps its own cookies; sign out of every site here.
 - **New workspace** `newWorkspace` (Settings UI row without a settings key; use `ghostex settings open`): Add a workspace, for example one per company you work for.
+### Team
+
+- **Team (Convex)** `teamConvex` (Settings UI row without a settings key; use `ghostex settings open`): Join your team's Convex project with an invite link, copy an invite link for a teammate, or leave the team.
+- **Set up a new team** `teamSetup` (Settings UI row without a settings key; use `ghostex settings open`): Deploy Ghostex's functions to your own Convex project with ghostex team deploy in a terminal.
+- **Slack app manifest** `slackAppManifest` (Settings UI row without a settings key; use `ghostex settings open`): Copy the manifest that creates your team's Slack app.
+- **Slack bot token and signing secret** `slackSecrets` (Settings UI row without a settings key; use `ghostex settings open`): Stored in your team's Convex project with ghostex team slack-connect.
+- **Your Slack user** `slackUser` (Settings UI row without a settings key; use `ghostex settings open`): Your Slack member ID, so @Ghostex commands you send in Slack reach this computer.
+- **Linear for the team** `teamLinearKey` (Settings UI row without a settings key; use `ghostex settings open`): The team-wide Linear key Slack commands use to find and create tickets, set with ghostex team linear-connect.
+### Team flow
+
+- **Working channel** `teamWorkingChannel` (Settings UI row without a settings key; use `ghostex settings open`): The Slack channel where each ticket gets its one working thread.
+- **Watch-only channels** `teamWatchOnlyChannels` (Settings UI row without a settings key; use `ghostex settings open`): Slack channels where a request is forwarded to the ticket's working thread and only gets a 👀.
+- **Repos for new work** `teamChannelRepos` (Settings UI row without a settings key; use `ghostex settings open`): Which repo and Linear team new work from each Slack channel goes to.
+- **Where new work runs** `teamDefaultRunPlace` (Settings UI row without a settings key; use `ghostex settings open`): Cloud or this computer, for @Ghostex in Slack without cloud or local.
+- **Never work without a ticket** `teamNeverWithoutTicket` (Settings UI row without a settings key; use `ghostex settings open`): Ghostex finds the ticket in the thread or creates one in Linear before any session starts. Always on.
+- **Team instructions** `teamInstructions` (Settings UI row without a settings key; use `ghostex settings open`): Your team's rules, added to every session Ghostex starts from Slack.
+- **Team-flow steps** `teamFlowSteps` (Settings UI row without a settings key; use `ghostex settings open`): The steps each ticket shows on the Work page: reorder, rename, remove or add them, or reset to the default.
 ## Hotkeys (tab `hotkeys`)
 
 ### Projects

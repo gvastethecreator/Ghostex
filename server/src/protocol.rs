@@ -754,7 +754,8 @@ pub fn endpoint_for(path: &str) -> Option<EndpointDescriptor> {
         | "/api/createWorkspace"
         | "/api/updateWorkspace"
         | "/api/deleteWorkspace"
-        | "/api/moveProjectToWorkspace" => remote_allowed(path),
+        | "/api/moveProjectToWorkspace"
+        | "/api/moveMachineToWorkspace" => remote_allowed(path),
         /*
         CDXC:WorkMode 2026-10-09 WHY:
         The Linear key is a secret on this computer, so only this computer's clients may set it or
@@ -775,8 +776,8 @@ pub fn endpoint_for(path: &str) -> Option<EndpointDescriptor> {
         | "/api/pingTeamSync"
         | "/api/listTeamSyncCommands"
         | "/api/listTicketSlackThreads"
-        | "/api/readTeamFlow"
-        | "/api/setTeamFlow"
+        | "/api/readSlackFlowSettings"
+        | "/api/setSlackFlowSettings"
         | "/api/readSlackManifest"
         | "/api/postSlackWorkingThread" => full_local(path),
         "/api/createQuickProject" | "/api/syncBotProjects" => full_local(path),

@@ -9,9 +9,10 @@
 //! session, PR, review comments, CI, video, QC package, validation).
 //!
 //! CDXC:WorkMode 2026-10-09 WHY:
-//! A step whose data Ghostex does not have yet (the Slack working thread, the video approval, the
-//! validation post: they arrive with the Slack bot and the team's Convex project) is "unknown",
-//! never "done", so the tracker cannot claim work happened that nobody can see.
+//! A step whose data Ghostex does not have is "unknown", never "done", so the tracker cannot claim
+//! work happened that nobody can see: the video approval always, and the Slack working thread and
+//! validation post when the project's workspace has no team (Convex) connection. With one, those
+//! two come from the team's Convex project (crate::team_sync::work_page).
 
 use std::fs;
 use std::io::Write;
@@ -331,6 +332,20 @@ pub(crate) struct TeamFlowFacts {
     pub(crate) checks_total: usize,
     pub(crate) checks_passed: usize,
     pub(crate) checks_failed: usize,
+    /// What the team's Convex project knows; `None` without a team connection.
+    pub(crate) team: Option<TeamTicketFacts>,
+}
+
+/// The Slack facts a Work workspace's team records for a ticket.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct TeamTicketFacts {
+    pub(crate) has_working_thread: bool,
+    /// `#kevin-the-bot` when Slack named the channel.
+    pub(crate) working_thread_channel: Option<String>,
+    pub(crate) working_thread_url: Option<String>,
+    pub(crate) validation_posted: bool,
+    pub(crate) validation_detail: Option<String>,
+    pub(crate) validation_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -341,6 +356,9 @@ pub(crate) struct TeamFlowStepState {
     /// `done`, `current`, `pending`, `failed` or `unknown`.
     pub(crate) status: &'static str,
     pub(crate) detail: String,
+    /// Where the step's evidence opens (the working thread, the validation thread).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) url: Option<String>,
 }
 
 /// Evaluates every step; the first step that is neither done nor unknown is the current one.
@@ -360,6 +378,7 @@ pub(crate) fn evaluate_team_flow(steps: &Value, facts: &TeamFlowFacts) -> Vec<Te
                 label,
                 status,
                 detail,
+                url: rule_url(&rule, facts),
             })
         })
         .collect();
@@ -473,10 +492,37 @@ fn evaluate_rule(rule: &Value, facts: &TeamFlowFacts) -> (&'static str, String) 
                 (None, false) => ("unknown", String::new()),
             }
         }
-        // The Slack bot and the team's Convex project bring these; until then nobody can tell.
-        "slackWorkingThread" | "videoApproved" | "slackValidationPost" => {
-            ("unknown", "not connected".to_string())
-        }
+        "slackWorkingThread" => match &facts.team {
+            Some(team) if team.has_working_thread => (
+                "done",
+                team.working_thread_channel
+                    .clone()
+                    .unwrap_or_else(|| "open".to_string()),
+            ),
+            Some(_) => ("pending", "none yet".to_string()),
+            None => ("unknown", "not connected".to_string()),
+        },
+        "slackValidationPost" => match &facts.team {
+            Some(team) if team.validation_posted => (
+                "done",
+                team.validation_detail
+                    .clone()
+                    .unwrap_or_else(|| "posted".to_string()),
+            ),
+            Some(_) => ("pending", "not posted".to_string()),
+            None => ("unknown", "not connected".to_string()),
+        },
+        // Nothing records the video approval yet; nobody can tell.
+        "videoApproved" => ("unknown", "not recorded".to_string()),
         _ => ("unknown", String::new()),
+    }
+}
+
+fn rule_url(rule: &Value, facts: &TeamFlowFacts) -> Option<String> {
+    let team = facts.team.as_ref()?;
+    match rule.get("kind").and_then(Value::as_str)? {
+        "slackWorkingThread" => team.working_thread_url.clone(),
+        "slackValidationPost" => team.validation_url.clone(),
+        _ => None,
     }
 }

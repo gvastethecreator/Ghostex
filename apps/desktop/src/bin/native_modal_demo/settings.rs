@@ -25,6 +25,8 @@ mod settings_e;
 mod settings_f1;
 #[path = "settings_f2.rs"]
 mod settings_f2;
+#[path = "settings_workspaces.rs"]
+mod settings_workspaces;
 
 type Slot = Rc<RefCell<Option<(WindowHandle<Root>, Entity<GpuiSettingsModalWindow>)>>>;
 
@@ -157,6 +159,12 @@ pub(super) fn open(demo: &super::DemoEnv, cx: &mut App) {
                 ..
             } => {
                 eprintln!("gxserver rpc: {path} {params}");
+                if settings_workspaces::owns(&host_state)
+                    && let Some(result) = settings_workspaces::rpc(&host_state, &path, &params)
+                {
+                    cx.defer(move |cx| reply(result, cx));
+                    return;
+                }
                 if let Some(answer) = settings_cloud_boxes::rpc(&host_state, &path, &params) {
                     if let Some(result) = answer {
                         cx.defer(move |cx| reply(result, cx));
@@ -201,7 +209,8 @@ pub(super) fn open(demo: &super::DemoEnv, cx: &mut App) {
         "tags" => {
             json!({ "initialSection": "sidebarTags", "initialSidebarTagsAction": "createTag" })
         }
-        _ => settings_f1::open_message(&state)
+        _ => settings_workspaces::open_message(&state)
+            .or_else(|| settings_f1::open_message(&state))
             .or_else(|| settings_cloud_boxes::open_message(&state))
             .or_else(|| settings_f2::open_message(&state))
             .or_else(|| settings_e::open_message(&state))
@@ -219,7 +228,9 @@ pub(super) fn open(demo: &super::DemoEnv, cx: &mut App) {
     if state == "select" {
         request.open_select = Some("commandsPanelSide".to_string());
     }
-    request.gxserver_rpc_available = if settings_cloud_boxes::owns(&state) {
+    request.gxserver_rpc_available = if settings_workspaces::owns(&state) {
+        true
+    } else if settings_cloud_boxes::owns(&state) {
         settings_cloud_boxes::gxserver_rpc_available(&state)
     } else {
         settings_f2::gxserver_rpc_available(&state) || settings_f1::gxserver_rpc_available(&state)

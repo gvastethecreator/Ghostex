@@ -20,6 +20,34 @@ export async function findThread(
     .unique();
 }
 
+/** Records that a thread belongs to a ticket, next to the ticket it already has. */
+async function linkThreadTicket(ctx: MutationCtx, teamId: Id<"teams">, threadId: Id<"slackThreads">, ticket: string) {
+  const links = await ctx.db
+    .query("slackThreadTickets")
+    .withIndex("by_thread", (q) => q.eq("threadId", threadId))
+    .collect();
+  if (links.some((link) => link.ticket === ticket)) return;
+  await ctx.db.insert("slackThreadTickets", { teamId, threadId, ticket, createdAt: Date.now() });
+}
+
+/** Every thread linked to a ticket: the ones whose (latest) ticket it is, and the ones linked to it next to another ticket. */
+export async function threadsForTicket(ctx: QueryCtx, teamId: Id<"teams">, ticket: string): Promise<Doc<"slackThreads">[]> {
+  const threads = await ctx.db
+    .query("slackThreads")
+    .withIndex("by_team_ticket", (q) => q.eq("teamId", teamId).eq("ticket", ticket))
+    .collect();
+  const links = await ctx.db
+    .query("slackThreadTickets")
+    .withIndex("by_team_ticket", (q) => q.eq("teamId", teamId).eq("ticket", ticket))
+    .collect();
+  for (const link of links) {
+    if (threads.some((thread) => thread._id === link.threadId)) continue;
+    const thread = await ctx.db.get(link.threadId);
+    if (thread) threads.push(thread);
+  }
+  return threads;
+}
+
 /** The thread row for a Slack thread, created when Ghostex first sees it. */
 export async function upsertThread(
   ctx: MutationCtx,
@@ -33,6 +61,7 @@ export async function upsertThread(
     if (fields.permalink) patch.permalink = fields.permalink;
     if (fields.ticket) patch.ticket = fields.ticket;
     await ctx.db.patch(existing._id, patch);
+    if (fields.ticket) await linkThreadTicket(ctx, teamId, existing._id, fields.ticket);
     return { ...existing, ...patch };
   }
   const id = await ctx.db.insert("slackThreads", {
@@ -44,6 +73,7 @@ export async function upsertThread(
     createdAt: now,
     updatedAt: now,
   });
+  if (fields.ticket) await linkThreadTicket(ctx, teamId, id, fields.ticket);
   return (await ctx.db.get(id))!;
 }
 
@@ -89,10 +119,7 @@ export const listForTicket = query({
     const me = await requireMember(ctx, args.memberToken);
     const ticket = normalizeTicket(args.ticket);
     const working = await workingThreadRow(ctx, me.teamId, ticket);
-    const threads = await ctx.db
-      .query("slackThreads")
-      .withIndex("by_team_ticket", (q) => q.eq("teamId", me.teamId).eq("ticket", ticket))
-      .collect();
+    const threads = await threadsForTicket(ctx, me.teamId, ticket);
     threads.sort((left, right) => {
       const leftWorking = left._id === working?.threadId ? 0 : 1;
       const rightWorking = right._id === working?.threadId ? 0 : 1;

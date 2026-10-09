@@ -108,6 +108,11 @@ export async function postPrivateNote(fields: {
   });
 }
 
+/** Replaces the text of a message the bot posted. */
+export async function updateMessage(channel: string, ts: string, text: string): Promise<void> {
+  await slackApi("chat.update", { channel, ts, text });
+}
+
 export async function addReaction(channel: string, ts: string, name: string): Promise<void> {
   try {
     await slackApi("reactions.add", { channel, timestamp: ts, name });

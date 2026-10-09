@@ -33,7 +33,9 @@ import {
 } from "./components";
 import { formatDuration, relativeTime } from "./format";
 import { ClampedText, LinkifiedText, MediaPlayer } from "./rich-text";
+import { SlackThreadCards } from "./slack-threads";
 import { TeamFlowTracker } from "./team-flow";
+import { TeamSessionRows } from "./team-sessions";
 import type {
   PullRequestDetails,
   WorkAgent,
@@ -90,6 +92,8 @@ export function TicketDetailsView({
   const githubIssue = details?.githubIssue ?? null;
   const pullRequest = details?.pullRequest ?? null;
   const sessions = item?.sessions ?? [];
+  const teamSessions = details?.team?.sessions ?? [];
+  const conversationCount = sessions.length + teamSessions.length;
   const ticketUrl = linear?.url ?? githubIssue?.url ?? item?.url;
   const projects = details?.projects ?? [];
   const projectName =
@@ -255,7 +259,7 @@ export function TicketDetailsView({
       ))}
 
       {details ? (
-        <TeamFlowTracker steps={details.teamFlow.steps} />
+        <TeamFlowTracker steps={details.teamFlow.steps} onOpenUrl={onOpenUrl} />
       ) : loading ? (
         <div className="w-skel w-skel--flow" />
       ) : null}
@@ -323,6 +327,14 @@ export function TicketDetailsView({
         </Card>
       ) : null}
 
+      {details?.team && details.team.threads.length > 0 ? (
+        <SlackThreadCards
+          threads={details.team.threads}
+          now={now}
+          onOpenUrl={onOpenUrl}
+        />
+      ) : null}
+
       {pullRequest ? (
         <PullRequestCard pullRequest={pullRequest} onOpenUrl={onOpenUrl} />
       ) : null}
@@ -358,43 +370,51 @@ export function TicketDetailsView({
           className="conversations-card"
           icon={<IconMessages size={14} className="c-claude" />}
           title="Conversations"
-          sub={sessions.length > 0 ? `· ${sessions.length}` : "· none yet"}
+          sub={conversationCount > 0 ? `· ${conversationCount}` : "· none yet"}
         >
-          {sessions.length > 0 ? (
-            sessions.map((session) => (
-              <div
-                key={`${session.projectId}:${session.sessionId}`}
-                className="w-convo"
-              >
-                <span className="w-convo-icon">
-                  <IconMessage size={13} />
-                </span>
-                <div className="w-convo-main">
-                  <div className="w-convo-who">
-                    {session.title}
-                    <span className="w-faint">you · in your sidebar</span>
+          {conversationCount > 0
+            ? sessions.map((session) => (
+                <div
+                  key={`${session.projectId}:${session.sessionId}`}
+                  className="w-convo"
+                >
+                  <span className="w-convo-icon">
+                    <IconMessage size={13} />
+                  </span>
+                  <div className="w-convo-main">
+                    <div className="w-convo-who">
+                      {session.title}
+                      <span className="w-faint">you · in your sidebar</span>
+                    </div>
+                    <div className="w-convo-sub">
+                      {session.working
+                        ? "Working right now"
+                        : session.lifecycle === "sleeping"
+                          ? "Sleeping"
+                          : "Idle"}
+                    </div>
                   </div>
-                  <div className="w-convo-sub">
-                    {session.working
-                      ? "Working right now"
-                      : session.lifecycle === "sleeping"
-                        ? "Sleeping"
-                        : "Idle"}
+                  <div className="w-convo-right">
+                    {session.working ? <LiveDot /> : null}
+                    <Button size="sm" onClick={() => onOpenChat(session)}>
+                      Open
+                    </Button>
                   </div>
                 </div>
-                <div className="w-convo-right">
-                  {session.working ? <LiveDot /> : null}
-                  <Button size="sm" onClick={() => onOpenChat(session)}>
-                    Open
-                  </Button>
-                </div>
-              </div>
-            ))
-          ) : (
+              ))
+            : null}
+          {teamSessions.length > 0 ? (
+            <TeamSessionRows
+              sessions={teamSessions}
+              now={now}
+              onOpenUrl={onOpenUrl}
+            />
+          ) : null}
+          {conversationCount === 0 ? (
             <div className="w-card-body w-faint">
               Nobody has a session on this ticket yet.
             </div>
-          )}
+          ) : null}
         </Card>
       ) : null}
 

@@ -111,10 +111,25 @@ const FUNCTION_FILES: &[(&str, &str)] = &[
         include_str!("../../../packages/team-sync/convex/slackPost.ts"),
     ),
     (
-        "convex/devMocks.ts",
-        include_str!("../../../packages/team-sync/convex/devMocks.ts"),
+        "convex/workPage.ts",
+        include_str!("../../../packages/team-sync/convex/workPage.ts"),
     ),
+    ("convex/devMocks.ts", DEV_MOCKS_STUB),
 ];
+
+/// What teams get in place of `convex/devMocks.ts`.
+///
+/// CDXC:TeamSync 2026-10-09 WHY:
+/// The dev mocks (stand-ins for the Slack and Linear APIs, answering only with
+/// `GHOSTEX_DEV_MOCKS=1`) exist to test the Slack flow on Ghostex's own dev deployment. A team's
+/// deployment never needs them, so it gets this no-op instead of the mock routes and their
+/// internal functions; `http.ts` still imports the same name. Its empty `devMockCalls` table stays
+/// in the shared schema.
+const DEV_MOCKS_STUB: &str = r#"import type { HttpRouter } from "convex/server";
+
+/** Teams' deployments carry no dev mocks; Ghostex's dev deployment has the real file. */
+export function registerDevMocks(_http: HttpRouter): void {}
+"#;
 
 pub(crate) struct DeployOptions {
     pub(crate) workspace_id: String,

@@ -10,6 +10,7 @@ const SIDEBAR_WORKSPACES_METADATA_KEY: &str = "sidebarWorkspaces";
 const MAX_WORKSPACES: usize = 64;
 const MAX_ID_CHARS: usize = 256;
 const MAX_NAME_CHARS: usize = 128;
+const MAX_MACHINE_ASSIGNMENTS: usize = 256;
 
 /// The workspace every project and Space without a `workspaceId` belongs to. It always exists
 /// and cannot be deleted.
@@ -118,6 +119,68 @@ pub fn workspace_claude_account_id(state: &Value, workspace_id: &str) -> Option<
         .get("claudeAccountId")?
         .as_str()
         .map(str::to_string)
+}
+
+/// The workspace `reference` names: a workspace id, else a workspace name (any case), so the
+/// `ghostex workspace` verbs can take either.
+pub fn find_workspace_id(state: &Value, reference: &str) -> Option<String> {
+    let reference = reference.trim();
+    if reference.is_empty() {
+        return None;
+    }
+    if workspace_exists(state, reference) {
+        return Some(reference.to_string());
+    }
+    state
+        .get("workspaces")?
+        .as_object()?
+        .iter()
+        .find(|(_, workspace)| {
+            workspace
+                .get("name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| name.trim().eq_ignore_ascii_case(reference))
+        })
+        .map(|(id, _)| id.clone())
+}
+
+/// Puts a remote machine's tab in a workspace of this computer.
+///
+/// CDXC:Workspaces 2026-10-09 WHY:
+/// A remote machine's projects carry that machine's own workspace ids, which mean nothing here,
+/// so the whole machine tab is placed instead: it shows in the windows of the workspace it was
+/// assigned to on this computer (Personal until moved), and its sessions keep their own machine's
+/// workspaces. The assignment is this computer's daemon's, beside its workspaces, so every client
+/// of this computer agrees and deleting the workspace sends the tab back to Personal.
+pub(crate) fn assign_machine_workspace_in(
+    state: &Value,
+    machine_id: &str,
+    workspace_id: &str,
+) -> Result<Value, DomainStateError> {
+    let machine_id = machine_id.trim();
+    if machine_id.is_empty() || machine_id.chars().count() > MAX_ID_CHARS {
+        return Err(DomainStateError::bad_request("Pass machineId."));
+    }
+    if !workspace_exists(state, workspace_id) {
+        return Err(DomainStateError::bad_request("No such workspace."));
+    }
+    let mut next = state.clone();
+    let Some(document) = next.as_object_mut() else {
+        return Err(DomainStateError::bad_request("No such workspace."));
+    };
+    let machines = document
+        .entry("machineWorkspaces")
+        .or_insert_with(|| json!({}));
+    if !machines.is_object() {
+        *machines = json!({});
+    }
+    let machines = machines.as_object_mut().expect("set to an object above");
+    if workspace_id == DEFAULT_WORKSPACE_ID {
+        machines.remove(machine_id);
+    } else {
+        machines.insert(machine_id.to_string(), json!(workspace_id));
+    }
+    Ok(normalize_sidebar_workspaces_state(&next))
 }
 
 /// Adds a workspace built from `params` (`name`, optional `color`, `letter`, `kind`) and returns
@@ -291,8 +354,33 @@ pub fn normalize_sidebar_workspaces_state(state: &Value) -> Value {
         }
         workspaces.insert(workspace_id.clone(), Value::Object(workspace));
     }
+    // A machine's assignment to the default workspace, or to one that is gone, is no assignment.
+    let mut machine_workspaces = Map::new();
+    for (machine_id, workspace_id) in state
+        .get("machineWorkspaces")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+    {
+        let machine_id = machine_id.trim();
+        let Some(workspace_id) = workspace_id.as_str().map(str::trim) else {
+            continue;
+        };
+        if machine_id.is_empty()
+            || machine_id.chars().count() > MAX_ID_CHARS
+            || workspace_id == DEFAULT_WORKSPACE_ID
+            || !workspaces.contains_key(workspace_id)
+        {
+            continue;
+        }
+        if machine_workspaces.len() >= MAX_MACHINE_ASSIGNMENTS {
+            break;
+        }
+        machine_workspaces.insert(machine_id.to_string(), json!(workspace_id));
+    }
     json!({
         "defaultWorkspaceId": DEFAULT_WORKSPACE_ID,
+        "machineWorkspaces": machine_workspaces,
         "order": ordered_ids,
         "workspaces": workspaces,
     })

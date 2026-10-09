@@ -91,8 +91,23 @@ details: the ticket and its latest comments, the PR with each check by name and
 its reviews, videos (Loom, YouTube and video files play right there), the
 sessions linked to it, and where it is in your team's flow (Ticket, Working
 thread, Session, PR, Review comments, CI, Video, QC package, Validation). Steps
-Ghostex cannot see yet, such as the Slack thread or the video OK, show a question
-mark instead of a tick. **Open chat** shows the session linked to the ticket;
+Ghostex cannot see, such as the video OK, show a question mark instead of a tick.
+In a Work workspace connected to its team (see the team backend under Git and
+worktrees), each row shows how many Slack threads the ticket has, and the details
+show every thread: its channel, the first message and the latest replies with who
+wrote them and when, files, links, and Loom or YouTube videos that play right
+there, with **Open in Slack**; the ticket's working thread is marked as such.
+Working thread is ticked once the ticket has one (click the step to open it), and
+Validation once the request shows up in a watch-only channel or a session posted
+the final result. **Conversations** also lists the sessions your teammates (and
+you, in the cloud or on another computer) run on the ticket, with **Open in
+Claude** for a cloud session; watching a teammate's conversation is not available
+yet. Without a team, as in a Personal workspace, these stay as they are. To
+change the steps, open Settings > Workspaces and use
+the workspace's **Team-flow steps**: reorder, rename or remove steps, add one with
+the rule that marks it done (for example "The pull request has a label" with
+`READY-FOR-QC`), then **Save steps**; **Reset to default** goes back to the
+default flow. **Open chat** shows the session linked to the ticket;
 **Start chat** starts one in a new worktree on the ticket's branch, linked to it,
 and sends nothing; its arrow picks the agent and the project. The Work view is
 part of the desktop app; the web version opens a chip's link instead.
@@ -344,15 +359,34 @@ letter tile at the left end of the Space row (with Spaces off, it shows in that
 row once you have a second workspace). Click it to switch this window to
 another workspace (if another window already shows it, that window comes
 forward instead), to open the workspace in a new window, to open Workspace
-settings, or to make a New workspace. To move a project, right-click it and
-choose Move to workspace; its sessions and worktrees go with it, and it leaves
-its group and Spaces and shows under Other in the new workspace. A project you
-add, and a Space you create, join the workspace of the window you are in.
-Settings > Workspaces names each workspace, sets its color, makes it Work or
-Personal (Work turns work mode on by default for its projects), and sets its
-Linear API key and the Claude account its agents use (an account you pick when
-you start a session still wins); Sign out of all sites clears that workspace's
-Browser sign-ins, and Delete moves its projects and Spaces to Personal.
+settings, or to make a New workspace. Switching reopens the session this window
+last had open in that workspace (or its first project with no session, or
+nothing if it is empty), and puts to sleep the open views of projects outside
+it; their tabs stay and reload when you come back. To move a project,
+right-click it and choose Move to workspace; its sessions and worktrees go with
+it, and it leaves its group and Spaces and shows under Other in the new
+workspace. A project you add with Add Project (or clone from it) joins the
+workspace of the window you are in; a worktree joins its project's workspace;
+a project added from the command line (`ghostex add-project`) goes to Personal
+unless you pass `--workspace <name>`. Opening a folder in Ghostex from your
+computer (or a terminal there) adds a new folder to the window's workspace, but
+a folder that is already a project stays in its own workspace and opens there,
+in a window already showing that workspace or by switching the window to it.
+The Ghostex project that holds Help chats shows in every workspace. A Space you
+create joins the window's workspace too. A remote machine's tab shows in one
+workspace of this computer, Personal until you right-click the tab and choose
+Move to workspace; its projects keep that machine's own workspaces. Settings >
+Workspaces names each workspace, sets its color, makes it Work or Personal
+(Work turns work mode on by default for its projects), and sets its Linear API
+key and the Claude account its agents use (an account you pick when you start a
+session still wins, and the agent launcher and New Thread picker mark the
+workspace's account as Default); Sign out of all sites clears that workspace's Browser sign-ins, and
+Delete moves its projects and Spaces to Personal. From the command line:
+`ghostex workspace list`, `ghostex workspace create <name> [--kind work|personal]`,
+`ghostex workspace rename <workspace> <new name>`,
+`ghostex workspace move-project <project> <workspace>` and
+`ghostex workspace delete <workspace>` (a workspace or project can be named by
+its name or id; a project also by its folder).
 Spaces group projects or groups together; they are not saved filters, and a
 filter cannot be saved as a Space. Spaces is a built-in extension, off by
 default: turn it on with its switch in Settings > Extensions (Features). While
@@ -2211,8 +2245,10 @@ Ghostex creates the ticket and starts the agent you pick in a new worktree on th
 branch Linear suggests for it, linked to the ticket. Nothing is sent to the agent:
 you type the first message. To start on a ticket that already exists, run
 `ghostex work-mode start SPX-1245` (or `#218` for a GitHub issue, which works on
-`<your GitHub name>/218-<title>`); a second session on the same ticket joins the
-first one's worktree and branch. `ghostex work-mode create-ticket --title "…"
+`<your GitHub name>/218-<title>`, or a PR link or `--pr 412` for a pull request,
+which works on the PR's own branch and links the session to the PR and the issues
+it closes); a second session on the same ticket joins the first one's worktree and
+branch. `ghostex work-mode create-ticket --title "…"
 --start` does both from a terminal. New session in a work-mode project still
 starts on main with no worktree.
 
@@ -2228,32 +2264,51 @@ project's environment variables (`SLACK_SIGNING_SECRET`, `LINEAR_WEBHOOK_SECRET`
 teammate runs `ghostex team join <link>`. So that a Slack request reaches you, link
 your Slack member ID once with `ghostex team identity --slack-user U012ABC`.
 `ghostex team status` shows the connection, `ghostex team ping` checks that your
-Ghostex receives requests, and `ghostex team leave` disconnects.
+Ghostex receives requests, and `ghostex team leave` disconnects. The same is in
+Settings > Workspaces under each Work workspace: **Team (Convex)** joins with a
+pasted invite link, shows who you are in the team, and has **Copy invite link**
+(owners) and **Leave**; **Your Slack user** links your Slack member ID; and **Set
+up a new team** shows the `ghostex team deploy` command to run in a terminal,
+because deploying needs your Convex CLI login.
 
 With the team backend in place, anyone can start work from Slack. In a thread,
 type `@Ghostex cloud <what to do>` or `@Ghostex local <what to do>` (`/ghostex
 cloud|local …` works at the top of a channel, where there is no thread to read).
 Ghostex reads the whole thread, finds the Linear ticket (or GitHub issue or PR)
 it mentions, asks which one when there are several, and creates a Linear ticket
-from the thread when there is none. Each ticket gets one working thread in the
-team's working channel, tagging only you and the dev/QC owner, and one working
+from the thread when there is none, in the Linear project (release) the thread
+links or the channel is mapped to. A thread that names only a PR works on that
+PR's branch. Each ticket gets one working thread in the team's working channel,
+tagging only you and the dev/QC owner, whose first post lists the requirements
+your Ghostex summarised from the thread with a quick Claude call; and one working
 session: a later request for the same ticket goes to that session instead of
 starting another. `cloud` (the default) starts Claude Code on the web for the
 channel's repo; `local` starts a session on your computer in a worktree on the
-ticket's branch. If your Ghostex is off, the request waits and starts when it is
-back. The thread you asked in gets the working thread's link once and, at the
-end, only the final result. In a watch-only channel Ghostex only reacts 👀 and
+ticket's branch. A later request for a cloud session's ticket is sent to that
+cloud session from the Ghostex that started it; a cloud session cannot post
+milestones to Slack, so its working thread shows its link instead. If your Ghostex
+is off, the request waits and starts when it is back. The thread you asked in gets
+the working thread's link once and, at the end, only the final result (every
+ticket's, when you asked for several). In a watch-only channel Ghostex only reacts 👀 and
 forwards the request to the ticket's working thread. Sessions started from Slack
 post milestones with `ghostex slack post --session <session> "<text>"` (`--final`
-for the result). Setup: create the Slack app from `ghostex team slack-manifest`,
+for the result). Setup: create the Slack app from `ghostex team slack-manifest`
+(an app made from an older manifest needs the `channels:read` and `groups:read`
+scopes added and the app reinstalled before the Work view can show channel names),
 store its token and signing secret with `ghostex team slack-connect` and a Linear
 API key with `ghostex team linear-connect` (both read from stdin, on the computer
 that deployed the team), then set the flow with `ghostex team flow set
 --working-channel <channel ID> --watch-only <IDs> --default-run cloud|local
 --linear-team <KEY> --qc-owner <Slack member ID> --instructions-file <path>` and
 map each channel to its repo with `ghostex team flow map <channel ID> --repo
-owner/name`. The team instructions file is added to every session started from
-Slack.
+owner/name` (add `--linear-project <name>` to put the tickets Ghostex creates from
+that channel into a Linear project). The team instructions file is added to every session started from
+Slack. Settings > Workspaces has all of this too: the **Slack** row's **Copy app
+manifest**, whether the bot token, signing secret and the team's Linear key are
+stored (with the `slack-connect` and `linear-connect` commands to copy), and the
+workspace's **Team flow** section for the working channel, watch-only channels,
+repos for new work, where new work runs, the default Linear team and the team
+instructions. **Never work without a ticket** is always on.
 
 Related settings: Settings > Projects > Global Defaults (worktree command,
 docs directory), `hideProjectHeaderDiffStats`,

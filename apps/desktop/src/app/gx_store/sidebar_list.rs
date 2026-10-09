@@ -429,6 +429,7 @@ impl GhostexGpuiApp {
         self.gx_store_quick_access_store_changed(true, cx);
         let mut inputs = std::mem::take(&mut self.gx_store.sidebar_list.last_inputs);
         let unavailable = self.gx_store.sidebar_list.unavailable;
+        let machine_tabs = self.gx_store_window_machine_tabs(&inputs);
         let store = &mut self.gx_store;
         refresh_inputs(
             &mut inputs,
@@ -439,7 +440,7 @@ impl GhostexGpuiApp {
             &store.runtime_facts,
             &store.sidebar_ui.stored_project_collections,
             unavailable,
-            store.remote.tabs(),
+            &machine_tabs,
         );
         self.gx_store_indicators_changed(&changes, &inputs, cx);
         let settings_moved = self.gx_store.sidebar_list.last_inputs.settings != inputs.settings;
@@ -510,6 +511,7 @@ impl GhostexGpuiApp {
             let mut inputs = std::mem::take(&mut self.gx_store.sidebar_list.last_inputs);
             let settings = inputs.settings.clone();
             let ui_generation = self.gx_store.sidebar_ui.generation();
+            let machine_tabs = self.gx_store_window_machine_tabs(&inputs);
             let store = &mut self.gx_store;
             refresh_inputs(
                 &mut inputs,
@@ -520,7 +522,7 @@ impl GhostexGpuiApp {
                 &store.runtime_facts,
                 &store.sidebar_ui.stored_project_collections,
                 unavailable,
-                store.remote.tabs(),
+                &machine_tabs,
             );
             changed |= self.gx_store.sidebar_list.model.update(
                 &self.gx_store.core,
@@ -542,6 +544,7 @@ impl GhostexGpuiApp {
         // this update's list. Nothing happens unless the focused row really changed
         // (`take_followed_session`), so every other path through here pays one comparison.
         self.gx_store_follow_active_session_space(cx);
+        self.gx_store_leave_machine_outside_window_workspace(cx);
         self.navigation_history_sidebar_changed(cx);
         // Every so often the same inputs are also built from scratch and the two lists compared:
         // this port's own cache invalidation, which has no second list to lean on since the page

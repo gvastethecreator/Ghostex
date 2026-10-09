@@ -18,7 +18,7 @@ export const reportCommand = internalAction({
     const { command, memberName } = report;
     const payload = (command.payload ?? {}) as {
       action?: "start" | "message";
-      ticket?: { key?: string; url?: string | null; teamName?: string | null };
+      ticket?: { key?: string; url?: string | null; teamName?: string | null; projectName?: string | null };
       runPlace?: "cloud" | "local";
       requester?: { slackUserId?: string };
       source?: { channelId?: string; threadTs?: string | null };
@@ -78,7 +78,9 @@ export const reportCommand = internalAction({
 
     const lines = ["On it:"];
     if (payload.createdTicket) {
-      const team = payload.ticket?.teamName ? ` in ${payload.ticket.teamName}` : "";
+      const team =
+        (payload.ticket?.teamName ? ` in ${payload.ticket.teamName}` : "") +
+        (payload.ticket?.projectName ? ` (project ${payload.ticket.projectName})` : "");
       lines.push(
         payload.source?.threadTs
           ? `• No ticket in this thread, so I created ${ticketLink}${team} and linked this thread to it.`

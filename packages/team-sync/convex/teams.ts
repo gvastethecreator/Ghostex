@@ -82,6 +82,12 @@ export const info = query({
         functionsVersion: team.functionsVersion,
       },
       deployedFunctionsVersion: FUNCTIONS_VERSION,
+      // Which secrets this deployment holds (never their values), for the Settings Team rows.
+      secrets: {
+        slackBotToken: Boolean(process.env.SLACK_BOT_TOKEN),
+        slackSigningSecret: Boolean(process.env.SLACK_SIGNING_SECRET),
+        linearApiKey: Boolean(process.env.LINEAR_API_KEY),
+      },
       me: {
         id: me._id,
         name: me.name,

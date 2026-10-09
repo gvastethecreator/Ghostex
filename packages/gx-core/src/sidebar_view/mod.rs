@@ -69,11 +69,15 @@ pub use session_slot::{rendered_session_ids, session_slot_plan, SessionSlotPlan}
 pub use slot_hotkey::{project_slot_plan, ProjectSlotPlan};
 pub use space_landing::space_landing_project_ids;
 pub use space_sleep::{plan_space_sleep, SpaceSleepPlan, SpaceSleepPlans, SpaceSleepScope};
-pub use space_switch::{plan_space_switch_restore, SpaceSwitchFocus};
+pub use space_switch::{
+    plan_space_switch_restore, plan_workspace_switch_restore, SpaceSwitchFocus,
+};
 pub use spaces::{Space, SpacesState, OTHER_SPACE_ID};
 pub use tags::{TagListItem, TagListItemKind, TagPresentation, UNTAGGED_TAG_FILTER};
 pub use work::{SessionWork, WorkGithubIssue, WorkLinearIssue, WorkLinearProject, WorkPullRequest};
-pub use workspaces::{project_workspace_id, window_spaces, window_workspace, WindowWorkspace};
+pub use workspaces::{
+    project_workspace_id, window_machine_tabs, window_spaces, window_workspace, WindowWorkspace,
+};
 pub use view::{
     CollectionView, CoordinatorBadge, CoordinatorBadgeTone, DelayedSendView, RowNesting, ThreadTally, EmptyState, GroupCore, GroupSummary, GroupView, LabelDeadline,
     MachineNotice, MachineSummary, MachineTabView, OrderItem, OrderKind, ProjectContextView, RemoteMachineView,

@@ -160,9 +160,18 @@ pub struct SidebarWorkspacesState {
     pub order: Vec<String>,
     #[serde(default, deserialize_with = "crate::de::null_as_default")]
     pub workspaces: BTreeMap<String, SidebarWorkspace>,
+    /// A remote machine's sidebar tab (by this computer's settings id for it) → the workspace it
+    /// shows in here. A machine not listed shows in the default workspace.
+    #[serde(default, deserialize_with = "crate::de::null_as_default")]
+    pub machine_workspaces: BTreeMap<String, String>,
 }
 
 impl SidebarWorkspacesState {
+    /// The workspace a remote machine's tab shows in on this computer.
+    pub fn machine_workspace(&self, machine_id: &str) -> &str {
+        self.resolve(self.machine_workspaces.get(machine_id).map(String::as_str))
+    }
+
     /// The default workspace's id (`personal` when the document came without one).
     pub fn default_id(&self) -> &str {
         if self.default_workspace_id.is_empty() {

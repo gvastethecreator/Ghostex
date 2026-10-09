@@ -3,18 +3,31 @@ import { cx } from "./components";
 import type { TeamFlowStepState } from "./types";
 
 /**
- * The ticket's place in the team's flow. A step whose data Ghostex does not have yet (Slack,
- * the video OK) shows as unknown, never as done (server/src/work_mode/team_flow.rs).
+ * The ticket's place in the team's flow. A step whose data Ghostex does not have (the video OK,
+ * Slack without a team connection) shows as unknown, never as done
+ * (server/src/work_mode/team_flow.rs). A step with evidence (the working thread) opens it.
  */
-export function TeamFlowTracker({ steps }: { steps: TeamFlowStepState[] }) {
+export function TeamFlowTracker({
+  steps,
+  onOpenUrl,
+}: {
+  steps: TeamFlowStepState[];
+  onOpenUrl: (url: string) => void;
+}) {
   if (steps.length === 0) return null;
   return (
     <ol className="w-flow team-flow-tracker" aria-label="Team flow">
       {steps.map((step, index) => (
         <li
           key={step.id}
-          className={cx("w-flow-step", `is-${step.status}`, `step-${step.id}`)}
-          title={`${step.label}: ${stepStatusText(step)}`}
+          className={cx(
+            "w-flow-step",
+            `is-${step.status}`,
+            `step-${step.id}`,
+            step.url && "has-link",
+          )}
+          title={`${step.label}: ${stepStatusText(step)}${step.url ? " · click to open" : ""}`}
+          onClick={step.url ? () => onOpenUrl(step.url ?? "") : undefined}
         >
           <span className="w-flow-node">
             {step.status === "done" ? (

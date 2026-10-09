@@ -77,7 +77,7 @@ export interface WorkItem {
   linearIssue?: string;
   githubIssue?: number;
   pullRequestRef?: string;
-  /** Slack threads that mention the item; arrives with the Slack bot. */
+  /** The ticket's Slack threads, from a Work workspace's team (server/src/team_sync/work_page.rs). */
   slackThreadCount?: number;
 }
 
@@ -202,6 +202,73 @@ export interface TeamFlowStepState {
   label: string;
   status: TeamFlowStepStatus;
   detail: string;
+  /** Where the step's evidence opens (the Slack working thread, the validation thread). */
+  url?: string;
+}
+
+export interface SlackFile {
+  id: string;
+  name?: string | null;
+  mimetype?: string | null;
+  permalink?: string | null;
+}
+
+export interface SlackMessage {
+  ts: string;
+  userId?: string | null;
+  botId?: string | null;
+  authorName?: string | null;
+  isApp: boolean;
+  /** Slack's markup with mentions already named; links stay `<url|label>`. */
+  text: string;
+  files: SlackFile[];
+  postedAt: number;
+  editedAt?: number | null;
+  media: WorkMedia[];
+}
+
+/** `working`: the ticket's one working thread; `watchOnly`: a watch-only (validation) channel. */
+export type SlackThreadRole = "working" | "source" | "watchOnly";
+
+export interface SlackThread {
+  id: string;
+  channelId: string;
+  channelName?: string | null;
+  threadTs: string;
+  permalink?: string | null;
+  role: SlackThreadRole;
+  isWorkingThread: boolean;
+  replyCount: number;
+  /** Replies between the first message and the latest ones, shown only in Slack. */
+  hiddenReplyCount: number;
+  lastMessageAt?: number | null;
+  messages: SlackMessage[];
+}
+
+/** A session the team's Convex project knows for the ticket (`ticketSessions`). */
+export interface TeamSession {
+  id: string;
+  memberName?: string | null;
+  isMe: boolean;
+  runPlace: "cloud" | "local";
+  status: "starting" | "running" | "failed" | "cancelled";
+  projectId?: string | null;
+  sessionId?: string | null;
+  sessionUrl?: string | null;
+  branch?: string | null;
+  runnerName?: string | null;
+  error?: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A Work workspace's team data for one ticket; absent without a team connection. */
+export interface WorkTeamDetails {
+  connected: boolean;
+  teamName?: string | null;
+  ticket: string;
+  threads: SlackThread[];
+  sessions: TeamSession[];
 }
 
 export interface WorkItemDetails {
@@ -212,6 +279,7 @@ export interface WorkItemDetails {
   media: WorkMedia[];
   links: { title: string; subtitle?: string | null; url: string }[];
   teamFlow: { source: string; steps: TeamFlowStepState[] };
+  team?: WorkTeamDetails | null;
   projects: WorkProject[];
   errors: string[];
 }

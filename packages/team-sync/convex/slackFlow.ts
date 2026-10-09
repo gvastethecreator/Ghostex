@@ -2,7 +2,15 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 import { internalAction } from "./_generated/server";
-import { createLinearIssue, hasLinearKey, linearIssue, linearTeams, type LinearIssue, type LinearTeam } from "./lib/linearApi";
+import {
+  createLinearIssue,
+  findLinearProject,
+  hasLinearKey,
+  linearIssue,
+  linearTeams,
+  type LinearIssue,
+  type LinearTeam,
+} from "./lib/linearApi";
 import {
   addReaction,
   downloadFile,
@@ -15,7 +23,7 @@ import {
   type SlackApiMessage,
 } from "./lib/slackApi";
 import { buildThreadContext, messageUserIds, type ThreadContext } from "./lib/threadContext";
-import { findTickets, parseTicketKey, titleFromText, type TicketRef } from "./lib/tickets";
+import { findLinearProjectLinks, findTickets, parseTicketKey, titleFromText, type TicketRef } from "./lib/tickets";
 import type { LoadedRequest, QueuedWork } from "./slackFlowState";
 
 /**
@@ -225,10 +233,10 @@ async function askWhichTicket(flow: FlowContext, tickets: TicketRef[]): Promise<
 }
 
 /**
- * No ticket in the thread: create it in Linear from the thread, in the Linear team the channel maps to.
+ * No ticket in the thread: create it in Linear from the thread, in the Linear team the channel maps to, and in the Linear project (release) the thread links or the channel maps to.
  *
  * CDXC:TeamSync 2026-10-09 DECISION:
- * User: the command never works without a Linear ticket; when the thread has none, Ghostex creates it automatically (project/team from the channel mapping) and links the Slack thread to it.
+ * User: the command never works without a Linear ticket; when the thread has none, Ghostex creates it automatically (project/team from the channel mapping) and links the Slack thread to it. When the thread or the channel mapping names a Linear project, the new ticket goes into it.
  */
 async function createTicketFromThread(flow: FlowContext): Promise<LinearIssue> {
   const { request, settings, requester } = flow.loaded;
@@ -238,14 +246,26 @@ async function createTicketFromThread(flow: FlowContext): Promise<LinearIssue> {
     );
   }
   const mapping = settings.channelRepos.find((entry) => entry.channelId === request.channelId);
+  // A project linked in the thread is the requester's own choice, so it wins over the channel's.
+  const projectRef = findLinearProjectLinks(flow.thread.searchText)[0] ?? mapping?.linearProject ?? null;
+  let project = projectRef ? await findLinearProject(projectRef) : null;
+  if (projectRef && !project) {
+    await flow.note(`Linear has no project ${projectRef}, so the new ticket has no project.`);
+  }
   const teamKey = mapping?.linearTeamKey ?? settings.linearTeamKey;
-  if (!teamKey) {
+  const team = teamKey
+    ? flow.teams.find((candidate) => candidate.key.toUpperCase() === teamKey.toUpperCase())
+    : flow.teams.find((candidate) => project?.teamIds[0] === candidate.id);
+  if (!team) {
+    if (teamKey) throw new Error(`Linear has no team with the key ${teamKey}.`);
     throw new Error(
       "there's no ticket in this thread and no Linear team for new tickets. Run `ghostex team flow set --linear-team <KEY>` (or map this channel with `ghostex team flow map`).",
     );
   }
-  const team = flow.teams.find((candidate) => candidate.key.toUpperCase() === teamKey.toUpperCase());
-  if (!team) throw new Error(`Linear has no team with the key ${teamKey}.`);
+  if (project && !project.teamIds.includes(team.id)) {
+    await flow.note(`The Linear project ${project.name} isn't shared with the ${team.key} team, so the new ticket has no project.`);
+    project = null;
+  }
   const fromThread = request.threadTs && request.messageTs !== request.threadTs ? flow.thread.rootText : "";
   const title = titleFromText(fromThread || request.prompt) || "Request from Slack";
   const description = [
@@ -259,6 +279,7 @@ async function createTicketFromThread(flow: FlowContext): Promise<LinearIssue> {
     title,
     description,
     assigneeId: requester?.linearUserId ?? undefined,
+    projectId: project?.id,
   });
 }
 
@@ -279,23 +300,22 @@ function sourceLine(flow: FlowContext): string {
 }
 
 /**
- * The working thread's opening post: ID and title, the source link, the request and what the thread says, tagging only the requester and the dev/QC owner.
+ * The working thread's opening post: ID and title, the source link, the request and what the thread says, tagging only the requester and the dev/QC owner. `head` and `tags` travel with the start command, so the post can be rewritten with the thread's requirements (slackPost.ts `updateOpeningPost`).
  *
  * CDXC:TeamSync 2026-10-09 DECISION:
  * User: the working thread's top-level post tags only the requester and the dev/QC owner, never the people who reported the bug.
  */
-function openingPost(flow: FlowContext, ticket: TicketRef, issue: LinearIssue | null): string {
+function openingPost(flow: FlowContext, ticket: TicketRef, issue: LinearIssue | null) {
   const { request, settings } = flow.loaded;
   const tags = [request.slackUserId, settings.qcOwnerSlackUserId]
     .filter((id, index, all): id is string => Boolean(id) && all.indexOf(id) === index)
     .map((id) => `<@${id}>`)
     .join(" ");
-  const lines = [`*${ticketLabel(ticket, issue)}*`, sourceLine(flow)];
-  if (request.prompt) lines.push(`Request: ${escapeSlack(request.prompt)}`);
+  const head = [`*${ticketLabel(ticket, issue)}*`, sourceLine(flow)];
+  if (request.prompt) head.push(`Request: ${escapeSlack(request.prompt)}`);
   const fromThread = request.threadTs && request.messageTs !== request.threadTs ? flow.thread.rootText : "";
-  if (fromThread) lines.push("From the thread:", quote(escapeSlack(fromThread), 8, 700));
-  lines.push(tags);
-  return lines.join("\n");
+  const body = fromThread ? ["From the thread:", quote(escapeSlack(fromThread), 8, 700)] : [];
+  return { head, tags, text: [...head, ...body, tags].join("\n") };
 }
 
 function forwardPost(flow: FlowContext, watchOnly: boolean): string {
@@ -349,11 +369,13 @@ async function workOnTicket(
   // Step 3: the ticket's working thread.
   let working = await ctx.runQuery(internal.slackFlowState.getWorkingThread, { teamId: request.teamId, ticket: ticket.key });
   let openedWorkingThread = false;
+  let opening: ReturnType<typeof openingPost> | null = null;
   if (!working) {
     if (!settings.workingChannelId) {
       throw new Error("this team has no working channel yet. Run `ghostex team flow set --working-channel <channel ID>` in Ghostex.");
     }
-    const posted = await postMessage({ channel: settings.workingChannelId, text: openingPost(flow, ticket, issue) });
+    opening = openingPost(flow, ticket, issue);
+    const posted = await postMessage({ channel: settings.workingChannelId, text: opening.text });
     const link = await permalink(posted.channel, posted.ts).catch(() => undefined);
     const recorded = await ctx.runMutation(internal.slackFlowState.recordWorkingThread, {
       teamId: request.teamId,
@@ -392,6 +414,7 @@ async function workOnTicket(
     title: issue?.title ?? null,
     url: ticketUrl(ticket, issue),
     teamName: issue?.teamName ?? null,
+    projectName: issue?.projectName ?? null,
     branchName: issue?.branchName ?? null,
     description: issue?.description ?? null,
     state: issue?.state ?? null,
@@ -430,6 +453,9 @@ async function workOnTicket(
       images,
       createdTicket: createdTicket?.identifier === ticket.key,
       openedWorkingThread,
+      // What the requester's Ghostex needs to replace the post's quote with the thread's requirements.
+      openingPost:
+        openedWorkingThread && opening ? { channelId: working.channelId, ts: working.threadTs, head: opening.head, tags: opening.tags } : null,
     },
     messagePayload: {
       action: "message",
@@ -439,9 +465,9 @@ async function workOnTicket(
     },
   });
 
-  if (queued.action === "cloud") {
+  if (queued.action === "cloudStarting") {
     await flow.note(
-      `${ticket.key} already has a working thread, and its session runs in the cloud, where Ghostex can't send messages yet.${queued.sessionUrl ? ` Continue it there: <${queued.sessionUrl}|Open session>.` : ""}`,
+      `${ticket.key}'s cloud session is still starting, so there's nothing to send your message to yet. Ask again in a minute.`,
     );
   } else if (!queued.assigned) {
     await flow.note(

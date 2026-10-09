@@ -7,6 +7,9 @@
 
 export type LinearTeam = { id: string; key: string; name: string };
 
+/** A Linear project (a release or initiative) and the teams whose tickets it may hold. */
+export type LinearProject = { id: string; name: string; url: string; teamIds: string[] };
+
 export type LinearIssue = {
   identifier: string;
   title: string;
@@ -15,6 +18,7 @@ export type LinearIssue = {
   description: string | null;
   teamKey: string | null;
   teamName: string | null;
+  projectName: string | null;
   assignee: string | null;
   state: string | null;
   labels: string[];
@@ -47,7 +51,7 @@ export async function linearTeams(): Promise<LinearTeam[]> {
 }
 
 const ISSUE_FIELDS = `identifier title url branchName description
-  team { key name } assignee { name } state { name }
+  team { key name } project { name } assignee { name } state { name }
   labels(first: 20) { nodes { name } }
   comments(first: 50) { nodes { body createdAt user { name } } }
   attachments(first: 20) { nodes { title url } }`;
@@ -62,6 +66,7 @@ function parseIssue(issue: any): LinearIssue | null {
     description: issue.description ?? null,
     teamKey: issue.team?.key ?? null,
     teamName: issue.team?.name ?? null,
+    projectName: issue.project?.name ?? null,
     assignee: issue.assignee?.name ?? null,
     state: issue.state?.name ?? null,
     labels: (issue.labels?.nodes ?? []).map((label: any) => String(label.name)),
@@ -88,11 +93,52 @@ export async function linearIssue(identifier: string): Promise<LinearIssue | nul
   return parseIssue(data?.issue);
 }
 
+const PROJECT_FIELDS = "id name url teams(first: 50) { nodes { id } }";
+
+function parseProject(project: any): LinearProject | null {
+  if (!project?.id) return null;
+  return {
+    id: String(project.id),
+    name: String(project.name ?? ""),
+    url: String(project.url ?? ""),
+    teamIds: (project.teams?.nodes ?? []).map((team: any) => String(team.id)),
+  };
+}
+
+/**
+ * The Linear project a channel mapping or a thread names: a project link (`linear.app/<workspace>/project/<name>-<slug id>`), its id, or its name.
+ */
+export async function findLinearProject(ref: string): Promise<LinearProject | null> {
+  const text = ref.trim();
+  if (!text) return null;
+  const link = /linear\.app\/[^/\s>|]+\/project\/([A-Za-z0-9-]+)/.exec(text);
+  if (link) {
+    // The link's last `-` part is the project's slug id; the words before it are its name and may change.
+    const slugId = link[1].split("-").pop() ?? link[1];
+    const data = await linearGraphql(`query($slug: String!) { projects(first: 1, filter: { slugId: { eq: $slug } }) { nodes { ${PROJECT_FIELDS} } } }`, {
+      slug: slugId,
+    });
+    return parseProject(data?.projects?.nodes?.[0]);
+  }
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) {
+    const data = await linearGraphql(`query($id: String!) { project(id: $id) { ${PROJECT_FIELDS} } }`, { id: text }).catch((error: Error) => {
+      if (/not found/i.test(error.message)) return null;
+      throw error;
+    });
+    return parseProject(data?.project);
+  }
+  const data = await linearGraphql(`query($name: String!) { projects(first: 1, filter: { name: { eqIgnoreCase: $name } }) { nodes { ${PROJECT_FIELDS} } } }`, {
+    name: text,
+  });
+  return parseProject(data?.projects?.nodes?.[0]);
+}
+
 export async function createLinearIssue(input: {
   teamId: string;
   title: string;
   description: string;
   assigneeId?: string;
+  projectId?: string;
 }): Promise<LinearIssue> {
   const data = await linearGraphql(
     `mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { ${ISSUE_FIELDS} } } }`,

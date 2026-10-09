@@ -55,7 +55,13 @@ pub(super) fn member_call(
     call_convex(&connection.deployment_url, kind, path, Value::Object(args))
 }
 
-/// `{ workspaceId, inviteLink, name, slackUserId? }`: exchanges the invite's one-time code for a
+fn default_member_name() -> String {
+    std::env::var("USERNAME")
+        .or_else(|_| std::env::var("USER"))
+        .unwrap_or_else(|_| "Teammate".to_string())
+}
+
+/// `{ workspaceId, inviteLink, name?, slackUserId? }`: exchanges the invite's one-time code for a
 /// member token and connects the workspace.
 pub(crate) fn join_team(
     paths: &GxserverPaths,
@@ -63,7 +69,8 @@ pub(crate) fn join_team(
 ) -> Result<Value, String> {
     let workspace_id = required(params, "workspaceId")?;
     let (deployment_url, code) = parse_invite_link(&required(params, "inviteLink")?)?;
-    let name = required(params, "name")?;
+    // Settings sends no name; the teammate list then shows this computer's user name, as the CLI does.
+    let name = text(params, "name").unwrap_or_else(default_member_name);
     let joined = call_convex(
         &deployment_url,
         ConvexCallKind::Action,

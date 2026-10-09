@@ -12,6 +12,7 @@ use serde_json::{json, Map, Value};
 
 use crate::paths::GxserverPaths;
 use crate::session_git_status::{gh_cli_is_available, run_gh_command};
+use crate::team_sync::{team_for_page, team_ticket_facts};
 
 use super::*;
 
@@ -181,13 +182,32 @@ pub(crate) fn read_work_item(
             _ => None,
         });
 
+    // A Work workspace's team: the ticket's Slack threads, working thread and team sessions.
+    let team_ticket = project.and_then(|input| {
+        let repo = input.repo.as_deref().map(str::to_ascii_lowercase);
+        let ticket = match item_ref {
+            WorkItemRef::Linear(identifier) => Some(identifier.clone()),
+            WorkItemRef::GithubIssue(number) => repo.map(|repo| format!("{repo}#{number}")),
+            WorkItemRef::PullRequest(selector) => pull_request_url_parts(selector)
+                .map(|(repo, number)| format!("{}#{number}", repo.to_ascii_lowercase()))
+                .or_else(|| repo.map(|repo| format!("{repo}#{selector}"))),
+        }?;
+        Some((input.workspace_id.clone(), ticket))
+    });
+
     let mut errors: Vec<String> = Vec::new();
     let mut linear: Option<Value> = None;
     let mut github_issue: Option<Value> = None;
     let mut pull_request: Option<Value> = None;
+    let mut team: Option<Value> = None;
 
     // The Linear issue first: it can name the PR (Linear's GitHub integration).
     std::thread::scope(|scope| {
+        let team_task = team_ticket.as_ref().map(|(workspace_id, ticket)| {
+            scope.spawn(move || {
+                crate::team_sync::read_team_ticket(paths, workspace_id, ticket, force)
+            })
+        });
         let linear_task = match (item_ref, linear_key.as_deref()) {
             (WorkItemRef::Linear(identifier), Some(api_key)) => {
                 let identifier = identifier.clone();
@@ -272,6 +292,11 @@ pub(crate) fn read_work_item(
                 Err(error) => errors.push(format!("GitHub: {error}")),
             }
         }
+        match team_task.and_then(|task| task.join().ok()).flatten() {
+            Some(Ok(value)) => team = Some(value),
+            Some(Err(error)) => errors.push(error),
+            None => {}
+        }
     });
 
     // A ticket the list does not have (closed, or someone else's team): its row from the details.
@@ -327,19 +352,43 @@ pub(crate) fn read_work_item(
     }
     let media = media_in_texts(&texts);
 
-    let sessions = item
+    let local_sessions: Vec<&str> = item
         .as_ref()
         .and_then(|item| item.get("sessions"))
         .and_then(Value::as_array)
-        .map(Vec::len)
-        .unwrap_or(0);
-    let facts = team_flow_facts(
+        .map(|sessions| {
+            sessions
+                .iter()
+                .filter_map(|session| session.get("sessionId").and_then(Value::as_str))
+                .collect()
+        })
+        .unwrap_or_default();
+    let team = team.map(|team| team_for_page(team, &local_sessions));
+    let mut facts = team_flow_facts(
         item_ref,
-        sessions,
+        local_sessions.len(),
         linear.as_ref(),
         github_issue.as_ref(),
         pull_request.as_ref(),
     );
+    if let Some(team) = &team {
+        facts.session_count += team
+            .get("sessions")
+            .and_then(Value::as_array)
+            .map(|sessions| {
+                sessions
+                    .iter()
+                    .filter(|session| {
+                        matches!(
+                            session.get("status").and_then(Value::as_str),
+                            Some("starting" | "running")
+                        )
+                    })
+                    .count()
+            })
+            .unwrap_or(0);
+        facts.team = Some(team_ticket_facts(team));
+    }
     let workspace_id =
         project.and_then(|input| crate::workspaces::stored_project_workspace_id(&input.project));
     let (steps, source) = resolve_team_flow(
@@ -356,6 +405,7 @@ pub(crate) fn read_work_item(
         "media": media,
         "links": links,
         "teamFlow": { "source": source, "steps": evaluate_team_flow(&steps, &facts) },
+        "team": team,
         "projects": list.get("projects").cloned().unwrap_or(Value::Array(Vec::new())),
         "errors": errors,
     })
@@ -491,6 +541,7 @@ fn team_flow_facts(
         checks_total: count("total"),
         checks_passed: count("passed"),
         checks_failed: count("failed"),
+        team: None,
     }
 }
 

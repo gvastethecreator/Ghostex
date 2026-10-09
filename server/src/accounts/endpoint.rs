@@ -812,6 +812,33 @@ fn state_value(
     // Supersedes the 2026-09-06 note that Codex Swap installs through Homebrew on macOS and Linux without requiring Cargo: Homebrew stays the macOS and Linux route, but a computer without brew (the usual case inside WSL) was being handed a command it cannot run, so it now gets the source build. Windows uses codex-swap's own installer and needs neither. See Provider::install_command.
     let helper_rows:Vec<_>=[Provider::Claude,Provider::Codex].into_iter().map(|p|json!({"provider":p,"installed":helpers::executable(home,p.helper()).is_some(),"cliInstalled":helpers::executable(home,p.id()).is_some(),"error":snapshot.errors.get(&p),"installCommand":p.install_command(home),"loginCommand":p.login_command()})).collect();
     let mut value = json!({"accounts":rows,"helpers":helper_rows,"defaults":{"claude":registry.defaults.get(&Provider::Claude).cloned().unwrap_or_default(),"codex":registry.defaults.get(&Provider::Codex).cloned().unwrap_or_default()},"defaultAccounts":super::default_account::quick_launch_accounts(registry,snapshot),"newSessionAccounts":registry.new_session_accounts});
+    // CDXC:Workspaces 2026-10-09 DECISION:
+    // User: the sidebar launcher's highlighted default account shows the workspace's Claude
+    // account when the workspace sets one, so what it shows is what launches. A launcher list for a
+    // project (`projectId`, no `sessionId`) reports the account `launch::apply_new_session` would
+    // pick for a new session there: the workspace's account while it is still registered, else
+    // the provider's rule.
+    if !params.contains_key("sessionId") {
+        if let Some(project) = params
+            .get("projectId")
+            .and_then(Value::as_str)
+            .map(|project_id| repository.get_project(project_id))
+            .transpose()?
+            .flatten()
+        {
+            if let Some(account_id) =
+                crate::workspaces::project_claude_account_id(repository.db, &project)?.filter(
+                    |id| {
+                        registry.accounts.iter().any(|account| {
+                            account.id == *id && account.provider == Provider::Claude
+                        })
+                    },
+                )
+            {
+                value["defaultAccounts"]["claude"] = json!(account_id);
+            }
+        }
+    }
     if params.contains_key("sessionId") {
         let session = get_session(repository, params)?;
         let project = repository

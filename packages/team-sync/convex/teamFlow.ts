@@ -10,7 +10,14 @@ const MAX_CHANNELS = 200;
 export type TeamFlowSettings = {
   workingChannelId: string | null;
   watchOnlyChannelIds: string[];
-  channelRepos: { channelId: string; repo: string | null; project: string | null; linearTeamKey: string | null }[];
+  channelRepos: {
+    channelId: string;
+    repo: string | null;
+    project: string | null;
+    linearTeamKey: string | null;
+    /** The Linear project (release) new tickets from this channel go to: its name, id or link. */
+    linearProject: string | null;
+  }[];
   linearTeamKey: string | null;
   defaultRunPlace: "cloud" | "local";
   qcOwnerSlackUserId: string | null;
@@ -41,6 +48,7 @@ export async function readTeamFlow(ctx: QueryCtx, teamId: Id<"teams">): Promise<
       repo: entry.repo ?? null,
       project: entry.project ?? null,
       linearTeamKey: entry.linearTeamKey ?? null,
+      linearProject: entry.linearProject ?? null,
     })),
     linearTeamKey: row?.linearTeamKey ?? null,
     defaultRunPlace: row?.defaultRunPlace ?? "cloud",
@@ -50,12 +58,22 @@ export async function readTeamFlow(ctx: QueryCtx, teamId: Id<"teams">): Promise<
   };
 }
 
+/**
+ * Whether a member may change the team flow settings. `get` reports it as `canEdit` and `set` enforces it, so Settings and the CLI follow this one rule.
+ *
+ * CDXC:TeamSync 2026-10-09 WHY:
+ * Every member can edit until the user decides whether the team flow is owner-only; owner-only is `member.role === "owner"` here.
+ */
+function canEditTeamFlow(member: Doc<"members">): boolean {
+  return member.role === "owner" || member.role === "member";
+}
+
 /** The team's flow settings, for `ghostex team flow` and the Team flow settings page. */
 export const get = query({
   args: { memberToken: v.string() },
   handler: async (ctx, args) => {
     const me = await requireMember(ctx, args.memberToken);
-    return await readTeamFlow(ctx, me.teamId);
+    return { ...(await readTeamFlow(ctx, me.teamId)), canEdit: canEditTeamFlow(me) };
   },
 });
 
@@ -92,6 +110,7 @@ export const set = mutation({
           repo: v.optional(v.union(v.string(), v.null())),
           project: v.optional(v.union(v.string(), v.null())),
           linearTeamKey: v.optional(v.union(v.string(), v.null())),
+          linearProject: v.optional(v.union(v.string(), v.null())),
         }),
       ),
     ),
@@ -101,6 +120,7 @@ export const set = mutation({
         repo: v.optional(v.union(v.string(), v.null())),
         project: v.optional(v.union(v.string(), v.null())),
         linearTeamKey: v.optional(v.union(v.string(), v.null())),
+        linearProject: v.optional(v.union(v.string(), v.null())),
       }),
     ),
     unmapChannel: v.optional(v.string()),
@@ -111,9 +131,16 @@ export const set = mutation({
   },
   handler: async (ctx, args) => {
     const me = await requireMember(ctx, args.memberToken);
+    if (!canEditTeamFlow(me)) throw new ConvexError("Only the team's owner can change the team flow.");
     const row = await settingsRow(ctx, me.teamId);
     type Mapping = Doc<"teamFlowSettings">["channelRepos"][number];
-    const mapping = (entry: { channelId: string; repo?: string | null; project?: string | null; linearTeamKey?: string | null }): Mapping => {
+    const mapping = (entry: {
+      channelId: string;
+      repo?: string | null;
+      project?: string | null;
+      linearTeamKey?: string | null;
+      linearProject?: string | null;
+    }): Mapping => {
       const repo = optionalText(entry.repo)?.replace(/^https?:\/\/github\.com\//i, "").replace(/\.git$/, "");
       if (repo !== undefined && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) {
         throw new ConvexError(`The repo must look like owner/name, not "${entry.repo}".`);
@@ -123,6 +150,7 @@ export const set = mutation({
         repo: repo?.toLowerCase(),
         project: optionalText(entry.project),
         linearTeamKey: optionalText(entry.linearTeamKey)?.toUpperCase(),
+        linearProject: optionalText(entry.linearProject),
       };
     };
     let channelRepos: Mapping[] = row?.channelRepos ?? [];
@@ -165,6 +193,6 @@ export const set = mutation({
     }
     if (row) await ctx.db.replace(row._id, { teamId: me.teamId, ...fields });
     else await ctx.db.insert("teamFlowSettings", { teamId: me.teamId, ...fields });
-    return await readTeamFlow(ctx, me.teamId);
+    return { ...(await readTeamFlow(ctx, me.teamId)), canEdit: true };
   },
 });

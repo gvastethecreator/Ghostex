@@ -3,10 +3,12 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { action, internalQuery } from "./_generated/server";
 import { normalizeTicket, requireMember } from "./lib/auth";
-import { postMessage } from "./lib/slackApi";
+import { escapeSlack, postMessage, updateMessage } from "./lib/slackApi";
 import type { PostTarget } from "./slackFlowState";
 
 const MAX_TEXT_CHARS = 3_500;
+const MAX_REQUIREMENTS = 10;
+const MAX_REQUIREMENT_CHARS = 300;
 
 export const memberOfToken = internalQuery({
   args: { memberToken: v.string() },
@@ -46,7 +48,46 @@ export const postForSession = action({
       for (const source of target.sourceThreads) {
         posted.push(await postMessage({ channel: source.channelId, threadTs: source.threadTs, text, username }));
       }
+      await ctx.runMutation(internal.workPage.recordFinalPost, { memberId, ticket: target.ticket });
     }
     return { ticket: target.ticket, posted: posted.map((post) => ({ channelId: post.channel, ts: post.ts })) };
+  },
+});
+
+type OpeningPost = { channelId: string; ts: string; head: string[]; tags: string };
+
+/** The working thread's opening post a caller's own `slack.request` command opened. */
+export const openingPostOf = internalQuery({
+  args: { memberId: v.id("members"), commandId: v.string() },
+  handler: async (ctx, args): Promise<OpeningPost | null> => {
+    const commandId = ctx.db.normalizeId("commands", args.commandId);
+    const command = commandId ? await ctx.db.get(commandId) : null;
+    if (!command || command.memberId !== args.memberId || command.type !== "slack.request") return null;
+    const post = (command.payload as { openingPost?: Partial<OpeningPost> | null } | null)?.openingPost;
+    if (!post?.channelId || !post.ts || !Array.isArray(post.head)) return null;
+    return { channelId: post.channelId, ts: post.ts, head: post.head.map(String), tags: String(post.tags ?? "") };
+  },
+});
+
+/**
+ * Rewrites a new working thread's opening post with the requirements the requester's Ghostex summarised from the source thread (server/src/team_sync/slack_requirements.rs), in place of the quote of the thread's first message.
+ */
+export const updateOpeningPost = action({
+  args: { memberToken: v.string(), commandId: v.string(), requirements: v.array(v.string()) },
+  handler: async (ctx, args): Promise<{ channelId: string; ts: string }> => {
+    const memberId: Id<"members"> = await ctx.runQuery(internal.slackPost.memberOfToken, { memberToken: args.memberToken });
+    const post: OpeningPost | null = await ctx.runQuery(internal.slackPost.openingPostOf, { memberId, commandId: args.commandId });
+    if (!post) throw new ConvexError("This command opened no working thread.");
+    const requirements = args.requirements
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .slice(0, MAX_REQUIREMENTS)
+      .map((line) => (line.length > MAX_REQUIREMENT_CHARS ? `${line.slice(0, MAX_REQUIREMENT_CHARS - 1)}…` : line));
+    if (requirements.length === 0) throw new ConvexError("Pass at least one requirement.");
+    const text = [...post.head, "*Requirements*", ...requirements.map((line) => `• ${escapeSlack(line)}`), post.tags]
+      .filter(Boolean)
+      .join("\n");
+    await updateMessage(post.channelId, post.ts, text);
+    return { channelId: post.channelId, ts: post.ts };
   },
 });

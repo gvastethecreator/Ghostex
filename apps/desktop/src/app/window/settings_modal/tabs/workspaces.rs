@@ -8,10 +8,16 @@
 //! User (mockup 09): one Settings page for the workspaces, each with a field per key and a status
 //! line under it; Work or Personal sets whether its projects start with work mode on. The Linear
 //! key is shared by the workspace's projects (a project can still override it), and the Personal
-//! workspace's key is the shared one. Slack and Convex rows come later from their own threads:
-//! they go in `connection_rows`.
+//! workspace's key is the shared one. A Work workspace also gets its team's rows (Convex, Slack,
+//! the team's Linear key: `workspaces/team.rs`), its Team flow (`workspaces/slack_flow.rs`) and its
+//! team-flow steps (`workspaces/flow_steps.rs`).
 //! SEE-ALSO: server/src/server/route_http/workspaces.rs, server/src/work_mode/credentials.rs,
 //! apps/desktop/src/app/workspace_browser.rs (`clear_workspace_browser_signins`).
+mod drafts;
+mod flow_steps;
+mod slack_flow;
+mod team;
+
 use super::super::catalog::SettingOption;
 use super::super::fields::{
     ButtonVariant, FieldStates, RowSpec, SettingsPage, setting_row, settings_button,
@@ -70,6 +76,12 @@ pub(crate) struct WorkspacesTab {
     name_saves: HashMap<String, Task<()>>,
     masked: HashMap<SharedString, bool>,
     confirm_delete: Option<String>,
+    /// Typed-but-unsaved text on the team rows, by input id.
+    drafts: HashMap<SharedString, String>,
+    /// Each Work workspace's team connection, Slack flow settings and team-flow steps.
+    team: HashMap<String, team::TeamConnectionState>,
+    slack_flows: HashMap<String, slack_flow::SlackFlowState>,
+    flow_steps: HashMap<String, flow_steps::FlowStepsState>,
 }
 
 impl SettingsPage for WorkspacesTab {
@@ -102,6 +114,10 @@ impl WorkspacesTab {
             name_saves: HashMap::new(),
             masked: HashMap::new(),
             confirm_delete: None,
+            drafts: HashMap::new(),
+            team: HashMap::new(),
+            slack_flows: HashMap::new(),
+            flow_steps: HashMap::new(),
         }
     }
 
@@ -495,7 +511,7 @@ impl WorkspacesTab {
             cx,
         ));
 
-        rows.extend(self.connection_rows(p, &workspace_id, cx));
+        rows.extend(self.connection_rows(p, &workspace_id, window, cx));
 
         // Browser sign-ins.
         if !is_default {
@@ -687,14 +703,21 @@ impl WorkspacesTab {
         )
     }
 
-    /// Where a workspace's other connections (Slack, Convex) add their rows.
+    /// A Work workspace's team rows: Convex, Slack and the team's Linear key.
     fn connection_rows(
         &mut self,
-        _p: &SettingsPalette,
-        _workspace_id: &str,
-        _cx: &mut Context<Self>,
+        p: &SettingsPalette,
+        workspace_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
-        Vec::new()
+        let Some(workspace) = self.workspace(workspace_id).cloned() else {
+            return Vec::new();
+        };
+        if text(&workspace, "kind") != "work" {
+            return Vec::new();
+        }
+        self.team_rows(p, workspace_id, &text(&workspace, "name"), window, cx)
     }
 
     fn create_workspace(&mut self, cx: &mut Context<Self>) {
@@ -763,7 +786,19 @@ impl Render for WorkspacesTab {
         for workspace in self.ordered_workspaces() {
             let anchor = format!("workspace-{}", text(&workspace, "workspaceId"));
             if let Some(section) = self.workspace_section(&p, &workspace, window, cx) {
-                blocks.push(PageBlock::section(anchor, section));
+                blocks.push(PageBlock::section(anchor.clone(), section));
+            }
+            if text(&workspace, "kind") == "work" {
+                let workspace_id = text(&workspace, "workspaceId");
+                let name = text(&workspace, "name");
+                if let Some(section) = self.slack_flow_section(&p, &workspace_id, &name, window, cx)
+                {
+                    blocks.push(PageBlock::section(format!("{anchor}-team-flow"), section));
+                }
+                if let Some(section) = self.flow_steps_section(&p, &workspace_id, &name, window, cx)
+                {
+                    blocks.push(PageBlock::section(format!("{anchor}-flow-steps"), section));
+                }
             }
         }
         settings_page(&self.store, SettingsTabId::Workspaces, &p, blocks, cx)

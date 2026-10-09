@@ -5,7 +5,9 @@
 //!   the request; otherwise `local` starts a session in a worktree on the ticket's branch
 //!   (`startWorkOnTicket`) and sends it the prompt, and `cloud` starts one through the cloud
 //!   runner (cloud_runner.rs).
-//! - `message`: the ticket's session exists; send it the request.
+//! - `message`: the ticket's session exists; send it the request (a cloud session through the
+//!   cloud runner).
+//! - A GitHub ticket that is a pull request starts on the PR's head branch, linked to the PR.
 //!
 //! CDXC:TeamSync 2026-10-09 DECISION:
 //! User: a session started from Slack gets the ticket, every message of the thread, the working
@@ -23,13 +25,14 @@ use crate::session_chat_queue_runtime::{
     send_session_chat_message_internal, SessionChatMessageSource,
 };
 use crate::storage::open_gxserver_database;
-use crate::work_mode::{start_work_on_ticket, work_targets};
+use crate::work_mode::{origin_repo, plan_pull_request, start_work_on_ticket, work_targets};
 use crate::workspaces::{project_workspace_id, read_sidebar_workspaces};
 use crate::worktree_sessions::read_worktree_session_marker;
 
 use super::cloud_runner::{cloud_runner, CloudStartRequest};
 use super::commands::CommandOutcome;
 use super::connections::TeamConnection;
+use super::slack_requirements::summarize_requirements_in_background;
 
 const MAX_IMAGE_BYTES: u64 = 8 * 1024 * 1024;
 /// Claude Code's `--cloud` takes the prompt as one command-line argument; Windows caps a command
@@ -82,6 +85,7 @@ fn start(
     payload: &Value,
 ) -> Result<Value, String> {
     let ticket = text(payload, "/ticket/key").ok_or("The request names no ticket.")?;
+    summarize_requirements_in_background(state, connection, command_id, payload);
     let images = download_images(state, command_id, payload)?;
     if let Some(existing) = find_ticket_session(state, &connection.workspace_id, payload)? {
         send(
@@ -103,33 +107,42 @@ fn start(
     let project = resolve_project(state, &connection.workspace_id, payload)?;
     let project_id = text(&project, "/projectId").unwrap_or_default().to_string();
     let project_path = text(&project, "/path").unwrap_or_default().to_string();
+    let pull_request = pull_request_number(&project_path, payload);
 
     if text(payload, "/runPlace") == Some("cloud") {
-        let runner = cloud_runner();
+        let runner = cloud_runner(&state.paths.home_dir);
         let prompt = clip(&start_prompt(payload, None), MAX_CLOUD_PROMPT_CHARS);
+        // A PR's session works on (and pushes to) the PR's own branch.
+        let head_branch = match pull_request {
+            Some(number) => Some(
+                plan_pull_request(&project_path, None, &number.to_string())
+                    .map_err(|error| error.message)?
+                    .branch,
+            ),
+            None => None,
+        };
         let session = runner.start(&CloudStartRequest {
             repo_dir: std::path::Path::new(&project_path),
             prompt: &prompt,
+            on_branch: head_branch.as_deref(),
         })?;
         return Ok(json!({
             "runPlace": "cloud",
             "reused": false,
             "projectId": project_id,
             "sessionUrl": session.url,
-            "branch": text(payload, "/ticket/branchName"),
+            "branch": head_branch.as_deref().or(text(payload, "/ticket/branchName")),
             "runner": runner.name(),
         }));
     }
 
     let mut params = Map::new();
     params.insert("projectId".to_string(), json!(project_id));
-    match text(payload, "/ticket/kind") {
-        Some("github") => {
-            if payload.pointer("/ticket/pullRequest") == Some(&Value::Bool(true)) {
-                return Err(format!(
-                    "{ticket} is a pull request; a session on this computer starts from a Linear ticket or a GitHub issue."
-                ));
-            }
+    match (text(payload, "/ticket/kind"), pull_request) {
+        (Some("github"), Some(number)) => {
+            params.insert("pullRequest".to_string(), json!(number));
+        }
+        (Some("github"), None) => {
             params.insert(
                 "githubIssue".to_string(),
                 payload
@@ -175,6 +188,18 @@ fn message(
     command_id: &str,
     payload: &Value,
 ) -> Result<Value, String> {
+    if text(payload, "/session/runPlace") == Some("cloud") {
+        let url = text(payload, "/session/sessionUrl")
+            .ok_or("The ticket's cloud session has no link to send to.")?;
+        let runner = cloud_runner(&state.paths.home_dir);
+        runner.send(url, &cloud_request_message(payload))?;
+        return Ok(json!({
+            "delivered": true,
+            "runPlace": "cloud",
+            "sessionUrl": url,
+            "runner": runner.name(),
+        }));
+    }
     let images = download_images(state, command_id, payload)?;
     let target = match (
         text(payload, "/session/projectId"),
@@ -330,36 +355,23 @@ fn resolve_project(state: &AppState, workspace_id: &str, payload: &Value) -> Res
                 format!("No project in this workspace has the repo {repo}. Add its folder to the workspace in Ghostex.")
             });
     }
+    // A GitHub issue or PR names its repo itself.
+    if let Some(repo) = text(payload, "/ticket/repo") {
+        let repo = repo.to_ascii_lowercase();
+        if let Some(project) = projects.iter().find(|project| {
+            text(project, "/path")
+                .and_then(origin_repo)
+                .is_some_and(|origin| origin == repo)
+        }) {
+            return Ok(project.clone());
+        }
+    }
     match projects.as_slice() {
         [only] => Ok(only.clone()),
         _ => Err(
             "This Slack channel is not mapped to a repo. Run `ghostex team flow map <channel ID> --repo owner/name`."
                 .to_string(),
         ),
-    }
-}
-
-/// `owner/name` of a folder's `origin` remote, lowercased.
-fn origin_repo(path: &str) -> Option<String> {
-    let output = crate::platform::process::background_command("git")
-        .args(["-C", path, "remote", "get-url", "origin"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let path = url
-        .strip_suffix(".git")
-        .unwrap_or(&url)
-        .rsplitn(3, ['/', ':'])
-        .take(2)
-        .collect::<Vec<_>>();
-    match path.as_slice() {
-        [name, owner] if !name.is_empty() && !owner.is_empty() => {
-            Some(format!("{owner}/{name}").to_ascii_lowercase())
-        }
-        _ => None,
     }
 }
 
@@ -439,6 +451,44 @@ fn source_text(payload: &Value) -> String {
         Some(link) => link.to_string(),
         None => "`/ghostex` in a Slack channel".to_string(),
     }
+}
+
+/// A GitHub ticket that is a pull request: the payload says so when the thread linked the PR, and a
+/// ticket stored as `owner/repo#12` (issue and PR numbers share one sequence) is asked of `gh`.
+fn pull_request_number(project_path: &str, payload: &Value) -> Option<u64> {
+    if text(payload, "/ticket/kind") != Some("github") {
+        return None;
+    }
+    let number = payload.pointer("/ticket/number").and_then(Value::as_u64)?;
+    if payload.pointer("/ticket/pullRequest") == Some(&Value::Bool(true)) {
+        return Some(number);
+    }
+    let number_text = number.to_string();
+    let mut args = vec!["pr", "view", number_text.as_str(), "--json", "number"];
+    if let Some(repo) = text(payload, "/ticket/repo") {
+        args.extend(["--repo", repo]);
+    }
+    crate::session_git_status::run_gh_command(Some(project_path), &args).map(|_| number)
+}
+
+/// A follow-up for a cloud session: the request, with the request's screenshots as links (the
+/// cloud session cannot take attachments from here).
+fn cloud_request_message(payload: &Value) -> String {
+    let mut message = request_message(payload);
+    let links: Vec<&str> = payload
+        .get("images")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|image| text(image, "/url"))
+        .collect();
+    if !links.is_empty() {
+        message.push_str("\n\nScreenshots:\n");
+        for link in links {
+            message.push_str(&format!("- {link}\n"));
+        }
+    }
+    message
 }
 
 /// A follow-up for the ticket's session: who, where, the words as typed.

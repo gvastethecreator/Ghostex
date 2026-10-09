@@ -90,6 +90,21 @@ export default defineSchema({
     .index("by_team_channel_thread", ["teamId", "channelId", "threadTs"])
     .index("by_team_ticket", ["teamId", "ticket"]),
 
+  /**
+   * Every ticket a (source) thread is linked to; `slackThreads.ticket` holds only the latest one.
+   *
+   * CDXC:TeamSync 2026-10-09 DECISION:
+   * User: a source thread that asks for several tickets ("Both, one thread each") gets every ticket's final result, not only the last one's.
+   */
+  slackThreadTickets: defineTable({
+    teamId: v.id("teams"),
+    threadId: v.id("slackThreads"),
+    ticket: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_team_ticket", ["teamId", "ticket"])
+    .index("by_thread", ["threadId"]),
+
   slackMessages: defineTable({
     teamId: v.id("teams"),
     threadId: v.id("slackThreads"),
@@ -121,6 +136,8 @@ export default defineSchema({
     ticket: v.string(),
     threadId: v.id("slackThreads"),
     createdAt: v.number(),
+    /** When a session first posted the ticket's final result (`ghostex slack post --final`), which comes after its validation request. */
+    finalPostedAt: v.optional(v.number()),
   }).index("by_team_ticket", ["teamId", "ticket"]),
 
   /**
@@ -141,6 +158,8 @@ export default defineSchema({
         /** The Ghostex project's name, when the repo alone is ambiguous. */
         project: v.optional(v.string()),
         linearTeamKey: v.optional(v.string()),
+        /** The Linear project (release) tickets created from this channel go to: its name, id or link. */
+        linearProject: v.optional(v.string()),
       }),
     ),
     /** The Linear team new tickets go to when the channel names none. */
@@ -204,6 +223,15 @@ export default defineSchema({
   })
     .index("by_team_ticket", ["teamId", "ticket"])
     .index("by_member_session", ["memberId", "sessionId"]),
+
+  /** Slack display names the Work page shows for user and channel ids, asked from Slack once and refreshed after a week. */
+  slackNames: defineTable({
+    teamId: v.id("teams"),
+    kind: v.union(v.literal("user"), v.literal("channel")),
+    slackId: v.string(),
+    name: v.string(),
+    updatedAt: v.number(),
+  }).index("by_team_kind_id", ["teamId", "kind", "slackId"]),
 
   /** Calls the dev mocks (`devMocks.ts`) received; empty unless GHOSTEX_DEV_MOCKS is set. */
   devMockCalls: defineTable({
