@@ -79,7 +79,8 @@ Sidebar with Show Advanced on (`closeSidePanelWithLastTab`, on by default).
 
 **Work** lists the tickets, GitHub issues and pull requests of every work-mode
 project in the window, Personal ones too (see Work mode under Git and
-worktrees). Open it with the briefcase at the top of the sidebar, which shows
+worktrees). Like work mode, it is part of Workspaces, which you turn on in
+Settings > Extensions (Features). Open it with the briefcase at the top of the sidebar, which shows
 while the window has a work-mode project, or from **Open a view**. It is one list,
 newest change first, and it opens with **Assigned to me** on; the filters next to
 it pick Linear issues, GitHub issues or PRs, the status, the repo, the Linear
@@ -353,7 +354,14 @@ its agent stops. The session you have open, and a working session with an
 unanswered question (pink), stay in Sessions. Pinned, draft, parked and snoozed
 sessions keep their own sections (`groupWorkingSessions`).
 Workspaces keep different parts of your work apart, for example one per company
-you work for and a Personal one. Each workspace has its own projects, Spaces,
+you work for and a Personal one. Workspaces is a built-in extension, off by
+default: turn it on with its switch in Settings > Extensions (Features). It also
+brings work mode, the Work view and the team backend (see Git and worktrees).
+While it is off there is no workspace button, every window shows every project,
+and the `ghostex workspace`, `work-mode`, `link-session`, `team` and `slack`
+commands say it is turned off; your workspaces, links, Linear keys and team
+connections are kept and come back when you turn it on (`workspacesHidden`).
+Each workspace has its own projects, Spaces,
 Linear API key, Claude account and Browser sign-ins (cookies), and a window
 shows one workspace at a time. Every install starts with one workspace,
 Personal, holding all your projects and Spaces. The workspace button is the
@@ -2209,7 +2217,9 @@ worktree as its own project so a second agent works on a branch without
 touching the main checkout; worktrees can be renamed, merged back, and
 deleted from the sidebar.
 
-Work mode links a project's sessions to the work they belong to. It is on by
+Work mode links a project's sessions to the work they belong to. It comes with
+Workspaces: turn Workspaces on in Settings > Extensions (Features) first; while
+it is off no project is in work mode and sessions show no work links. It is on by
 default for projects in a Work workspace and off in a Personal one; right-click
 a project and choose Work Mode, turn on **Work mode** for the project in Settings >
 Projects, or run `ghostex work-mode on` in its folder, to set it yourself, and a project keeps a choice you made when it moves to another
@@ -2260,7 +2270,8 @@ branch. `ghostex work-mode create-ticket --title "…"
 --start` does both from a terminal. New session in a work-mode project still
 starts on main with no worktree.
 
-A Work workspace can share a team backend: your team's own Convex project (not
+A Work workspace can share a team backend (part of Workspaces, so turn that on
+in Settings > Extensions first): your team's own Convex project (not
 one Ghostex runs), which receives Slack and Linear events while your computer is
 off and hands requests to the right person's Ghostex as soon as it is online. One
 person sets it up with `ghostex team deploy --workspace <name>`, which uses their
@@ -2344,11 +2355,13 @@ post`.
   project.
   Features are whole parts of Ghostex you can switch off to keep the app
   simple: Actions (off by default), Open In (on by default), Spaces (off by
-  default) and Cloud Boxes (off by default; macOS and Linux only, not listed on
-  Windows). Turning one off removes it everywhere at once (its header button,
+  default), Cloud Boxes (off by default; macOS and Linux only, not listed on
+  Windows) and Workspaces (off by default; it brings workspaces, work mode, the
+  Work view and the team's Slack flow). Turning one off removes it everywhere at once (its header button,
   Settings pages and rows, hotkeys, Quick Access rows and menus) and turning it
   back on restores everything you had set up. Settings: `actionsHidden`,
-  `openInTitlebarButtonHidden`, `sidebarSpacesEnabled`, `cloudBoxesHidden`.
+  `openInTitlebarButtonHidden`, `sidebarSpacesEnabled`, `cloudBoxesHidden`,
+  `workspacesHidden`.
   The Edit (pencil) button on a card chooses where that view, header button, or
   extension appears. Pick **Everywhere** or **Only in selected places**, then
   choose projects and spaces from the dropdown next to **Except in** (or

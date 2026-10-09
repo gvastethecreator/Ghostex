@@ -12,6 +12,13 @@ pub(super) fn owns(state: &str) -> bool {
     state.starts_with("workspaces-") || state.starts_with("projects-work-mode")
 }
 
+/// These states show the Workspaces built-in extension's pages and rows, so it is on for them.
+pub(super) fn story_settings(state: &str, settings: &mut serde_json::Map<String, Value>) {
+    if owns(state) {
+        settings.insert("workspacesHidden".into(), json!(false));
+    }
+}
+
 pub(super) fn open_message(state: &str) -> Option<Value> {
     owns(state).then(|| match state {
         _ if state.starts_with("projects-work-mode") => {

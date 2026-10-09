@@ -60,6 +60,7 @@ pub(crate) fn official(platform: Platform) -> Section {
         row("openIn", "Open In", "Open the active project or a session's folder in your editor, terminal or file manager from the Open button and the Open In menus."),
         row("spaces", "Spaces", "Group projects into Spaces and switch between them from a row of icons at the top of the sidebar, or by swiping."),
         row("cloudBoxes", "Cloud Boxes", "Run agent sessions in isolated boxes, in Docker on this computer or in the cloud, from New Thread's Run on choice or Run in a Box in the Select Agent menu."),
+        row("workspaces", "Workspaces", "Keep each company's projects, Spaces, browser sign-ins and Claude account in its own workspace, and turn on work mode: Linear tickets and GitHub pull requests on your sessions, the Work view and your team's Slack flow."),
         row("extensionsButton", "Extensions", "An entry in the work area header’s ⋯ menu that opens this Extensions page."),
         row("cef", "Chromium runtime (CEF)", "Install, reinstall or uninstall the optional web runtime used by the Browser, the Code view, website and extension views, and HTML files in Files."),
     ];

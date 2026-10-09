@@ -7,9 +7,8 @@ use serde_json::{json, Map, Value};
 use crate::domain::DomainStateError;
 use crate::protocol::rpc_success;
 use crate::work_mode::{
-    linear_api_key_summary, merge_work_links, project_work_mode, resolve_work_mode_project,
-    set_project_work_mode, store_linear_api_key, verify_linear_api_key, write_work_links,
-    LinearKeyScope,
+    linear_api_key_summary, merge_work_links, resolve_work_mode_project, set_project_work_mode,
+    store_linear_api_key, verify_linear_api_key, write_work_links, LinearKeyScope,
 };
 
 use super::super::work_mode_sync::{publish_project_work_mode_change, spawn_work_mode_refresh};
@@ -42,7 +41,7 @@ pub(super) async fn route_work_mode_http(
                             })?;
                     let project = resolve_work_mode_project(repository, params)?;
                     let project_id = value_text(&project, "projectId")?;
-                    let project = if project_work_mode(&project) == enabled
+                    let project = if crate::work_mode::stored_project_work_mode(&project) == enabled
                         && crate::workspaces::project_work_mode_set_by_hand(&project)
                     {
                         project

@@ -633,11 +633,26 @@ fn run_command(name: &str, args: &[String]) -> CliResult<()> {
             fail_on_not_ok,
             args,
         ),
-        "work-mode" => work_mode::work_mode_command(args),
-        "workspace" => workspace::workspace_command(args),
-        "team" => team::team_command(args),
-        "slack" => team_slack::slack_command(args),
-        "link-session" => work_mode::link_session_command(args),
+        "work-mode" => {
+            require_built_in(ghostex_settings_catalog::built_in_extensions::WORKSPACES)?;
+            work_mode::work_mode_command(args)
+        }
+        "workspace" => {
+            require_built_in(ghostex_settings_catalog::built_in_extensions::WORKSPACES)?;
+            workspace::workspace_command(args)
+        }
+        "team" => {
+            require_built_in(ghostex_settings_catalog::built_in_extensions::WORKSPACES)?;
+            team::team_command(args)
+        }
+        "slack" => {
+            require_built_in(ghostex_settings_catalog::built_in_extensions::WORKSPACES)?;
+            team_slack::slack_command(args)
+        }
+        "link-session" => {
+            require_built_in(ghostex_settings_catalog::built_in_extensions::WORKSPACES)?;
+            work_mode::link_session_command(args)
+        }
         "delayed-send" => {
             // `--cancel` clears the armed automation; otherwise the parser
             // accepts the timer and both agent-completion trigger modes.
@@ -887,7 +902,8 @@ fn run_command(name: &str, args: &[String]) -> CliResult<()> {
     }
 }
 
-/// A verb of a built-in extension that is off (Actions, Spaces) answers "turned off".
+/// A verb of a built-in extension that is off (Actions, Spaces, Cloud Boxes, Workspaces) answers
+/// "turned off".
 fn require_built_in(id: &str) -> CliResult<()> {
     built_in_extensions::require_built_in_extension(id)
 }

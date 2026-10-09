@@ -4,7 +4,14 @@ use serde_json::{json, Map, Value};
 
 use crate::domain::{DomainRepository, DomainStateError};
 
+/// Whether work mode is on for `project`: its switch, while the Workspaces built-in extension is
+/// on (`crate::workspaces::workspaces_feature_enabled`); off for every project otherwise.
 pub(crate) fn project_work_mode(project: &Value) -> bool {
+    stored_project_work_mode(project) && crate::workspaces::workspaces_feature_enabled()
+}
+
+/// The project's own Work mode switch as stored, whether or not Workspaces is on.
+pub(crate) fn stored_project_work_mode(project: &Value) -> bool {
     project
         .get("launchSettings")
         .and_then(|settings| settings.get("workMode"))

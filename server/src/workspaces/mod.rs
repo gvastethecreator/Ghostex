@@ -20,8 +20,10 @@
 //! the sidebar filter in packages/gx-core/src/sidebar_view/, and the routes in
 //! server/src/server/route_http/workspaces.rs.
 
+mod feature;
 mod projects;
 mod store;
 
+pub(crate) use feature::*;
 pub(crate) use projects::*;
 pub use store::*;

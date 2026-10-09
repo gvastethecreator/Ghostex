@@ -402,6 +402,7 @@ How to use this file:
 - **Open In** `openIn` (Settings UI row without a settings key; use `ghostex settings open`): Open the active project or a session's folder in your editor, terminal or file manager from the Open button and the Open In menus.
 - **Spaces** `spaces` (Settings UI row without a settings key; use `ghostex settings open`): Group projects into Spaces and switch between them from a row of icons at the top of the sidebar, or by swiping.
 - **Cloud Boxes** `cloudBoxes` (Settings UI row without a settings key; use `ghostex settings open`): Run agent sessions in isolated boxes, in Docker on this computer or in the cloud, from New Thread's Run on choice or Run in a Box in the Select Agent menu.
+- **Workspaces** `workspaces` (Settings UI row without a settings key; use `ghostex settings open`): Keep each company's projects, Spaces, browser sign-ins and Claude account in its own workspace, and turn on work mode: Linear tickets and GitHub pull requests on your sessions, the Work view and your team's Slack flow.
 - **Extensions** `extensionsButton` (Settings UI row without a settings key; use `ghostex settings open`): An entry in the work area header’s ⋯ menu that opens this Extensions page.
 - **Chromium runtime (CEF)** `cef` (Settings UI row without a settings key; use `ghostex settings open`): Install, reinstall or uninstall the optional web runtime used by the Browser, the Code view, website and extension views, and HTML files in Files.
 - **Hide Bots** `botsHidden` (boolean, default true): Stop offering Bots, the sidebar mode with one row per Hermes profile. Hidden by default; offered only where the Hermes CLI is installed.
@@ -410,6 +411,7 @@ How to use this file:
 - **Turn off Open In** `openInTitlebarButtonHidden` (boolean, default false): Turn off Open In everywhere: the Open button, the Open In page in Settings and the Open In menus. Your apps and custom commands are kept.
 - **Spaces** `sidebarSpacesEnabled` (boolean, default false): Turn on Spaces: a row of Space icons at the top of the sidebar, Space menus, and the Space settings. Off by default; your saved Spaces are kept while it is off.
 - **Turn off Cloud Boxes** `cloudBoxesHidden` (boolean, default true): Turn off Cloud Boxes everywhere: the Cloud Boxes page in Settings, the Run on choice of a new thread, Run in a Box in the Select Agent menu and the agentbox commands. Off by default; your boxes and box settings are kept. Only on macOS and Linux.
+- **Turn off Workspaces** `workspacesHidden` (boolean, default true): Turn off Workspaces and work mode everywhere: the workspace button, the Workspaces page in Settings, Work mode on projects, the Work view, Linear and GitHub links on sessions and the workspace commands. Off by default; your workspaces, links, keys and team connections are kept.
 ### Extensions Store
 
 - **Extension store** `store` (Settings UI row without a settings key; use `ghostex settings open`): Browse audited extensions, install them, and manage what is already installed.

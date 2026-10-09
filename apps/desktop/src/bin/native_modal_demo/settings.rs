@@ -62,6 +62,7 @@ fn story_settings(state: &str) -> serde_json::Map<String, Value> {
     settings_f2::story_settings(state, &mut settings);
     settings_f1::story_settings(state, &mut settings);
     settings_e::story_settings(state, &mut settings);
+    settings_workspaces::story_settings(state, &mut settings);
     if let Ok(Value::Object(extra)) = std::env::var("GHOSTEX_NATIVE_MODAL_DEMO_SETTINGS")
         .map_err(|_| ())
         .and_then(|text| serde_json::from_str::<Value>(&text).map_err(|_| ()))

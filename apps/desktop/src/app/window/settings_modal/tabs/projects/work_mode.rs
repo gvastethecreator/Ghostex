@@ -288,6 +288,15 @@ impl ProjectsTab {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
+        // Both rows belong to the Workspaces built-in extension (its `settingKeys`), hidden while
+        // it is off like Spaces' rows on the General page.
+        let values = self.store.read(cx).values();
+        if !ghostex_settings_catalog::built_in_extensions::enabled_with(
+            ghostex_settings_catalog::built_in_extensions::WORKSPACES,
+            |key| Some(values.bool(key)),
+        ) {
+            return Vec::new();
+        }
         if !self.work.requested {
             self.reload_work_mode_status(cx);
         }

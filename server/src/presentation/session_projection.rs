@@ -109,11 +109,13 @@ pub(crate) fn project_presentation_project(project: &Value) -> Value {
             output.insert("workLinear".to_string(), Value::Bool(true));
         }
     }
-    if let Some(workspace_id) = crate::workspaces::stored_project_workspace_id(project) {
-        output.insert("workspaceId".to_string(), json!(workspace_id));
-    }
-    if crate::workspaces::project_in_every_workspace(project) {
-        output.insert("everyWorkspace".to_string(), Value::Bool(true));
+    if crate::workspaces::workspaces_feature_enabled() {
+        if let Some(workspace_id) = crate::workspaces::stored_project_workspace_id(project) {
+            output.insert("workspaceId".to_string(), json!(workspace_id));
+        }
+        if crate::workspaces::project_in_every_workspace(project) {
+            output.insert("everyWorkspace".to_string(), Value::Bool(true));
+        }
     }
     Value::Object(output)
 }

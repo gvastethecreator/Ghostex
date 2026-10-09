@@ -110,6 +110,8 @@ pub const DEFAULT_GHOSTEX_SETTINGS: &[(&str, J)] = &[
     ("actionsHidden", J::Bool(true)),
     // CDXC:AgentBox 2026-10-06 DECISION: Cloud Boxes is off by default (official_extensions.rs).
     ("cloudBoxesHidden", J::Bool(true)),
+    // CDXC:Workspaces 2026-10-09 DECISION: Workspaces is off by default (official_extensions.rs).
+    ("workspacesHidden", J::Bool(true)),
     ("openInTitlebarButtonHidden", J::Bool(false)),
     // CDXC:CodeEditor 2026-05-06-15:00
     // Embedded code-server editor panes can reuse the user's local VS Code

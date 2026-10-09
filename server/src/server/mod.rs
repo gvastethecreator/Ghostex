@@ -153,6 +153,7 @@ pub(crate) mod title_job_recovery;
 pub mod typed_operation_http;
 pub mod worktree_ops;
 mod work_mode_sync;
+mod workspaces_switch;
 pub mod ws;
 pub mod zmx_http;
 mod app_state;

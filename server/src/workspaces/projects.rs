@@ -219,6 +219,11 @@ pub(crate) fn place_added_project(
     if project_parent_id(&project).is_some() {
         return place_worktree_project(repository, db, project);
     }
+    // With Workspaces off a window has no workspace to add to, so the project stays in the
+    // default one.
+    if !super::workspaces_feature_enabled() {
+        return Ok(project);
+    }
     let Some(reference) = params
         .get("workspaceId")
         .and_then(Value::as_str)
@@ -356,11 +361,15 @@ pub(crate) fn resolve_project_reference(
     id_of(&project).ok_or_else(|| DomainStateError::bad_request("No project id."))
 }
 
-/// The Claude account the workspace of `project` picked for its agents, if any.
+/// The Claude account the workspace of `project` picked for its agents, if any. None while
+/// Workspaces is off: launches use the account they would without workspaces.
 pub(crate) fn project_claude_account_id(
     db: &rusqlite::Connection,
     project: &Value,
 ) -> Result<Option<String>, DomainStateError> {
+    if !super::workspaces_feature_enabled() {
+        return Ok(None);
+    }
     let workspaces = read_sidebar_workspaces(db)?;
     let project_workspace = match project
         .get("worktree")

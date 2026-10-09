@@ -19,7 +19,7 @@ mod work_page;
 pub(crate) use deploy::{deploy_team_functions, DeployOptions};
 pub(crate) use invite_link::site_url;
 pub(crate) use operations::*;
-pub(crate) use runtime::spawn_team_sync_task;
+pub(crate) use runtime::{reload_team_sync, spawn_team_sync_task};
 pub(crate) use slack_flow_settings::*;
 pub(crate) use slack_post::post_slack_working_thread;
 pub(crate) use work_page::*;

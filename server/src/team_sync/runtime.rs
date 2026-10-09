@@ -71,9 +71,17 @@ pub(crate) fn spawn_team_sync_task(state: &Arc<AppState>) -> JoinHandle<()> {
     tokio::spawn(async move {
         loop {
             let paths = state.paths.clone();
-            let connections = tokio::task::spawn_blocking(move || read_team_connections(&paths))
-                .await
-                .unwrap_or_default();
+            // While the Workspaces built-in extension is off no workspace subscribes; the stored
+            // connections are kept, and turning it on reloads (`reload_team_sync`).
+            let connections = tokio::task::spawn_blocking(move || {
+                if crate::workspaces::read_workspaces_feature_enabled(&paths) {
+                    read_team_connections(&paths)
+                } else {
+                    Vec::new()
+                }
+            })
+            .await
+            .unwrap_or_default();
             if let Ok(mut statuses) = statuses().lock() {
                 statuses.clear();
             }

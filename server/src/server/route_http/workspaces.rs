@@ -257,12 +257,17 @@ fn publish_projects(
     Ok(())
 }
 
-/// Callers hold the presentation event sequencer.
+/// Callers hold the presentation event sequencer. Nothing is sent while the Workspaces built-in
+/// extension is off: clients then hold no workspaces document, and one frame would bring the tile
+/// back.
 fn broadcast_workspaces(
     state: &AppState,
     db: &rusqlite::Connection,
     workspaces: &Value,
 ) -> Result<(), DomainStateError> {
+    if !crate::workspaces::workspaces_feature_enabled() {
+        return Ok(());
+    }
     let revision = increment_presentation_revision(db)?;
     state.event_hub.broadcast(json!({
         "protocolVersion": GXSERVER_PROTOCOL_VERSION,

@@ -27,6 +27,10 @@ pub const SPACES: &str = "spaces";
 /// Cloud Boxes (Settings > Cloud Boxes, the new thread's Run on choice, Run in box menus, the
 /// `ghostex agentbox` verbs). macOS and Linux only.
 pub const CLOUD_BOXES: &str = "cloudBoxes";
+/// Workspaces and work mode (the workspace tile, Settings > Workspaces, Work mode on projects,
+/// Link to, Create Linear ticket, the Work view, the team's Slack flow, the `ghostex workspace`,
+/// `work-mode`, `link-session`, `team` and `slack` verbs).
+pub const WORKSPACES: &str = "workspaces";
 
 fn entry(id: &str) -> Option<&'static J> {
     GHOSTEX_OFFICIAL_EXTENSIONS

@@ -9574,6 +9574,17 @@
       "agentWritable": false
     },
     {
+      "key": "workspaces",
+      "title": "Workspaces",
+      "subtitle": "Keep each company's projects, Spaces, browser sign-ins and Claude account in its own workspace, and turn on work mode: Linear tickets and GitHub pull requests on your sessions, the Work view and your team's Slack flow.",
+      "tab": "extensions",
+      "tabTitle": "Extensions",
+      "section": "official",
+      "sectionTitle": "Built-in",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
       "key": "extensionsButton",
       "title": "Extensions",
       "subtitle": "An entry in the work area header’s ⋯ menu that opens this Extensions page.",
@@ -9667,6 +9678,18 @@
       "default": true,
       "agentWritable": true,
       "availability": "Only on macOS and Linux."
+    },
+    {
+      "key": "workspacesHidden",
+      "title": "Turn off Workspaces",
+      "subtitle": "Turn off Workspaces and work mode everywhere: the workspace button, the Workspaces page in Settings, Work mode on projects, the Work view, Linear and GitHub links on sessions and the workspace commands. Off by default; your workspaces, links, keys and team connections are kept.",
+      "tab": "extensions",
+      "tabTitle": "Extensions",
+      "section": "official",
+      "sectionTitle": "Built-in",
+      "type": "boolean",
+      "default": true,
+      "agentWritable": true
     },
     {
       "key": "store",

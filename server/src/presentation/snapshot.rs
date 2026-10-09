@@ -386,9 +386,10 @@ pub fn presentation_capabilities(sidebar_v2_selected: bool) -> Value {
         `workspaces` promises `sidebarWorkspaces` in the snapshot, `workspaceId` on projects and
         Spaces, and the workspace routes (`/api/readWorkspaces` … `/api/moveProjectToWorkspace`).
         A client viewing a daemon without it shows that machine's projects and Spaces unfiltered
-        and offers no workspace tile or Move to workspace.
+        and offers no workspace tile or Move to workspace, which is also what the Workspaces
+        built-in extension being off means, so the flag follows that switch.
         */
-        "workspaces": true,
+        "workspaces": crate::workspaces::workspaces_feature_enabled(),
         /*
         CDXC:Worktrees 2026-07-29-00:00:
         `worktreeSessions` promises `/api/createWorktreeSession` and

@@ -42,11 +42,16 @@ pub(crate) fn insert_sidebar_project_collections_presentation_payload(
 
 /// CDXC:Workspaces 2026-10-09 WHY:
 /// The workspaces document rides the snapshot beside Spaces, so a window can filter its projects
-/// and Spaces by workspace from its first frame.
+/// and Spaces by workspace from its first frame. While the Workspaces built-in extension is off it
+/// is left out (and `capabilities.workspaces` is false), which every client already reads as a
+/// daemon without workspaces: no tile, every project in every window.
 pub(crate) fn insert_sidebar_workspaces_presentation_payload(
     snapshot: &mut Value,
     db: &Connection,
 ) -> Result<(), DomainStateError> {
+    if !crate::workspaces::workspaces_feature_enabled() {
+        return Ok(());
+    }
     let workspaces = crate::workspaces::read_sidebar_workspaces(db)?;
     if let Some(snapshot) = snapshot.as_object_mut() {
         snapshot.insert("sidebarWorkspaces".to_string(), workspaces);
