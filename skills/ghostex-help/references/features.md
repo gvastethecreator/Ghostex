@@ -711,6 +711,9 @@ off in this version on every platform while it is being fixed, so there is no
 microphone button yet.
 A long code block shows its first lines and scrolls inside the block; the arrows
 button in the block's header shows the whole block, and again collapses it.
+A long message you sent (more than 20 lines or 2,000 characters, such as a
+pasted log) shows its first lines with Show more under them; Show less folds it
+again. Copy still copies the whole message.
 Hover a message to show its actions and the time it was sent in a row below
 it: Copy message, Reply by Annotating, and Save to md under an agent's final
 reply; Rewind to here, Save prompt, and Copy message under your own messages.

@@ -375,13 +375,7 @@ impl NativeChatView {
                 .border_color(gpui::transparent_black())
                 .p(px(12.0 * s))
                 .bg(p.input)
-                .child(self.markdown(
-                    format!("user:{id}"),
-                    body.clone(),
-                    &message["markdownReferences"],
-                    &bubble_appearance,
-                    cx,
-                ))
+                .child(self.prompt_body(&id, message, body.clone(), &bubble_appearance, p, cx))
                 .children(indicator);
             let failed_delivery = self.render_startup_delivery(message, false, p, cx);
             // The prompt's own pictures sit above the bubble, where their author put them.
@@ -570,6 +564,57 @@ impl NativeChatView {
             row = row.child(self.reply_actions(message, reply_focused, p, cx));
         }
         row.into_any_element()
+    }
+
+    /// A prompt's text in its bubble. A long one shows only its first lines (the core's
+    /// `collapsedText`, `long_prompt.rs`) with Show more under them until the reader expands it,
+    /// so the rest is never laid out unless it is read.
+    fn prompt_body(
+        &self,
+        id: &str,
+        message: &Value,
+        body: String,
+        bubble: &ChatAppearance,
+        p: &ChatAppearance,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let collapsed = text(message, "collapsedText");
+        if collapsed.is_empty() {
+            return self.markdown(
+                format!("user:{id}"),
+                body,
+                &message["markdownReferences"],
+                bubble,
+                cx,
+            );
+        }
+        let key = format!("prompt:{id}");
+        let expanded = self.expanded.contains(&key);
+        let prose = if expanded {
+            self.markdown(
+                format!("user:{id}"),
+                body,
+                &message["markdownReferences"],
+                bubble,
+                cx,
+            )
+        } else {
+            self.markdown(
+                format!("user-collapsed:{id}"),
+                collapsed,
+                &message["collapsedReferences"],
+                bubble,
+                cx,
+            )
+        };
+        div()
+            .flex()
+            .flex_col()
+            .min_w_0()
+            .gap(px(8.0 * p.scale))
+            .child(prose)
+            .child(self.show_more_toggle(format!("prompt-toggle:{id}"), key, expanded, p, cx))
+            .into_any_element()
     }
 }
 

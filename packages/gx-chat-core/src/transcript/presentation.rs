@@ -21,6 +21,7 @@ use crate::transcript::foreign::{
 use crate::transcript::images::{image_source, ImageRef};
 use crate::transcript::jsstr::js_trim;
 use crate::transcript::line_breaks::{agent_line_breaks, user_line_breaks, AgentLineBreaks};
+use crate::transcript::long_prompt::collapsed_prompt;
 use crate::transcript::markdown_links::markdown_references;
 use crate::transcript::message_text::{
     message_action_content, normalize_user_message_markdown, split_reasoning_headline,
@@ -132,6 +133,11 @@ pub fn project_message(
     } else {
         native_markdown(&displayed_body, false)
     };
+    // A long prompt's first lines, which its bubble shows until it is expanded.
+    let collapsed_body = is_user
+        .then(|| collapsed_prompt(&displayed_body))
+        .flatten()
+        .map(|preview| native_markdown(&user_line_breaks(&preview), true));
     let suppressed = suppressed_turn_presentation(message);
     let rows = tool_rows(&tool_pairs, agent_path, working_directory);
     let system_card = classify_system_card(message, &displayed_body);
@@ -166,6 +172,19 @@ pub fn project_message(
     projected.insert(
         "markdownReferences".to_string(),
         Value::Array(markdown_references(&native_body)),
+    );
+    projected.insert(
+        "collapsedReferences".to_string(),
+        Value::Array(
+            collapsed_body
+                .as_deref()
+                .map(markdown_references)
+                .unwrap_or_default(),
+        ),
+    );
+    projected.insert(
+        "collapsedText".to_string(),
+        collapsed_body.map_or(Value::Null, Value::String),
     );
     projected.insert(
         "reasoning".to_string(),
