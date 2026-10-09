@@ -169,6 +169,8 @@ pub struct ProjectContextView {
     pub bot_profile: Option<String>,
     /// Whether that bot's Hermes gateway runs (the row's dot); false for every ordinary project.
     pub bot_gateway_running: bool,
+    /// Work mode is on for this project (server/src/work_mode/), which ticks its menu item.
+    pub work_mode: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -201,6 +203,9 @@ pub struct SectionView {
     pub question_count: usize,
     /// The rows this heading draws: its sessions, minus the ones the compact list leaves out.
     pub session_ids: Vec<String>,
+    /// Every row of the heading, the compact list's and a collapsed heading's hidden ones too. Only
+    /// the Parked heading fills it, for its Sleep All and Close All; empty for every other one.
+    pub member_ids: Vec<String>,
 }
 
 /// A row in a group: the session's own values plus what this list says about it.
@@ -364,6 +369,9 @@ pub struct SessionRow {
     pub thread_state: Option<String>,
     /// The agentbox box the session's agent runs in, when it does not run on its machine.
     pub agentbox: Option<crate::agentbox::SessionAgentbox>,
+    /// What the session is linked to; present only for a session of a project with work mode on
+    /// (server/src/work_mode/).
+    pub work: Option<super::work::SessionWork>,
 }
 
 /// What a row's context menu, hover actions and Copy Details need beyond what it draws.
@@ -391,6 +399,8 @@ pub struct SessionMenuFacts {
     /// stream does not carry it, so on this client it is always absent and both items are hidden,
     /// exactly as they are in the TypeScript projection.
     pub first_user_message: Option<String>,
+    /// The checkout's branch, for Copy Branch: the work-mode branch, else the git probe's.
+    pub branch: Option<String>,
     /// A remote row publishes whether its machine can do these; a local daemon row always can.
     pub can_schedule_delayed_send: bool,
     pub can_toggle_close_after_done: bool,

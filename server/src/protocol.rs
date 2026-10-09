@@ -714,7 +714,20 @@ pub fn endpoint_for(path: &str) -> Option<EndpointDescriptor> {
         | "/api/startExtension"
         | "/api/stopExtension"
         | "/api/extensionStatus"
-        | "/api/extensionBadge" => remote_allowed(path),
+        | "/api/extensionBadge"
+        /*
+        CDXC:WorkMode 2026-10-09 WHY:
+        A sidebar showing a remote machine's projects can flip their Work mode switch and set a
+        session's links like any other session metadata; both take opaque project and session ids.
+        */
+        | "/api/setProjectWorkMode"
+        | "/api/setSessionWorkLinks" => remote_allowed(path),
+        /*
+        CDXC:WorkMode 2026-10-09 WHY:
+        The Linear key is a secret on this computer, so only this computer's clients may set it or
+        ask which keys exist.
+        */
+        "/api/setLinearApiKey" | "/api/readWorkModeStatus" => full_local(path),
         "/api/createQuickProject" | "/api/syncBotProjects" => full_local(path),
         /*
         CDXC:Bots 2026-09-27 WHY:

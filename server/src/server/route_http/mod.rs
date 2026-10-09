@@ -11,6 +11,7 @@ mod projects;
 mod prompts;
 mod sessions;
 mod sidebar;
+mod work_mode;
 
 use agents::route_agents_http;
 use chat::route_chat_http;
@@ -22,3 +23,4 @@ use projects::route_projects_http;
 use prompts::route_prompts_http;
 use sessions::route_sessions_http;
 use sidebar::route_sidebar_http;
+use work_mode::route_work_mode_http;

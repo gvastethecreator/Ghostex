@@ -157,6 +157,21 @@ pub fn project_menu(input: &ProjectMenuInput<'_>) -> Vec<MenuItem> {
             input.spaces,
         ));
     }
+    // CDXC:WorkMode 2026-10-09 DECISION:
+    // User: work mode is a per-project switch: right-click the project → Work mode, on by default for Work-workspace projects (later) and off in Personal. Only this computer's projects: `/api/setProjectWorkMode` answers for the gxserver the app talks to.
+    if project.bot_profile.is_none() && !group.is_remote && !group.is_stale {
+        menu.push(
+            MenuItem::row(
+                "Work Mode",
+                "briefcase",
+                MenuCommand::command(message::set_project_work_mode(
+                    project.project_id.as_str(),
+                    !project.work_mode,
+                )),
+            )
+            .with_checked(project.work_mode),
+        );
+    }
     menu.push(MenuItem::separator());
     // CDXC:ContextMenus 2026-09-29 DECISION:
     // User: a project's menu does not have both New Group and Add to Group > New Project Group; only

@@ -194,6 +194,7 @@ pub mod terminal_ws;
 pub mod toolchain;
 pub mod typed_operations;
 pub(crate) mod visual_pages;
+pub(crate) mod work_mode;
 pub mod workspace_groups;
 pub mod worktree_sessions;
 pub mod zmx;

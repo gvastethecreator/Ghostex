@@ -1,7 +1,7 @@
 use super::drag::SidebarDrag;
 use super::drag::SidebarDropTarget;
 use super::drag_source::SidebarDragSource;
-use super::session_list::{SESSION_HEIGHT, SESSION_INSET_X, SESSION_SPACING};
+use super::session_list::{SESSION_HEIGHT, SESSION_INSET_X, SESSION_SPACING, session_card_height};
 use gpui::prelude::FluentBuilder;
 use gpui::{
     AnyElement, InteractiveElement, IntoElement, MouseButton, ParentElement,
@@ -23,6 +23,9 @@ impl GhostexGpuiApp {
         &self,
         group: &NativeSidebarGroup,
         session: &std::sync::Arc<NativeSidebarSession>,
+        // The unscaled height of the card above this one in the same list, which a thread's tree
+        // line rises to.
+        above_height: f32,
         hud: &Value,
         appearance: &SidebarAppearance,
         cx: &mut gpui::Context<Self>,
@@ -64,6 +67,9 @@ impl GhostexGpuiApp {
             == Some(true);
         let drop_position = self.native_sidebar_session_drop_line(&session_id);
         let scale = appearance.scale;
+        let card_height = session_card_height(session);
+        // The row's left padding before its icon: the card inset plus its depth in a coordinator's tree.
+        let indent = 5.0 + super::threads::thread_depth(session) * super::threads::THREAD_INDENT;
         let hovered = self.native_sidebar.hovered_session.as_deref() == Some(&session_id);
         // CDXC:Sidebar 2026-09-19 WHY: sidebar clicks and tab selections must show in the same frame (user decision in gx_store/local_focus.rs). The focused and visible fills of a local session row read the Rust store, which a selection changes in the same frame; the snapshot's flags arrive a sidebar projection later. This supersedes the click-only `optimistic_focus` mark and its 1.5 second timeout of earlier the same day.
         let (focused, visible) = self.gx_store_sidebar_row_focus(
@@ -138,13 +144,13 @@ impl GhostexGpuiApp {
         .collect::<Vec<_>>()
         .join(", ");
         div().on_children_prepainted(move |bounds, window, cx| { if completion.is_some_and(|start| start.elapsed().as_secs_f32() < 3.0) { window.request_animation_frame(); cx.notify(view.entity_id()); } if let Some(bounds) = bounds.first() { view.update(cx, |app, cx| { if app.native_sidebar.session_card_bounds.get(&reveal_id) != Some(bounds) { app.native_sidebar.session_card_bounds.insert(reveal_id.clone(), *bounds); } app.reveal_native_session_bounds(&reveal_id, *bounds, scale, window, cx) }); } }).w_full().pb(px(SESSION_SPACING * scale)).px(px(SESSION_INSET_X * scale))
-            .child(h_flex()
+            .child(div()
                 .id(format!("native-sidebar-session-{session_id}"))
                 .role(gpui::Role::TreeItem)
                 .aria_label(session.title().to_owned())
                 .aria_description(a11y_description)
                 .aria_selected(focused)
-                .relative().h(px(SESSION_HEIGHT * scale)).w_full().min_w_0().pl(px((5.0 + super::threads::thread_depth(session) * super::threads::THREAD_INDENT) * scale)).pr(px(6.0 * scale)).gap(px(6.0 * scale)).rounded(px(5.0 * scale))
+                .relative().h(px(card_height * scale)).w_full().min_w_0().flex().flex_col().rounded(px(5.0 * scale))
                 .cursor_default()
                 .when(stale, |row| row.opacity(0.55))
                 .when(dim_sleeping && !stale, |row| row.opacity(0.5))
@@ -159,10 +165,13 @@ impl GhostexGpuiApp {
                 .when(!focused, |row| row.hover(|row| row.bg(appearance.session_hover)))
                 .when(focused, |row| row.child(super::decorations::session_outline(appearance)))
                 .when_some(question_fill, |row, fill| row.bg(fill).hover(move |row| row.bg(fill)))
-                .children(super::threads::thread_connector(session, appearance))
-                .child(self.render_native_session_identity(session, icon, hovered, appearance, cx))
+                .children(super::threads::thread_connector(session, card_height, above_height, appearance))
                 .children(self.render_native_session_decorations(session, appearance, cx))
                 .when_some(self.native_sidebar.reveal_flash.as_ref().filter(|(id, _)| id == &session.session_id).map(|(_, start)| *start), |row, start| row.child(super::scroll::reveal_flash(start, scale)))
+                // Line 1 is the whole card of every row without work links, and the absolute
+                // decorations above keep their tops because it starts at the card's top.
+                .child(h_flex().h(px(SESSION_HEIGHT * scale)).flex_shrink_0().w_full().min_w_0().pl(px(indent * scale)).pr(px(6.0 * scale)).gap(px(6.0 * scale))
+                .child(self.render_native_session_identity(session, icon, hovered, appearance, cx))
                 .child(div().id(format!("native-session-title-{session_id}")).flex_1().min_w_0().h_full().flex().items_center().child(div().min_w_0().truncate().child(session.title().to_owned())).when(self.native_sidebar.pointer_inside && self.native_sidebar.menu.is_none() && !cx.has_active_drag(), |row| row.managed_discrete_tooltip_with_placement(tooltip_span.placement(), appearance.tooltip_delay, move |window, cx| super::tooltips::sidebar_tooltip(tooltip.clone(), tooltip_span, scale, window, cx))))
                 .when(!hovered, |row| row.children(super::threads::coordinator_badge(session, appearance)))
                 .when(!hovered, |row| row.children(super::agentbox::agentbox_badge(session, appearance, tooltip_span, self.native_sidebar.pointer_inside && self.native_sidebar.menu.is_none() && !cx.has_active_drag())))
@@ -170,7 +179,8 @@ impl GhostexGpuiApp {
                 // CDXC:SessionStatus 2026-09-13 DECISION: User: hide Last Active while the question dot is shown so they do not overlap, including when the session is not working.
                 .when(!hovered && !question && !session.model_selection_failed && (timer.is_some() || (show_time && session.activity != "working" && session.activity != "attention" && !session.has_background_work)), |row| row.child(div().text_size(px(13.55 * scale)).text_color(if sleeping { chrome_color(0x686868, 0x959595) } else { chrome_color(0xa6a6a6, 0x424242) }).child(time)))
                 .when(hovered, |row| row.child(self.render_native_session_hover_actions(group, session, appearance, cx)))
-                .when(question, |row| row.child(super::status::question_indicator(session.activity == "working", scale)))
+                .when(question, |row| row.child(super::status::question_indicator(session.activity == "working", scale))))
+                .children(self.render_native_session_work_chips(session, indent, tooltip_span, appearance, cx))
                 .when(can_drag && self.native_sidebar.menu.is_none(), |row| row.sidebar_drag_source(dragged, cx))
 .sidebar_drop_target("session", drag_id, Some(drag_group_id), cx)
                 .on_mouse_down(MouseButton::Middle, |_, window, _| {

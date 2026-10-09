@@ -205,6 +205,20 @@ pub(crate) fn session_row(
         .or_else(|| Some(session.updated_at.clone()));
 
     let session_kind = session_kind(&session.kind);
+    let work = session
+        .work
+        .as_ref()
+        .map(super::work::SessionWork::from_presentation);
+    let branch = work
+        .as_ref()
+        .and_then(|work| work.branch.clone())
+        .or_else(|| {
+            session
+                .git_status
+                .as_ref()
+                .and_then(|status| status.branch.clone())
+        })
+        .filter(|branch| !branch.trim().is_empty());
     SessionRow {
         // `combined-session:<project>:<session>` locally, `remote:<machine>:session:<project>:
         // <session>` on a remote machine: the two id spaces must not collide in one list.
@@ -272,6 +286,7 @@ pub(crate) fn session_row(
             terminal_title: session.terminal_title.clone(),
             detail: session.subtitle.clone(),
             first_user_message: None,
+            branch,
             can_schedule_delayed_send: remote_capable,
             can_toggle_close_after_done: remote_capable,
         },
@@ -296,6 +311,7 @@ pub(crate) fn session_row(
                 box_name: agentbox.box_name.clone(),
                 provider_label: agentbox.provider_label.clone(),
             }),
+        work,
         key: Some(key),
     }
 }

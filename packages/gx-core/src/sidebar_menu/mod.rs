@@ -19,6 +19,7 @@ mod capabilities;
 mod clipboard;
 mod collection;
 mod commands;
+mod copy;
 mod group;
 mod header;
 mod host;
@@ -29,6 +30,7 @@ mod menus;
 mod navigation;
 mod project;
 mod run_in_box;
+mod section;
 mod session;
 mod text;
 

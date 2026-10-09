@@ -15,7 +15,6 @@ use crate::sidebar_view::view::SessionRow;
 use crate::sidebar_view::SidebarSettings;
 
 use super::capabilities::{can_sleep, SessionCapabilities};
-use super::clipboard::session_details_text;
 use super::commands::{message, MenuCommand};
 use super::group::MenuGroup;
 use super::hover::{hover_strip, HoverAction, HoverStrip};
@@ -434,7 +433,7 @@ fn full_menu(
     };
     /*
     CDXC:ContextMenus 2026-10-01 DECISION:
-    The user wants the session menu in ChatGPT's conversation-menu order (Rename, Pin, Mark as unread, Archive, then Section after a line), mirrored hover buttons included: "why is rename below those other buttons? match the order of ChatGPT". The rows run Rename, Pin, Snooze, Park, Sleep, Note, then Tag As after a separator, whether a row is there as a mirrored hover button or on its own; this supersedes the mirrored buttons leading the menu in the card's right-to-left order. Note shows here only as a mirrored hover button and otherwise sits first in Advanced. Close keeps its hover-strip rule, and Fork and Copy Details stay in Advanced. The phone's menu (`apps/mobile/app/src/screens/sessions-screen/sidebar-menus.ts`) must match.
+    The user wants the session menu in ChatGPT's conversation-menu order (Rename, Pin, Mark as unread, Archive, then Section after a line), mirrored hover buttons included: "why is rename below those other buttons? match the order of ChatGPT". The rows run Rename, Pin, Snooze, Park, Sleep, Note, then Tag As after a separator, whether a row is there as a mirrored hover button or on its own; this supersedes the mirrored buttons leading the menu in the card's right-to-left order. Note shows here only as a mirrored hover button and otherwise sits first in Advanced. Close keeps its hover-strip rule, and Fork stays in Advanced (Copy Details moved into the Copy submenu on 2026-10-09, sidebar_menu/copy.rs). The phone's menu (`apps/mobile/app/src/screens/sessions-screen/sidebar-menus.ts`) must match.
     */
     const PRIMARY_ORDER: [HoverAction; 7] = [
         HoverAction::Rename,
@@ -617,20 +616,6 @@ fn full_menu(
             MenuCommand::command(message::focus_session_mode(id)),
         ));
     }
-    /*
-    CDXC:ContextMenus 2026-09-26 DECISION:
-    The user wants Copy Details always there under Advanced so anyone can hand a session to another agent; the Settings opt-in that hid it is gone.
-    */
-    advanced.push(MenuItem::separator());
-    advanced.push(MenuItem::heading("Copy"));
-    advanced.push(MenuItem::row(
-        "Copy Details",
-        "copy",
-        MenuCommand::command(message::copy_session_details(
-            id,
-            &session_details_text(row, &group.details()),
-        )),
-    ));
     if !input.below.is_empty() {
         advanced.push(MenuItem::separator());
         advanced.push(MenuItem::heading("Below"));
@@ -691,8 +676,11 @@ fn full_menu(
         ));
         menu.push(MenuItem::submenu("Postpone By", "clock", children));
     }
-    if advanced.len() > 1 {
+    if !menu.is_empty() {
         menu.push(MenuItem::separator());
+    }
+    menu.push(super::copy::copy_submenu(id, row, group));
+    if advanced.len() > 1 {
         menu.push(MenuItem::submenu("Advanced", "dots", advanced));
     }
     if !enabled.contains(&HoverAction::Close) {

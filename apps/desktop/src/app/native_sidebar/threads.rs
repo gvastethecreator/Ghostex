@@ -42,9 +42,13 @@ pub(crate) fn thread_depth(session: &NativeSidebarSession) -> f32 {
 }
 
 /// The tree line: from the top of the row down to the icon (the last thread) or through the row
-/// (a thread with siblings below it), then across to the icon.
+/// (a thread with siblings below it), then across to the icon. `card_height` is this row's card and
+/// `above_height` the card above it, both unscaled: a work-mode card is taller, but its icon still
+/// sits centred in its first `SESSION_HEIGHT`.
 pub(crate) fn thread_connector(
     session: &NativeSidebarSession,
+    card_height: f32,
+    above_height: f32,
     appearance: &SidebarAppearance,
 ) -> Option<AnyElement> {
     let depth = thread_depth(session);
@@ -56,10 +60,11 @@ pub(crate) fn thread_connector(
     let color = chrome_color(0x4a4a4a, 0xc8c8c8);
     // Under the middle of the parent's 15px icon, which starts at the row's 5px inset.
     let x = (5.0 + 7.0 + (depth - 1.0) * THREAD_INDENT) * scale;
-    let height = super::session_list::SESSION_HEIGHT * scale;
-    let mid = height / 2.0;
-    // The line starts right under the parent's icon, which sits centred in the row above.
-    let rise = (mid - 7.5 * scale) + super::session_list::SESSION_SPACING * scale;
+    let height = card_height * scale;
+    let mid = super::session_list::SESSION_HEIGHT * scale / 2.0;
+    // The line starts right under the icon of the row above, centred in that row's first line.
+    let rise =
+        (above_height * scale - mid - 7.5 * scale) + super::session_list::SESSION_SPACING * scale;
     Some(
         div()
             .absolute()

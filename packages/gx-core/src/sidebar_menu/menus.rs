@@ -235,6 +235,15 @@ impl<'a> SidebarMenus<'a> {
         })
     }
 
+    /// A section heading's context menu, or `None` for a heading that has none (only Parked does).
+    pub fn section_menu(
+        &self,
+        group: &GroupView,
+        section: &crate::sidebar_view::SectionView,
+    ) -> Option<Vec<MenuItem>> {
+        super::section::section_menu(group, section)
+    }
+
     /// A project header's context menu: the buttons the header no longer draws, then the menu proper.
     pub fn project_menu(&self, group: &GroupView) -> Vec<MenuItem> {
         let menu_group = self.menu_group(group);

@@ -77,6 +77,9 @@ pub(crate) struct NativeSidebarSection {
     pub(crate) background_work_count: usize,
     pub(crate) question_count: usize,
     pub(crate) session_ids: Vec<String>,
+    /// The heading's right-click menu; only the Parked heading has one (Sleep All, Close All).
+    #[serde(skip)]
+    pub(crate) menu: Option<Arc<Value>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -107,6 +110,10 @@ pub(crate) struct NativeSidebarSession {
     pub(crate) has_composer_draft: bool,
     #[serde(default)]
     pub(crate) queued_prompt_count: u64,
+    /// What a work-mode session is linked to, present only when it has links: the card's second
+    /// line (native_sidebar/work_chips.rs).
+    #[serde(skip)]
+    pub(crate) work: Option<Arc<ghostex_gx_core::SessionWork>>,
     #[serde(flatten)]
     pub(crate) details: serde_json::Map<String, Value>,
 }

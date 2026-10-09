@@ -42,6 +42,7 @@ pub mod tailcat_tunnel;
 pub mod usage;
 pub mod wait;
 pub mod web;
+mod work_mode;
 
 use rpc::{CliError, CliResult};
 
@@ -262,6 +263,8 @@ fn is_known_command(name: &str) -> bool {
         "paired-device-seen",
         "pin-session",
         "park-session",
+        "work-mode",
+        "link-session",
         "delayed-send",
         "close-after-done",
         "send-text",
@@ -624,6 +627,8 @@ fn run_command(name: &str, args: &[String]) -> CliResult<()> {
             fail_on_not_ok,
             args,
         ),
+        "work-mode" => work_mode::work_mode_command(args),
+        "link-session" => work_mode::link_session_command(args),
         "delayed-send" => {
             // `--cancel` clears the armed automation; otherwise the parser
             // accepts the timer and both agent-completion trigger modes.

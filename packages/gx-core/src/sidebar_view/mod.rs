@@ -40,6 +40,7 @@ pub(crate) mod tags;
 pub(crate) mod text;
 mod threads;
 pub(crate) mod view;
+mod work;
 
 pub use armed_actions::{
     armed_actions_by_session, ArmedAction, ARMED_ACTION_CLOSE_AFTER_DONE, ARMED_ACTION_DELAYED_SEND,
@@ -70,6 +71,7 @@ pub use space_sleep::{plan_space_sleep, SpaceSleepPlan, SpaceSleepPlans, SpaceSl
 pub use space_switch::{plan_space_switch_restore, SpaceSwitchFocus};
 pub use spaces::{Space, SpacesState, OTHER_SPACE_ID};
 pub use tags::{TagListItem, TagListItemKind, TagPresentation, UNTAGGED_TAG_FILTER};
+pub use work::{SessionWork, WorkGithubIssue, WorkLinearIssue, WorkLinearProject, WorkPullRequest};
 pub use view::{
     CollectionView, CoordinatorBadge, CoordinatorBadgeTone, DelayedSendView, RowNesting, ThreadTally, EmptyState, GroupCore, GroupSummary, GroupView, LabelDeadline,
     MachineNotice, MachineSummary, MachineTabView, OrderItem, OrderKind, ProjectContextView, RemoteMachineView,

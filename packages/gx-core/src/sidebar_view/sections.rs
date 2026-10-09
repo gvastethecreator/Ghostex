@@ -96,6 +96,14 @@ pub(crate) fn project_session_sections(
                     .filter(|index| is_visible[**index])
                     .map(|index| row(index).sidebar_session_id.clone())
                     .collect(),
+                member_ids: if id == SectionId::Parked {
+                    members
+                        .iter()
+                        .map(|index| row(index).sidebar_session_id.clone())
+                        .collect()
+                } else {
+                    Vec::new()
+                },
             })
         })
         .collect();

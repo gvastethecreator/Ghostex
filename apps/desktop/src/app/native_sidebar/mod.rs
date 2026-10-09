@@ -44,3 +44,4 @@ mod sticky;
 mod threads;
 mod tooltips;
 pub(crate) mod usage;
+mod work_chips;

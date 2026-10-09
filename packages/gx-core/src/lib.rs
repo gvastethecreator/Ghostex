@@ -209,6 +209,7 @@ pub use crate::sidebar_view::{
     SidebarSettings, SidebarUiState, SidebarUpdateWork, SidebarView, SidebarViewModel, Space,
     SpaceSleepPlan, SpaceSleepPlans, SpaceSleepScope, SpaceSwitchFocus, SpaceView, SpacesState,
     TagListItem, TagListItemKind, TagPresentation, UnavailableState, WorktreeView,
+    SessionWork, WorkGithubIssue, WorkLinearIssue, WorkLinearProject, WorkPullRequest,
     ARMED_ACTION_CLOSE_AFTER_DONE, ARMED_ACTION_DELAYED_SEND, LOCAL_MACHINE_ID,
     MACHINE_STATE_CONNECTED, OTHER_SPACE_ID, UNTAGGED_TAG_FILTER,
 };

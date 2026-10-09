@@ -326,6 +326,10 @@ pub(crate) mod message {
         })
     }
 
+    pub(crate) fn sleep_sessions(session_ids: &[String]) -> Value {
+        json!({ "type": "setSessionsSleeping", "sessionIds": session_ids, "sleeping": true })
+    }
+
     pub(crate) fn unsnooze_session(session_id: &str) -> Value {
         json!({ "type": "unsnoozeSession", "sessionId": session_id })
     }
@@ -369,6 +373,11 @@ pub(crate) mod message {
             "sessionId": session_id,
             "detailsText": details_text,
         })
+    }
+
+    /// Any text a Copy row offers (a branch, a Linear ID, a link), straight to the clipboard.
+    pub(crate) fn copy_text(text: &str) -> Value {
+        json!({ "type": "copyText", "text": text })
     }
 
     pub(crate) fn postpone_delayed_send(session_id: &str, delay_ms: i64) -> Value {
@@ -421,6 +430,11 @@ pub(crate) mod message {
 
     pub(crate) fn copy_project_remote_url(remote_url: &str) -> Value {
         json!({ "type": "copyWorkspaceProjectRemoteUrl", "remoteUrl": remote_url })
+    }
+
+    /// Answered by `/api/setProjectWorkMode` (server/src/work_mode/).
+    pub(crate) fn set_project_work_mode(project_id: &str, enabled: bool) -> Value {
+        json!({ "type": "setProjectWorkMode", "projectId": project_id, "enabled": enabled })
     }
 
     pub(crate) fn wake_project_sleeping_sessions(group_id: &str) -> Value {

@@ -137,6 +137,8 @@ export interface GxserverPresentationProject {
   botGatewayRunning?: boolean;
   /** How many runs that bot's cron jobs delivered since local midnight; absent for every other project. */
   botRunsToday?: number;
+  /** Work mode is on for this project (server/src/work_mode/); present only when true. */
+  workMode?: true;
   /*
   CDXC:Icons 2026-07-29 (discovered icons):
   The icon the PROJECT ITSELF ships, discovered server-side inside the checkout
@@ -254,6 +256,30 @@ export interface GxserverPresentationCapabilities {
   worktreeSessions?: boolean;
 }
 
+/** What a session in a work-mode project is linked to (`PresentationSessionWork` in gx-protocol). */
+export interface GxserverPresentationSessionWork {
+  /** The checkout's branch; absent on the default branch or a detached HEAD. */
+  branch?: string;
+  pullRequest?: {
+    number: number;
+    state: GxserverPresentationSessionPrState;
+    url?: string;
+    checks?: "passing" | "failing" | "pending";
+  };
+  linearIssues?: Array<{
+    /** `SPX-1245`. */
+    identifier: string;
+    title?: string;
+    /** `triage`, `backlog`, `unstarted`, `started`, `completed` or `canceled`. */
+    stateType?: string;
+    stateName?: string;
+    url?: string;
+  }>;
+  githubIssues?: Array<{ number: number; title?: string; state?: "open" | "closed"; url?: string }>;
+  /** A Linear project is a release the team works on, never a repo. */
+  linearProject?: { name: string; url?: string };
+}
+
 /** The agentbox sandbox a session's agent runs in (`PresentationAgentbox` in gx-protocol). */
 export interface GxserverPresentationAgentbox {
   /** `docker`, `hetzner`, `vercel`, `daytona`, `e2b`, `digitalocean`, or `docker:<host alias>`. */
@@ -316,6 +342,8 @@ export interface GxserverPresentationSession {
    * work tree, or a daemon that predates the probe entirely.
    */
   gitStatus?: GxserverPresentationSessionGitStatus;
+  /** Present only for a session of a project with work mode on. */
+  work?: GxserverPresentationSessionWork;
   groupId: string;
   /**
    * CDXC:SessionSleep 2026-08-22:

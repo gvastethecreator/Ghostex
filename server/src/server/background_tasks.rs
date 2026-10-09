@@ -304,8 +304,9 @@ pub(crate) fn spawn_session_git_status_refresh_task(
             let pass_result = tokio::task::spawn_blocking(move || {
                 /*
                 CDXC:StateSync 2026-07-29:
-                Session git status remains Sidebar V2-only, so read the current
-                setting for that pass. Project origin URLs are now also shown by
+                Session git status remains Sidebar V2-only (plus the projects with
+                work mode on, see `run_session_git_status_refresh_once`), so read the
+                current setting for that pass. Project origin URLs are now also shown by
                 the classic project's Copy Remote URL menu item, so their pass
                 runs for both sidebar versions below.
                 */
@@ -342,6 +343,13 @@ pub(crate) fn spawn_session_git_status_refresh_task(
                 */
                 if let Err(error) = run_project_icon_refresh_once(&pass_state) {
                     log_project_icon_refresh_failure(&pass_state, &error.message);
+                }
+                // Work mode's Linear and `gh` status rides right after the git pass, which it reads.
+                if let Err(error) = super::work_mode_sync::run_work_mode_refresh_once(&pass_state) {
+                    super::work_mode_sync::log_work_mode_refresh_failure(
+                        &pass_state,
+                        &error.message,
+                    );
                 }
                 // Bot gateway dots and today's run counts: small file reads per bot and no spawn,
                 // so they ride here too.
@@ -391,14 +399,37 @@ pub(crate) fn run_session_git_status_refresh_once(
     return is about the rest of the pass: on a V1 machine there is no reason to
     open SQLite and walk every session row to build a cwd set nobody will probe.
     */
-    if !sidebar_v2_selected {
-        return Ok(());
-    }
     let db = open_gxserver_database(&state.paths).map_err(|error| DomainStateError {
         code: "internalError",
         message: format!("SQLite gxserver state error: {error}"),
     })?;
     let repository = DomainRepository::new(&db, state.metadata.server_id.as_str());
+    /*
+    CDXC:WorkMode 2026-10-09 WHY:
+    Work mode reads each session's branch and PR from this same probe, so a project with work mode
+    on is probed on a V1 machine too; every other project still waits for Sidebar V2.
+    */
+    let work_mode_projects: HashSet<String> = repository
+        .list_projects()?
+        .iter()
+        .filter(|project| crate::work_mode::project_work_mode(project))
+        .filter_map(|project| {
+            project
+                .get("projectId")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .collect();
+    if !sidebar_v2_selected && work_mode_projects.is_empty() {
+        return Ok(());
+    }
+    let probes_session = |session: &Value| {
+        sidebar_v2_selected
+            || session
+                .get("projectId")
+                .and_then(Value::as_str)
+                .is_some_and(|project_id| work_mode_projects.contains(project_id))
+    };
     /*
     Only LIVE sessions are probed, and many of them share a checkout, so the
     cache is fed the DEDUPLICATED cwd set: one git (and at most one `gh`) call
@@ -439,7 +470,7 @@ pub(crate) fn run_session_git_status_refresh_once(
     let mut cwds: Vec<String> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
     for session in &sessions {
-        if !crate::presentation::is_active(session) {
+        if !crate::presentation::is_active(session) || !probes_session(session) {
             continue;
         }
         let Some(cwd) =
@@ -452,8 +483,9 @@ pub(crate) fn run_session_git_status_refresh_once(
         }
     }
 
+    // The cwd set is already limited to what may be probed, so the gate is open for it.
     let changed: HashSet<String> =
-        session_git_status::refresh_session_git_status_cache(&cwds, sidebar_v2_selected)
+        session_git_status::refresh_session_git_status_cache(&cwds, true)
             .into_iter()
             .collect();
     if changed.is_empty() {

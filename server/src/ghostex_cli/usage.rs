@@ -441,6 +441,14 @@ pub fn usage() -> String {
             "Park or unpark a session, honoring Sleep session when parking",
         ),
         format_help_command(
+            "work-mode on|off [--project-id id|--path path] | status | linear-key [--project-id id] [--clear]",
+            "Turn work mode on or off for a project (default: the current folder), or save the Linear API key from stdin",
+        ),
+        format_help_command(
+            "link-session <selector> [--pr n|url|none] [--linear SPX-1,SPX-2|none] [--issue n|none] [--linear-project name|none] [--auto]",
+            "Link a session to a PR, Linear or GitHub issues and a Linear project; --auto goes back to what its branch says",
+        ),
+        format_help_command(
             "tag-session <id> <tag|none>",
             "Set or clear a session tag (built-in tag, or a custom tag by name or id)",
         ),

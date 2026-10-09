@@ -524,7 +524,8 @@ where they are while you open, change and close views.
   its terminal; Codex only notices chat sends. All four settings are in
   General > Sidebar without Show Advanced: `enableSessionParking`,
   `sleepSessionWhenParking`, `showTagMenuWhenParking`,
-  `unparkAfterSendingMessage`.
+  `unparkAfterSendingMessage`. Right-click the Parked header to Sleep All or
+  Close All of its sessions.
 - Snooze puts a session away until a chosen time: right-click it and choose
   Snooze (or use the Snooze hover button), then pick 1 hour, 3 hours,
   Tomorrow (9:00) or Next week (Monday 9:00). The session moves into a
@@ -1569,7 +1570,9 @@ An agent can also read or search any other thread, including a sleeping one:
 `ghostex read-session-chat <session> --all --format text` prints the whole
 conversation, and `--grep "<words>" --context 1` finds where a topic came up.
 `<session>` can be any id from the sidebar's Copy Details (right-click a session,
-Advanced > Copy Details; its Global Ref is the most precise), or the title.
+Copy > Copy Details; its Global Ref is the most precise), or the title. The same
+Copy menu also copies the session's branch, its Linear issue ID and link, and its
+pull request or GitHub issue link when it has them.
 Copy Details lists the session's agent, title, Global Ref, agent session id,
 zmx name and project, and ends with a pointer to `$ghostex-agents`: paste it
 into another agent's chat and mention that skill, and the agent can message or
@@ -2128,10 +2131,26 @@ worktree as its own project so a second agent works on a branch without
 touching the main checkout; worktrees can be renamed, merged back, and
 deleted from the sidebar.
 
+Work mode links a project's sessions to the work they belong to. Right-click a
+project and choose Work Mode, or run `ghostex work-mode on` in its folder. In a
+work-mode project, a session linked to a GitHub pull request, a GitHub issue, a
+Linear issue or a Linear project gets a second line on its card: the PR with its
+state and checks, the issue with its status, and the Linear project. Click one to
+open it. Links come from the session's branch on their own (a branch named like
+`yahia/spx-1245-copy-link` or `yahia/218-arabic-plan-cards`), from the PR Linear
+attached to the issue, or by hand with `ghostex link-session <session> --pr 6538
+--linear SPX-1245 --issue 218`; `--auto` goes back to what the branch says. A
+session on a branch other than main is titled by that branch, without your name
+and the ticket ID, until you rename it. Linear status needs a Linear API key: run
+`ghostex work-mode linear-key` and paste it (`--project-id <id>` sets one for a
+single project, `--clear` removes it). GitHub status comes from `gh`, so sign in
+with `gh auth login`. `ghostex work-mode status` says what is set up.
+
 Related settings: Settings > Projects > Global Defaults (worktree command,
 docs directory), `hideProjectHeaderDiffStats`,
 `showProjectEditorDiffFileCount`,
-`showUntrackedProjectDiffWhenNoTrackedChanges`.
+`showUntrackedProjectDiffWhenNoTrackedChanges`. Work mode: `ghostex work-mode
+on|off|status|linear-key`, `ghostex link-session`.
 
 ## Extensions, Open In, and integrations
 

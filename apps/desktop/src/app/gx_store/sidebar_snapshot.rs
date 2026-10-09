@@ -505,6 +505,9 @@ fn native_group(
                 background_work_count: section.background_work_count,
                 question_count: section.question_count,
                 session_ids: section.session_ids.clone(),
+                menu: menus
+                    .section_menu(group, section)
+                    .map(|items| Arc::new(menu_to_json(&items))),
             })
             .collect(),
         title: core.title.clone(),
@@ -928,6 +931,11 @@ fn build_session(
         favicon_data_url: row.favicon_data_url.clone(),
         has_composer_draft: row.has_composer_draft,
         queued_prompt_count: row.queued_prompt_count.unwrap_or(0),
+        work: row
+            .work
+            .as_ref()
+            .filter(|work| work.has_links())
+            .map(|work| Arc::new(work.clone())),
         details,
     }
 }
