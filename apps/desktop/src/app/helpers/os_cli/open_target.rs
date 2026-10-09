@@ -118,8 +118,16 @@ pub(crate) fn gpui_open_with_application(
         .map_err(|_| "The app could not open the file.".to_string())
 }
 
-/// Open With lists no apps outside macOS, so nothing asks for one here.
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+pub(crate) fn gpui_open_with_application(
+    app: &Path,
+    target: &std::ffi::OsStr,
+) -> Result<(), String> {
+    super::windows_open_with_application(app, target)
+}
+
+/// Open With lists no apps on Linux, so nothing asks for one here.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub(crate) fn gpui_open_with_application(
     _app: &Path,
     target: &std::ffi::OsStr,

@@ -24,6 +24,9 @@ resvg = { version = "0.46.0", default-features = false, features = ["text", "sys
 # PNG encoding for the check's picture (tiny-skia's `png-format`, on by default).
 tiny-skia = "0.11"
 ghostex-agent-sync = { path = "../packages/agent-sync" }
+# The live subscription to a Work workspace's team Convex project (crate::team_sync). rustls, not the
+# default vendored OpenSSL, so it reuses the TLS stack the server already ships.
+convex = { version = "0.10.4", default-features = false, features = ["rustls-tls-webpki-roots"] }
 libc = "0.2"
 markdown = "1"
 md-5 = "0.10"

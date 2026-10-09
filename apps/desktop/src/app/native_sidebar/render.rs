@@ -360,7 +360,7 @@ impl GhostexGpuiApp {
             )
             .children(self.render_native_sticky_project(&content, &appearance, cx))
             .children(self.render_native_sidebar_usage_peek(&appearance, window, cx))
-            .children(self.render_native_sidebar_menu(cx))
+            .children(self.render_native_sidebar_menu(window, cx))
             .into_any_element()
     }
 }

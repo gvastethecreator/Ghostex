@@ -165,6 +165,23 @@ impl GhostexGpuiApp {
             }
             None => None,
         };
+        // CDXC:Workspaces 2026-10-09 WHY: a project added in a window, or cloned from Add
+        // Project, joins the workspace that window shows on this computer (gxserver's
+        // `place_added_project`; a clone job carries the id until the project is registered).
+        let mut params = params;
+        if remote_machine_id.is_none()
+            && matches!(
+                operation,
+                GpuiAddProjectDialogOperation::Add | GpuiAddProjectDialogOperation::StartClone
+            )
+        {
+            if let (Some(workspace_id), Some(params)) = (
+                self.gx_store_window_non_default_workspace_id(),
+                params.as_object_mut(),
+            ) {
+                params.insert("workspaceId".to_string(), serde_json::json!(workspace_id));
+            }
+        }
         let Some(endpoint) = operation.endpoint() else {
             return;
         };

@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+## 10.17.0 - 2026-10-09
+
+**Ghostex 10.17.0 is out.** Workspaces and Work Mode arrive as an extension you can turn on, a chat's history no longer disappears after Escape, dialogs keep their focus on Windows, and the Files editor gets find, Open with and proper Windows editing keys.
+
+### 🧩 Workspaces and Work Mode
+- **Workspaces and Work Mode are a built-in extension, off by default:** turn it on in Settings > Extensions to get workspaces with their own browser sign-ins, a Work page with Linear and GitHub items, Link to and Create Linear ticket on sessions, and your team's Slack flow.
+
+### 💬 Chat
+- **A chat no longer loses its earlier history** after you press Escape and send again.
+- **Long messages show their first lines with Show more,** and scrolling past a very long message no longer lags the app.
+- **Send failures say what actually went wrong** (the message never appeared, appeared twice, or was kept by the agent), and Claude sessions on a saved account are no longer reported as stopped.
+- **Short hex colors like `#abc` show a swatch,** while all-digit numbers like `#1234` stay issue links.
+- **The loading notice stays on one line** when there's room.
+
+### 📂 Files
+- **Ctrl+F (Cmd+F) finds in the open file,** with next and previous match.
+- **Open with works on Windows,** listing your apps and browsers plus Choose another app.
+- **Windows editing keys work in the Markdown editor:** Ctrl+arrows by word, Shift+Home/End, Ctrl+Home/End and Ctrl+Backspace.
+- **File list tooltips sit below the pointer and wrap,** and hovering one no longer closes the floating list.
+
+### 🪟 Windows and dialogs
+- **Dialogs keep their focus:** Rename keeps its selected text and History stays open instead of the main window taking focus back; clicking away closes Rename without renaming.
+- **The floating chat stays open** with two windows, and a second window no longer hides the first window's menu.
+- **Tooltips never block clicks,** and a pane's blue attention line shows along its top edge.
+- **The terminal view's Switch Account opens its account list,** to the right when there's room.
+
+### 🗂️ Sessions
+- **Starting a new session no longer closes your other empty sessions;** turn it back on for Chat agents with Settings > General > Chat > Close empty sessions when starting a new one.
+
+### 📱 Phone
+- **The phone's session menu matches the desktop's Copy, Work Mode and Parked menus,** and its chat connection recovers from a dropped link instead of showing raw errors.
+
 ## 10.16.0 - 2026-10-09
 
 **Ghostex 10.16.0 is out.** Chat View no longer starts a terminal it doesn't need, the phone opens chats at once, custom agents can keep their own Claude or Codex login, and the Files editor handles wide tables, selections and long code lines properly.

@@ -27,8 +27,9 @@ use super::resolve::{
 /// Every message type this file answers. The host checks it before it handles a command (it kept
 /// such commands out of the old runtime, and the deleted parity gate enumerated it), so the set
 /// lives in one place.
-pub const READ_ONLY_MESSAGE_TYPES: [&str; 6] = [
+pub const READ_ONLY_MESSAGE_TYPES: [&str; 7] = [
     "copySessionDetails",
+    "copyText",
     "copyWorkspaceProjectPathForGroup",
     "copyWorkspaceProjectRemoteUrl",
     "openWorkspaceProjectInFinderForGroup",
@@ -51,6 +52,8 @@ pub fn plan_read_only_action(
         // NOT trimmed on the way, because `normalizeNonEmptyString` tests the trim and returns the
         // original string.
         "copySessionDetails" => Some(copy_text(text_field(message, "detailsText"))),
+        // `copyText`: a session menu's Copy row (a branch, a Linear ID, a link).
+        "copyText" => Some(copy_text(text_field(message, "text"))),
         // `copyWorkspaceProjectRemoteUrl`: the same call with the menu's URL.
         "copyWorkspaceProjectRemoteUrl" => Some(copy_text(text_field(message, "remoteUrl"))),
         "copyWorkspaceProjectPathForGroup" => Some(project_path_action(

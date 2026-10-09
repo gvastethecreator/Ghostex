@@ -9,7 +9,7 @@ use crate::{
 };
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    AnyElement, FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement,
     StatefulInteractiveElement, Styled, div, px, rgb,
 };
 use gpui_component::h_flex;
@@ -135,6 +135,16 @@ impl GhostexGpuiApp {
                     cx,
                 );
             }))
+            // The Parked heading's Sleep All and Close All (gx-core `sidebar_menu/section.rs`).
+            .when_some(section.menu.clone(), |row, menu| {
+                row.on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(move |_, event: &gpui::MouseDownEvent, window, cx| {
+                        cx.stop_propagation();
+                        Self::show_native_sidebar_menu(&menu, event.position, scale, window, cx);
+                    }),
+                )
+            })
             .into_any_element()
     }
 }

@@ -59,7 +59,16 @@ pub(crate) fn open_with_applications(target: &str, is_url: bool) -> Vec<OpenWith
         .collect()
 }
 
-#[cfg(not(target_os = "macos"))]
+/// The apps the shell offers for a link scheme (`is_url`) or a file extension.
+#[cfg(target_os = "windows")]
+pub(crate) fn open_with_applications(target: &str, is_url: bool) -> Vec<OpenWithApp> {
+    crate::app::helpers::windows_open_with_applications(target, is_url)
+        .into_iter()
+        .map(|(name, path)| OpenWithApp { name, path })
+        .collect()
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub(crate) fn open_with_applications(_target: &str, _is_url: bool) -> Vec<OpenWithApp> {
     Vec::new()
 }
@@ -273,6 +282,12 @@ impl GhostexGpuiApp {
                 .filter(|app| browsers.iter().all(|browser| browser.path != app.path))
             {
                 menu = menu.menu(app.name, command("openWithApp", &app.path));
+            }
+            // Windows' own Open With dialog, for an app the list does not have.
+            #[cfg(target_os = "windows")]
+            {
+                let chooser = PathBuf::from(crate::app::helpers::GPUI_OPEN_WITH_CHOOSER);
+                menu = menu.menu("Choose another app…", command("openWithApp", &chooser));
             }
         }
         menu

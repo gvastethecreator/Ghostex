@@ -52,6 +52,7 @@ pub fn read_presentation_snapshot(
     insert_workspace_groups_presentation_payload(&mut snapshot, db)?;
     insert_sidebar_project_collections_presentation_payload(&mut snapshot, db)?;
     insert_sidebar_spaces_presentation_payload(&mut snapshot, db)?;
+    insert_sidebar_workspaces_presentation_payload(&mut snapshot, db)?;
     insert_sidebar_spaces_enabled_presentation_payload(&mut snapshot, sidebar_spaces_enabled);
     insert_custom_session_tags_presentation_payload(&mut snapshot, db)?;
     Ok(snapshot)
@@ -380,6 +381,15 @@ pub fn presentation_capabilities(sidebar_v2_selected: bool) -> Value {
         shows its full unfiltered project list — not even the built-in Other view.
         */
         "spaces": true,
+        /*
+        CDXC:Workspaces 2026-10-09 WHY:
+        `workspaces` promises `sidebarWorkspaces` in the snapshot, `workspaceId` on projects and
+        Spaces, and the workspace routes (`/api/readWorkspaces` … `/api/moveProjectToWorkspace`).
+        A client viewing a daemon without it shows that machine's projects and Spaces unfiltered
+        and offers no workspace tile or Move to workspace, which is also what the Workspaces
+        built-in extension being off means, so the flag follows that switch.
+        */
+        "workspaces": crate::workspaces::workspaces_feature_enabled(),
         /*
         CDXC:Worktrees 2026-07-29-00:00:
         `worktreeSessions` promises `/api/createWorktreeSession` and

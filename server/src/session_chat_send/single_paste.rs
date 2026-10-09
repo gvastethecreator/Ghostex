@@ -1,7 +1,7 @@
 use super::*;
 
 /// The message typed once more after the input box showed it twice.
-const SESSION_CHAT_PASTE_DOUBLED: &str =
+pub(crate) const SESSION_CHAT_PASTE_DOUBLED: &str =
     "The message showed up twice in the agent's input box, so it was not sent.";
 
 /// The agents whose input box the paste check reads and whose verified clear sends nothing to an

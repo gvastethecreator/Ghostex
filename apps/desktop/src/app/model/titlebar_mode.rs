@@ -56,6 +56,9 @@ pub(crate) enum TitlebarMode {
     /// The Bot automations feed of Hermes cron runs: app-wide, drawn by GPUI, opened from the Bots
     /// sidebar's Automations row. See `app/native_bot_feed/`.
     BotFeed,
+    /// The Work page: the tickets, issues and PRs of every work-mode project the window shows,
+    /// app-wide, as a first-party web page. See `app/work_view/`.
+    Work,
     Extension(ExtensionId),
 }
 
@@ -70,6 +73,7 @@ impl TitlebarMode {
             "manage" => Some(Self::Manage),
             "terminal" => Some(Self::Terminal),
             "bot-feed" => Some(Self::BotFeed),
+            "work" => Some(Self::Work),
             value if value.starts_with("extension:") => {
                 ExtensionId::new(value.trim_start_matches("extension:")).map(Self::Extension)
             }
@@ -87,6 +91,7 @@ impl TitlebarMode {
             Self::Manage => "manage".to_string(),
             Self::Terminal => "terminal".to_string(),
             Self::BotFeed => "bot-feed".to_string(),
+            Self::Work => "work".to_string(),
             Self::Extension(id) => format!("extension:{}", id.as_str()),
         }
     }
@@ -103,6 +108,7 @@ impl TitlebarMode {
             Self::Manage => "Files",
             Self::Terminal => "Terminal",
             Self::BotFeed => "Automations",
+            Self::Work => "Work",
             Self::Extension(id) => id.as_str(),
         }
     }
@@ -140,6 +146,7 @@ impl TitlebarMode {
             Self::Manage => TITLEBAR_ICON_FILE_TEXT,
             Self::Terminal => TITLEBAR_ICON_TERMINAL,
             Self::BotFeed => TITLEBAR_ICON_MESSAGES,
+            Self::Work => "titlebar/briefcase.svg",
             Self::Extension(_) => TITLEBAR_ICON_EXTENSIONS,
         }
     }
@@ -178,8 +185,9 @@ impl TitlebarMode {
             Self::Manage => 4,
             Self::Terminal => 5,
             Self::BotFeed => 6,
-            Self::Extension(_) => 7,
-            Self::Agents => 8,
+            Self::Work => 7,
+            Self::Extension(_) => 8,
+            Self::Agents => 9,
         }
     }
 
@@ -193,6 +201,7 @@ impl TitlebarMode {
             Self::Manage => 5,
             Self::Terminal => 6,
             Self::BotFeed => 7,
+            Self::Work => 8,
             Self::Extension(id) => {
                 id.as_str()
                     .bytes()
@@ -217,6 +226,7 @@ impl TitlebarMode {
             Self::Manage => "Files is unavailable for the current project context.",
             Self::Terminal => "",
             Self::BotFeed => "",
+            Self::Work => "Work shows the tickets of projects with Work mode on.",
             Self::Extension(_) => "This extension is unavailable for the current project context.",
         }
     }

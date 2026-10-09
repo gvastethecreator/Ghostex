@@ -47,6 +47,7 @@ use crate::json::J;
 /// action-completion sound, Sidebar Tags, and the sidebar interface-size slider
 /// remain visible without Show Advanced.
 pub const ADVANCED_MAIN_SETTING_KEYS: &[&str] = &[
+    "closeEmptySessionsOnNew",
     "sessionCardHoverButtons",
     "showSessionCardHoverButtonsInContextMenu",
     "sidebarVisibilityMemory",
@@ -341,6 +342,7 @@ pub const MAIN_SETTINGS_SCROLL_TARGET_SETTING_KEYS: &[(&str, &[&str])] = &[
         "chat",
         &[
             "preferredAgentInterface",
+            "closeEmptySessionsOnNew",
             "sessionChatFontFamily",
             "sessionChatZoomPercent",
             "sessionChatCustomTranscriptWidthEnabled",
@@ -670,6 +672,7 @@ pub const MAIN_SETTINGS_SECTION_SETTING_KEYS: &[(&str, &[&str])] = &[
         "chat",
         &[
             "preferredAgentInterface",
+            "closeEmptySessionsOnNew",
             "sessionChatFontFamily",
             "sessionChatZoomPercent",
             "sessionChatCustomTranscriptWidthEnabled",

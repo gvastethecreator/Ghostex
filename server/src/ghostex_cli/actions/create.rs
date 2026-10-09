@@ -214,7 +214,7 @@ pub(super) fn create_gxserver_agent_session(payload: &Value, flags: &Flags) -> C
     if flags.truthy("deferStart") {
         params.insert("draft".to_string(), json!(true));
     }
-    // CDXC:Sessions 2026-10-04 SEE-ALSO: `--replace-empty-sessions` is the phone's new-session action; gxserver then closes the project's other fully empty sessions (server/src/empty_session_cleanup.rs). Agents and scripts leave it out.
+    // CDXC:Sessions 2026-10-09 SEE-ALSO: `--replace-empty-sessions` is the phone's new-session action; gxserver then closes the project's other fully empty sessions only when the `closeEmptySessionsOnNew` setting is on and the agent opens in Chat (server/src/empty_session_cleanup.rs). Agents and scripts leave it out.
     if flags.truthy("replaceEmptySessions") {
         params.insert(
             crate::empty_session_cleanup::REPLACE_EMPTY_SESSIONS_PARAM.to_string(),

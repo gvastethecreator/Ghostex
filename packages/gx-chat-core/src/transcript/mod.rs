@@ -21,6 +21,7 @@ pub mod jsstr;
 pub mod line_breaks;
 pub mod links;
 pub mod local_command;
+pub mod long_prompt;
 pub mod markdown_links;
 pub mod message_text;
 pub mod message_time;

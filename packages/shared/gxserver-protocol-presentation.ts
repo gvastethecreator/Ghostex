@@ -137,6 +137,14 @@ export interface GxserverPresentationProject {
   botGatewayRunning?: boolean;
   /** How many runs that bot's cron jobs delivered since local midnight; absent for every other project. */
   botRunsToday?: number;
+  /** Work mode is on for this project (server/src/work_mode/); present only when true. */
+  workMode?: true;
+  /** Work mode is on and a Linear key is set for this project; present only when true. */
+  workLinear?: true;
+  /** The workspace this project belongs to (server/src/workspaces/); absent = the default workspace. */
+  workspaceId?: string;
+  /** The project shows in every workspace (the Ghostex config folder's project, home of the Help chats); present only when true. */
+  everyWorkspace?: true;
   /*
   CDXC:Icons 2026-07-29 (discovered icons):
   The icon the PROJECT ITSELF ships, discovered server-side inside the checkout
@@ -243,6 +251,8 @@ export interface GxserverPresentationCapabilities {
    * context submenu, not even the built-in Other view.
    */
   spaces?: boolean;
+  /** `sidebarWorkspaces`, `workspaceId` on projects and Spaces, and the workspace routes. */
+  workspaces?: boolean;
   /**
    * CDXC:Worktrees 2026-07-29:
    * `/api/createWorktreeSession` + `/api/removeSessionWorktree` are served by
@@ -252,6 +262,34 @@ export interface GxserverPresentationCapabilities {
    * and the worktree affordances do not render at all.
    */
   worktreeSessions?: boolean;
+}
+
+/** What a session in a work-mode project is linked to (`PresentationSessionWork` in gx-protocol). */
+export interface GxserverPresentationSessionWork {
+  /** The checkout's branch; absent on the default branch or a detached HEAD. */
+  branch?: string;
+  pullRequest?: {
+    number: number;
+    state: GxserverPresentationSessionPrState;
+    url?: string;
+    checks?: "passing" | "failing" | "pending";
+  };
+  linearIssues?: Array<{
+    /** `SPX-1245`. */
+    identifier: string;
+    title?: string;
+    /** `triage`, `backlog`, `unstarted`, `started`, `completed` or `canceled`. */
+    stateType?: string;
+    stateName?: string;
+    url?: string;
+  }>;
+  githubIssues?: Array<{ number: number; title?: string; state?: "open" | "closed"; url?: string }>;
+  /** A Linear project is a release the team works on, never a repo. */
+  linearProject?: { name: string; url?: string };
+  /** Some link was set by hand, so "Back to automatic" has something to undo. */
+  handSet?: true;
+  /** The linked PR is merged and its Clean up / Keep offer is unanswered (server/src/work_mode/cleanup.rs). */
+  offerCleanup?: true;
 }
 
 /** The agentbox sandbox a session's agent runs in (`PresentationAgentbox` in gx-protocol). */
@@ -316,6 +354,8 @@ export interface GxserverPresentationSession {
    * work tree, or a daemon that predates the probe entirely.
    */
   gitStatus?: GxserverPresentationSessionGitStatus;
+  /** Present only for a session of a project with work mode on. */
+  work?: GxserverPresentationSessionWork;
   groupId: string;
   /**
    * CDXC:SessionSleep 2026-08-22:
@@ -514,11 +554,32 @@ export interface GxserverSidebarSpace {
   memberProjectIds: readonly string[];
   name: string;
   spaceId: string;
+  /** The workspace the Space belongs to; absent = the default workspace. */
+  workspaceId?: string;
 }
 
 export interface GxserverSidebarSpacesState {
   order: readonly string[];
   spaces: Readonly<Record<string, GxserverSidebarSpace>>;
+}
+
+/** One workspace (server/src/workspaces/store.rs). `kind` sets its projects' work-mode default. */
+export interface GxserverSidebarWorkspace {
+  claudeAccountId?: string;
+  color: string;
+  kind: "work" | "personal";
+  letter: string;
+  name: string;
+  workspaceId: string;
+}
+
+/** Projects and Spaces with no `workspaceId` belong to `defaultWorkspaceId`, which always exists. */
+export interface GxserverSidebarWorkspacesState {
+  defaultWorkspaceId: string;
+  /** A remote machine's sidebar tab (this computer's settings id for it) → the workspace it shows in here; unlisted machines show in the default workspace. */
+  machineWorkspaces?: Readonly<Record<string, string>>;
+  order: readonly string[];
+  workspaces: Readonly<Record<string, GxserverSidebarWorkspace>>;
 }
 
 export interface GxserverWorkspaceSessionGroup {
@@ -625,6 +686,7 @@ export interface GxserverPresentationSnapshot {
   sessions: readonly GxserverPresentationSession[];
   sidebarProjectCollections?: GxserverSidebarProjectCollectionsState;
   sidebarSpaces?: GxserverSidebarSpacesState;
+  sidebarWorkspaces?: GxserverSidebarWorkspacesState;
   customSessionTags?: GxserverCustomSessionTagsState;
   workspaceGroups?: GxserverWorkspaceSessionGroupsState;
 }

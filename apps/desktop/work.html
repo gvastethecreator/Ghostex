@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ghostex Work</title>
+    <style>
+      html,
+      body {
+        background: #0e0e0e;
+        margin: 0;
+      }
+
+      html[data-workarea-theme="light"],
+      html[data-workarea-theme="light"] body {
+        background: #ffffff;
+      }
+    </style>
+    <script>
+      // The first paint follows the app's theme before work-main installs it (same as manage.html).
+      (() => {
+        const theme =
+          new URLSearchParams(location.search).get("appTheme") === "light"
+            ? "light"
+            : "dark";
+        document.documentElement.dataset.workareaTheme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./sidebar/work-main.tsx"></script>
+  </body>
+</html>

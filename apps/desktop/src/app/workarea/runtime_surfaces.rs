@@ -53,6 +53,14 @@ impl GhostexGpuiApp {
             }
             return self.extension_view_runtime_url(id);
         }
+        // The Work page is app-wide: it needs a work-mode project in the window, not a project
+        // snapshot (app/work_view/).
+        if slot_key == ProjectWorkareaCefSurfaceSlotKey::Work {
+            return self
+                .work_view_available()
+                .then(|| self.work_view_page_url())
+                .flatten();
+        }
         let snapshot = self.latest_sidebar_project_snapshot.as_ref()?;
         match slot_key {
             ProjectWorkareaCefSurfaceSlotKey::Source => {
@@ -69,7 +77,9 @@ impl GhostexGpuiApp {
             // Files (app/native_docs/) draws the view itself; its slot only runs the embed page
             // as the browser area for an open HTML file, drawing or media file.
             ProjectWorkareaCefSurfaceSlotKey::Manage => self.native_docs_browser_area_url(snapshot),
-            ProjectWorkareaCefSurfaceSlotKey::Extension(_) => None,
+            ProjectWorkareaCefSurfaceSlotKey::Work | ProjectWorkareaCefSurfaceSlotKey::Extension(_) => {
+                None
+            }
         }
     }
 
@@ -79,7 +89,9 @@ impl GhostexGpuiApp {
     ) -> bool {
         let mode = slot_key.titlebar_mode();
         self.active_mode == mode
-            && self.project_editor_shell.is_mode_awake(mode)
+            // The Work page never sleeps as a view, like the GPUI pages beside it.
+            && (self.project_editor_shell.is_mode_awake(mode)
+                || slot_key == ProjectWorkareaCefSurfaceSlotKey::Work)
             && !(slot_key == ProjectWorkareaCefSurfaceSlotKey::Manage
                 && self.native_docs_browser_area_covered())
             && !self.browser_tab_drag_active
@@ -160,10 +172,10 @@ impl GhostexGpuiApp {
         let mut profile = slot_key.cef_profile_id();
         let website_view = slot_key.titlebar_mode().website_provider().is_some();
         if website_view {
-            profile = self
-                .browser_profiles
-                .active_profile_id()
-                .cef_profile_string();
+            profile = self.browser_tab_cef_profile(self.browser_profiles.active_profile_id());
+            if !self.prepare_workspace_browser_context(&profile, cx) {
+                return None;
+            }
         }
         if let ProjectWorkareaCefSurfaceSlotKey::Extension(id) = slot_key {
             if !website_view
@@ -194,6 +206,7 @@ impl GhostexGpuiApp {
             ProjectWorkareaCefSurfaceSlotKey::Kanban
                 | ProjectWorkareaCefSurfaceSlotKey::Automate
                 | ProjectWorkareaCefSurfaceSlotKey::Manage
+                | ProjectWorkareaCefSurfaceSlotKey::Work
         );
         let mut url = runtime_url.clone().into_cef_url();
         if themed_page {
@@ -389,6 +402,9 @@ impl GhostexGpuiApp {
         let mut slot_keys = ProjectWorkareaCefSurfaceSlotKey::project_placeholder_slots().to_vec();
         if let TitlebarMode::Extension(id) = self.active_mode {
             slot_keys.push(ProjectWorkareaCefSurfaceSlotKey::Extension(id));
+        }
+        if self.active_mode == TitlebarMode::Work {
+            slot_keys.push(ProjectWorkareaCefSurfaceSlotKey::Work);
         }
         for slot_key in slot_keys {
             if !self.project_workarea_runtime_cef_surface_may_be_visible(slot_key) {

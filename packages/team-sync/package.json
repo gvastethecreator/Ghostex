@@ -1,0 +1,19 @@
+{
+  "name": "@ghostex/team-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The Convex functions a Ghostex Work workspace deploys to its team's own Convex project.",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p convex --noEmit",
+    "dev": "convex dev",
+    "deploy": "convex deploy"
+  },
+  "dependencies": {
+    "convex": "1.46.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "~5.9.3"
+  }
+}

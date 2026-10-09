@@ -279,6 +279,34 @@ pub(in crate::server) async fn route_http(
         Ok(response) => return response,
         Err(request) => request,
     };
+    let request = match route_work_mode_http(request).await {
+        Ok(response) => return response,
+        Err(request) => request,
+    };
+    let request = match route_team_sync_http(request).await {
+        Ok(response) => return response,
+        Err(request) => request,
+    };
+    let request = match route_team_slack_http(request).await {
+        Ok(response) => return response,
+        Err(request) => request,
+    };
+    let request = match route_work_links_http(request).await {
+        Ok(response) => return response,
+        Err(request) => request,
+    };
+    let request = match route_workspaces_http(request).await {
+        Ok(response) => return response,
+        Err(request) => request,
+    };
+    let request = match route_work_tickets_http(request).await {
+        Ok(response) => return response,
+        Err(request) => request,
+    };
+    let request = match route_work_items_http(request).await {
+        Ok(response) => return response,
+        Err(request) => request,
+    };
     let RouteHttpRequest {
         endpoint,
         request_id,

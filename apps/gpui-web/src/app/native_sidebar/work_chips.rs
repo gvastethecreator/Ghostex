@@ -1,0 +1,1 @@
+../../../../desktop/src/app/native_sidebar/work_chips.rs

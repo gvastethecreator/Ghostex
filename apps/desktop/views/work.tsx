@@ -1,0 +1,281 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  installFixtureAnswers,
+  isFixtureMode,
+  onWorkOpen,
+  onWorkRefresh,
+  workRequest,
+} from "./work/bridge";
+import { itemRef, refKey } from "./work/format";
+import { TicketDetailsView, type StartChatChoice } from "./work/ticket-details";
+import type {
+  StartWorkResult,
+  WorkAgent,
+  WorkItem,
+  WorkItemDetails,
+  WorkItemRef,
+  WorkItemSession,
+  WorkList,
+  WorkReady,
+} from "./work/types";
+import {
+  DEFAULT_WORK_FILTERS,
+  WorkListView,
+  type WorkFilters,
+} from "./work/work-list";
+import "./work/work.css";
+
+/** The list re-reads itself this often while the page is on screen. */
+const AUTO_REFRESH_MS = 90_000;
+/** While gxserver says it is still fetching, ask again after this long, a few times. */
+const REFRESHING_RETRY_MS = 4_000;
+const REFRESHING_RETRIES = 5;
+
+type Route =
+  | { view: "list" }
+  | { view: "details"; ref: WorkItemRef; item: WorkItem | null };
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function WorkApp() {
+  const [agents, setAgents] = useState<WorkAgent[]>([]);
+  const [list, setList] = useState<WorkList | null>(null);
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  // Kept in memory: the page lives as long as its view tab, so filters survive switching views.
+  const [filters, setFilters] = useState<WorkFilters>(DEFAULT_WORK_FILTERS);
+  const [route, setRoute] = useState<Route>({ view: "list" });
+  const [details, setDetails] = useState<WorkItemDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [newTicketError, setNewTicketError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const listRequest = useRef(0);
+  const detailsRequest = useRef(0);
+  const routeRef = useRef(route);
+  routeRef.current = route;
+
+  const loadList = useCallback(
+    (force: boolean, retries = REFRESHING_RETRIES) => {
+      const request = ++listRequest.current;
+      setListLoading(true);
+      workRequest<WorkList>("work.list", { force })
+        .then((data) => {
+          if (request !== listRequest.current) return;
+          setList(data);
+          setListError(null);
+          setNow(Date.now());
+          if (data.refreshing && retries > 0) {
+            window.setTimeout(() => {
+              if (request === listRequest.current) loadList(false, retries - 1);
+            }, REFRESHING_RETRY_MS);
+          }
+        })
+        .catch((error: unknown) => {
+          if (request === listRequest.current) setListError(errorText(error));
+        })
+        .finally(() => {
+          if (request === listRequest.current) setListLoading(false);
+        });
+    },
+    [],
+  );
+
+  const loadDetails = useCallback((ref: WorkItemRef, force: boolean) => {
+    const request = ++detailsRequest.current;
+    setDetailsLoading(true);
+    setDetailsError(null);
+    workRequest<WorkItemDetails>("work.read", { ...ref, force })
+      .then((data) => {
+        if (request === detailsRequest.current) setDetails(data);
+      })
+      .catch((error: unknown) => {
+        if (request === detailsRequest.current)
+          setDetailsError(errorText(error));
+      })
+      .finally(() => {
+        if (request === detailsRequest.current) setDetailsLoading(false);
+      });
+  }, []);
+
+  const openRef = useCallback(
+    (ref: WorkItemRef, item: WorkItem | null) => {
+      setDetails(null);
+      setStartError(null);
+      setRoute({ view: "details", ref, item });
+      loadDetails(ref, false);
+      document.querySelector(".w-scroll")?.scrollTo({ top: 0 });
+    },
+    [loadDetails],
+  );
+
+  // A chip on a session card: the row it names, when the list already has it.
+  const openFromChip = useCallback(
+    (ref: WorkItemRef) => {
+      void workRequest("work.ackOpen").catch(() => undefined);
+      const key = refKey(ref);
+      const row =
+        list?.items.find(
+          (item) =>
+            refKey(itemRef(item)) === key ||
+            item.pullRequest?.url === ref.pullRequest,
+        ) ?? null;
+      openRef(
+        row
+          ? { ...itemRef(row), projectId: row.projectId ?? ref.projectId }
+          : ref,
+        row,
+      );
+    },
+    [list, openRef],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    workRequest<WorkReady>("work.ready")
+      .then((ready) => {
+        if (cancelled) return;
+        setAgents(ready.agents ?? []);
+        if (ready.pendingOpen) openFromChip(ready.pendingOpen);
+      })
+      .catch(() => undefined);
+    loadList(false);
+    return () => {
+      cancelled = true;
+    };
+    // Once, on mount; later opens arrive through onWorkOpen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => onWorkOpen(openFromChip), [openFromChip]);
+
+  // A ticket made in the app's dialog (New ticket below, or a project's "…" menu) is new to Linear,
+  // so the list skips gxserver's cache.
+  useEffect(() => onWorkRefresh(() => loadList(true)), [loadList]);
+
+  useEffect(() => {
+    const tick = window.setInterval(() => setNow(Date.now()), 30_000);
+    const refresh = window.setInterval(() => {
+      if (
+        document.visibilityState === "visible" &&
+        routeRef.current.view === "list"
+      )
+        loadList(false);
+    }, AUTO_REFRESH_MS);
+    return () => {
+      window.clearInterval(tick);
+      window.clearInterval(refresh);
+    };
+  }, [loadList]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        routeRef.current.view === "details" &&
+        !document.querySelector(".w-menu")
+      ) {
+        setRoute({ view: "list" });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // The app opens its own Create Linear Ticket dialog: for the repo the list is filtered to, the
+  // only project, or with the dialog's Project picker.
+  const newTicket = () => {
+    const projects = list?.projects ?? [];
+    const projectId =
+      filters.projectId ||
+      (projects.length === 1 ? projects[0]?.projectId : undefined);
+    setNewTicketError(null);
+    void workRequest("work.createTicket", { projectId }).catch(
+      (error: unknown) => setNewTicketError(errorText(error)),
+    );
+  };
+
+  const openUrl = (url: string) => {
+    void workRequest("work.openUrl", { url }).catch(() => undefined);
+  };
+
+  const openChat = (session: WorkItemSession) => {
+    void workRequest("work.openChat", {
+      projectId: session.projectId,
+      sessionId: session.sessionId,
+    }).catch((error: unknown) => setStartError(errorText(error)));
+  };
+
+  const startChat = (choice: StartChatChoice) => {
+    if (route.view !== "details") return;
+    const ref = route.ref;
+    setStarting(true);
+    setStartError(null);
+    workRequest<StartWorkResult>("work.startChat", {
+      linearIssue: ref.linearIssue,
+      githubIssue: ref.githubIssue,
+      projectId: choice.projectId,
+      agentId: choice.agentId,
+    })
+      .then(() => {
+        loadDetails({ ...ref, projectId: choice.projectId }, true);
+        loadList(false);
+      })
+      .catch((error: unknown) => setStartError(errorText(error)))
+      .finally(() => setStarting(false));
+  };
+
+  return (
+    <div className="w-scroll">
+      {route.view === "list" ? (
+        <WorkListView
+          data={list}
+          loading={listLoading}
+          error={listError}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onRefresh={() => loadList(true)}
+          onOpen={(item) => openRef(itemRef(item), item)}
+          onNewTicket={newTicket}
+          newTicketError={newTicketError}
+          now={now}
+        />
+      ) : (
+        <TicketDetailsView
+          details={details}
+          fallbackItem={route.item}
+          loading={detailsLoading}
+          error={detailsError}
+          agents={agents}
+          starting={starting}
+          startError={startError}
+          now={now}
+          onBack={() => {
+            setRoute({ view: "list" });
+            loadList(false);
+          }}
+          onRefresh={() => loadDetails(route.ref, true)}
+          onOpenChat={openChat}
+          onStartChat={startChat}
+          onOpenUrl={openUrl}
+        />
+      )}
+    </div>
+  );
+}
+
+async function mount(): Promise<void> {
+  if (isFixtureMode()) {
+    const { answerFromFixtures } = await import("./work/fixtures");
+    installFixtureAnswers(answerFromFixtures);
+  }
+  const root = document.getElementById("root");
+  if (root) createRoot(root).render(<WorkApp />);
+}
+
+void mount();

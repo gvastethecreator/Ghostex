@@ -215,8 +215,10 @@ pub(crate) fn resize_rail_outline_segments(
             .right(px(inset(edges.right)))
             .h(px(thickness))
             .bg(color);
+        // CDXC:Workarea 2026-10-09 WHY:
+        // Where the outline closes along the window's top edge, the window's own 1px frame covers that pixel row (on Windows the DWM border is drawn over the client area's top row), so a segment there was invisible while the side segments showed. It sits one pixel lower, on the first row the app really paints; the header's layout is unchanged.
         let segment = if at_top {
-            segment.top(px(header_reach.map_or(-thickness, |reach| -reach)))
+            segment.top(px(header_reach.map_or(-thickness, |reach| -reach + thickness)))
         } else {
             segment.bottom(px(-thickness))
         };

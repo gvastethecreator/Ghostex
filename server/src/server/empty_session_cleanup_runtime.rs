@@ -1,7 +1,7 @@
 //! Runs the new-session cleanup after a user's new-session create: reads each candidate's agent
 //! input box and closes the ones that are still fully empty through `/api/transitionSession`.
 //!
-//! SEE-ALSO: server/src/empty_session_cleanup.rs (the marker, the rule and CDXC:Sessions 2026-10-04).
+//! SEE-ALSO: server/src/empty_session_cleanup.rs (the marker, the rule and CDXC:Sessions 2026-10-09).
 
 use super::*;
 

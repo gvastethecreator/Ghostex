@@ -58,6 +58,7 @@ impl GhostexGpuiApp {
                         && gpui_extension_view_presentation(id).is_some()
                 }
             }
+            TitlebarMode::Work => self.work_view_available(),
             _ => self
                 .project_scoped_workarea_availability()
                 .titlebar_mode_available(mode),
@@ -128,6 +129,15 @@ impl GhostexGpuiApp {
                     .then_some(TITLEBAR_PROJECT_CONTEXT_DISABLED_REASON),
             }
         }));
+        // CDXC:WorkMode 2026-10-09 DECISION:
+        // User: "Work" is listed in the side panel's "Open a view" picker, beside the briefcase that opens it from the sidebar, whenever the window shows a work-mode project.
+        if self.work_view_available() {
+            items.push(TitlebarModeSwitcherItem {
+                mode: TitlebarMode::Work,
+                is_available: true,
+                disabled_reason: None,
+            });
+        }
         items.extend(
             gpui_custom_views_from_settings()
                 .into_iter()

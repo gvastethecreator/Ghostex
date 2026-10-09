@@ -414,7 +414,9 @@ impl ProjectScopedWorkareaAvailability {
         */
         match mode {
             // App-wide: the feed reads Hermes, not the project, so every context can show it.
-            TitlebarMode::Agents | TitlebarMode::BotFeed => true,
+            // The Work view's own condition (a work-mode project in the window) is the app's:
+            // `work_view_available` in app/work_view/.
+            TitlebarMode::Agents | TitlebarMode::BotFeed | TitlebarMode::Work => true,
             TitlebarMode::Extension(_) => self.project_context.has_project_scoped_workareas(),
             TitlebarMode::Source => self.project_features.source,
             TitlebarMode::Browser | TitlebarMode::Kanban | TitlebarMode::Automate => {
@@ -491,6 +493,8 @@ pub(crate) enum ProjectWorkareaCefSurfaceSlotKey {
     Kanban,
     Automate,
     Manage,
+    /// The Work page (`work.html`): app-wide, one per window.
+    Work,
     Extension(ExtensionId),
 }
 
@@ -505,6 +509,7 @@ impl ProjectWorkareaCefSurfaceSlotKey {
             Self::Kanban => "kanban",
             Self::Automate => "automate",
             Self::Manage => "manage",
+            Self::Work => "work",
             Self::Extension(id) => id.as_str(),
         }
     }
@@ -519,6 +524,7 @@ impl ProjectWorkareaCefSurfaceSlotKey {
             TitlebarMode::Automate => Self::Automate,
             TitlebarMode::Manage => Self::Manage,
             TitlebarMode::Extension(id) => Self::Extension(id),
+            TitlebarMode::Work => Self::Work,
             TitlebarMode::Agents
             | TitlebarMode::Browser
             | TitlebarMode::Terminal
@@ -534,6 +540,7 @@ impl ProjectWorkareaCefSurfaceSlotKey {
             Self::Kanban => TitlebarMode::Kanban,
             Self::Automate => TitlebarMode::Automate,
             Self::Manage => TitlebarMode::Manage,
+            Self::Work => TitlebarMode::Work,
             Self::Extension(id) => TitlebarMode::Extension(id),
         }
     }

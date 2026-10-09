@@ -893,6 +893,21 @@
       "agentWritable": true
     },
     {
+      "key": "closeEmptySessionsOnNew",
+      "title": "Close empty sessions when starting a new one",
+      "subtitle": "When you start a new session, close this project's other sessions that have nothing typed, drafted or queued. Only applies when Chat is the default view for that agent; with Terminal it never runs.",
+      "tab": "settings",
+      "tabTitle": "General",
+      "group": "chat",
+      "groupTitle": "Chat",
+      "section": "chat",
+      "sectionTitle": "Chat",
+      "type": "boolean",
+      "default": false,
+      "advanced": true,
+      "agentWritable": true
+    },
+    {
       "key": "sessionChatFontFamily",
       "title": "Chat font family",
       "subtitle": "Use any installed font in chat messages and the prompt composer.",
@@ -9559,6 +9574,17 @@
       "agentWritable": false
     },
     {
+      "key": "workspaces",
+      "title": "Workspaces",
+      "subtitle": "Keep each company's projects, Spaces, browser sign-ins and Claude account in its own workspace, and turn on work mode: Linear tickets and GitHub pull requests on your sessions, the Work view and your team's Slack flow.",
+      "tab": "extensions",
+      "tabTitle": "Extensions",
+      "section": "official",
+      "sectionTitle": "Built-in",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
       "key": "extensionsButton",
       "title": "Extensions",
       "subtitle": "An entry in the work area header’s ⋯ menu that opens this Extensions page.",
@@ -9652,6 +9678,18 @@
       "default": true,
       "agentWritable": true,
       "availability": "Only on macOS and Linux."
+    },
+    {
+      "key": "workspacesHidden",
+      "title": "Turn off Workspaces",
+      "subtitle": "Turn off Workspaces and work mode everywhere: the workspace button, the Workspaces page in Settings, Work mode on projects, the Work view, Linear and GitHub links on sessions and the workspace commands. Off by default; your workspaces, links, keys and team connections are kept.",
+      "tab": "extensions",
+      "tabTitle": "Extensions",
+      "section": "official",
+      "sectionTitle": "Built-in",
+      "type": "boolean",
+      "default": true,
+      "agentWritable": true
     },
     {
       "key": "store",
@@ -10184,6 +10222,28 @@
       "agentWritable": false
     },
     {
+      "key": "projectWorkMode",
+      "title": "Work mode",
+      "subtitle": "Turn work mode on or off for this project: Linear tickets, GitHub pull requests and the Work view.",
+      "tab": "projects",
+      "tabTitle": "Projects",
+      "section": "projectSettings",
+      "sectionTitle": "Project settings",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "projectLinearApiKey",
+      "title": "Project Linear API key",
+      "subtitle": "A Linear key for this project only, used instead of its workspace's or the shared key.",
+      "tab": "projects",
+      "tabTitle": "Projects",
+      "section": "projectSettings",
+      "sectionTitle": "Project settings",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
       "key": "portlessEnabled",
       "title": "Portless",
       "subtitle": "Route project dev servers through named local addresses instead of raw ports.",
@@ -10457,6 +10517,226 @@
       "tabTitle": "Remote",
       "section": "remoteAdvanced",
       "sectionTitle": "Advanced",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "workspaceName",
+      "title": "Workspace name",
+      "subtitle": "The name and letter shown on the workspace button left of your Spaces.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "workspaceColor",
+      "title": "Workspace color",
+      "subtitle": "The color of the workspace button.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "workspaceKind",
+      "title": "Work or Personal",
+      "subtitle": "Work turns work mode on for the workspace's projects by default; Personal leaves it off.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "workspaceLinearApiKey",
+      "title": "Linear API key",
+      "subtitle": "The Linear key this workspace's projects use, unless a project sets its own.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "workspaceClaudeAccount",
+      "title": "Claude account",
+      "subtitle": "Which of your Claude accounts agents in this workspace's projects use.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "workspaceBrowserSignins",
+      "title": "Browser sign-ins",
+      "subtitle": "Each workspace's Browser keeps its own cookies; sign out of every site here.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "newWorkspace",
+      "title": "New workspace",
+      "subtitle": "Add a workspace, for example one per company you work for.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "teamConvex",
+      "title": "Team (Convex)",
+      "subtitle": "Join your team's Convex project with an invite link, copy an invite link for a teammate, or leave the team.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "team",
+      "sectionTitle": "Team",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "teamSetup",
+      "title": "Set up a new team",
+      "subtitle": "Deploy Ghostex's functions to your own Convex project with ghostex team deploy in a terminal.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "team",
+      "sectionTitle": "Team",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "slackAppManifest",
+      "title": "Slack app manifest",
+      "subtitle": "Copy the manifest that creates your team's Slack app.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "team",
+      "sectionTitle": "Team",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "slackSecrets",
+      "title": "Slack bot token and signing secret",
+      "subtitle": "Stored in your team's Convex project with ghostex team slack-connect.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "team",
+      "sectionTitle": "Team",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "slackUser",
+      "title": "Your Slack user",
+      "subtitle": "Your Slack member ID, so @Ghostex commands you send in Slack reach this computer.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "team",
+      "sectionTitle": "Team",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "teamLinearKey",
+      "title": "Linear for the team",
+      "subtitle": "The team-wide Linear key Slack commands use to find and create tickets, set with ghostex team linear-connect.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "team",
+      "sectionTitle": "Team",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "teamWorkingChannel",
+      "title": "Working channel",
+      "subtitle": "The Slack channel where each ticket gets its one working thread.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "teamFlow",
+      "sectionTitle": "Team flow",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "teamWatchOnlyChannels",
+      "title": "Watch-only channels",
+      "subtitle": "Slack channels where a request is forwarded to the ticket's working thread and only gets a 👀.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "teamFlow",
+      "sectionTitle": "Team flow",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "teamChannelRepos",
+      "title": "Repos for new work",
+      "subtitle": "Which repo and Linear team new work from each Slack channel goes to.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "teamFlow",
+      "sectionTitle": "Team flow",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "teamDefaultRunPlace",
+      "title": "Where new work runs",
+      "subtitle": "Cloud or this computer, for @Ghostex in Slack without cloud or local.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "teamFlow",
+      "sectionTitle": "Team flow",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "teamNeverWithoutTicket",
+      "title": "Never work without a ticket",
+      "subtitle": "Ghostex finds the ticket in the thread or creates one in Linear before any session starts. Always on.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "teamFlow",
+      "sectionTitle": "Team flow",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "teamInstructions",
+      "title": "Team instructions",
+      "subtitle": "Your team's rules, added to every session Ghostex starts from Slack.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "teamFlow",
+      "sectionTitle": "Team flow",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "teamFlowSteps",
+      "title": "Team-flow steps",
+      "subtitle": "The steps each ticket shows on the Work page: reorder, rename, remove or add them, or reset to the default.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "teamFlow",
+      "sectionTitle": "Team flow",
       "type": "ui",
       "agentWritable": false
     },

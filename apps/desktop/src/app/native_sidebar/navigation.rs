@@ -110,10 +110,11 @@ impl GhostexGpuiApp {
             - bots_toggle.map_or(0.0, |_| (super::bots::BOTS_TOGGLE_WIDTH + 4.0) * scale)
             - 5.0 * scale;
         let bell_visible = !footer && self.titlebar_notification_bell_visible();
-        // Search, Send Feedback and the menu button, plus the bell when it shows.
-        let feedback_collapsed = !footer
-            && compact
-            && compact_room < (if bell_visible { 4.0 } else { 3.0 }) * compact_button_slot;
+        let work_visible = !footer && !snapshot.work_mode_project_ids().is_empty();
+        // Search, Send Feedback and the menu button, plus the bell and the briefcase when they show.
+        let shown_buttons = 3.0 + f32::from(u8::from(bell_visible)) + f32::from(u8::from(work_visible));
+        let feedback_collapsed =
+            !footer && compact && compact_room < shown_buttons * compact_button_slot;
         if feedback_collapsed && let Some(items) = more_menu.as_array_mut() {
             items.splice(
                 0..0,
@@ -189,6 +190,47 @@ impl GhostexGpuiApp {
             })
             .when_some(bots_toggle, |row, bots_mode| {
                 row.child(self.render_native_sidebar_bots_toggle(bots_mode, appearance, cx))
+            })
+            // CDXC:WorkMode 2026-10-09 DECISION:
+            // User: a briefcase button at the top of the sidebar opens the Work list as a tab in the side panel; it shows only while the window has a project with Work mode on, Personal ones included.
+            .when(work_visible, |row| {
+                let showing = self.work_view_showing();
+                row.child(
+                    div()
+                        .id("native-sidebar-work")
+                        .role(gpui::Role::Button)
+                        .aria_label("Work")
+                        .aria_selected(showing)
+                        .when(cfg!(target_os = "windows"), |button| button.occlude())
+                        .h(px(28.0 * scale))
+                        .w(px(34.0 * scale))
+                        .rounded(px(5.0 * scale))
+                        .flex()
+                        .flex_shrink_0()
+                        .items_center()
+                        .justify_center()
+                        .cursor_default()
+                        .when(showing, |button| button.bg(appearance.hover))
+                        .hover(|button| button.bg(appearance.hover))
+                        .child(titlebar_svg_icon(
+                            "titlebar/briefcase.svg",
+                            15.0 * scale,
+                            if showing {
+                                titlebar_active_text_color()
+                            } else {
+                                appearance.muted
+                            },
+                        ))
+                        .on_click(cx.listener(|app, _, _, cx| {
+                            cx.stop_propagation();
+                            app.dispatch_native_sidebar_ui(json!({"type": "openWorkView"}), cx);
+                        }))
+                        .managed_discrete_tooltip_with_placement(
+                            ManagedTooltipPlacement::Right,
+                            tooltip_delay,
+                            |window, cx| titlebar_tooltip("Work", window, cx),
+                        ),
+                )
             })
             /*
             CDXC:Sidebar 2026-09-20 WHY:

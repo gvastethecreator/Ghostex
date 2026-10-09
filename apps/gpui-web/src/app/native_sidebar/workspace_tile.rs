@@ -1,0 +1,1 @@
+../../../../desktop/src/app/native_sidebar/workspace_tile.rs

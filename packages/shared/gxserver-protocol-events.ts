@@ -14,6 +14,7 @@ import type {
   GxserverPresentationRevision,
   GxserverSidebarProjectCollectionsState,
   GxserverSidebarSpacesState,
+  GxserverSidebarWorkspacesState,
   GxserverWorkspaceSessionGroupsState,
   GxserverCustomSessionTagsState,
   GxserverPresentationSnapshot,
@@ -93,6 +94,13 @@ export type GxserverEvent =
       serverId: GxserverServerId;
       sidebarSpaces: GxserverSidebarSpacesState;
       type: "sidebarSpacesChanged";
+    }
+  | {
+      protocolVersion: GxserverProtocolVersion;
+      revision: GxserverPresentationRevision;
+      serverId: GxserverServerId;
+      sidebarWorkspaces: GxserverSidebarWorkspacesState;
+      type: "sidebarWorkspacesChanged";
     }
   | {
       customSessionTags: GxserverCustomSessionTagsState;

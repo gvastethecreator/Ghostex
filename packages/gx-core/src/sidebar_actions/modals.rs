@@ -1,4 +1,5 @@
-//! Rename, Note and Make Coordinator: the sidebar actions that call nothing and only open a dialog.
+//! Rename, Note, Make Coordinator and Link to: the sidebar actions that call nothing and only open a
+//! dialog.
 //!
 //! CDXC:Sessions 2026-09-20 WHY:
 //! The boundary is the whole point and it is easy to get wrong in the other direction. A sidebar
@@ -115,6 +116,27 @@ pub fn plan_modal_action(view: &SidebarView, message: &Value) -> Option<ModalAct
                 "sessionTitle": title,
             }),
         }),
+        // The work-mode Link to picker for one kind (sidebar_menu/link_menu.rs); it lists its
+        // suggestions through `/api/listWorkLinkCandidates` and links through
+        // `/api/setSessionWorkLinks`.
+        "linkWork" => {
+            let kind = text_field(message, "kind").filter(|kind| {
+                matches!(
+                    *kind,
+                    "pullRequest" | "linearIssue" | "linearProject" | "githubIssue"
+                )
+            })?;
+            Some(ModalAction {
+                close_reason: "SettingsDismissal:sessionRowLinkWork",
+                open: json!({
+                    "type": "open",
+                    "modal": "workLinkPicker",
+                    "sessionId": sidebar_session_id,
+                    "sessionTitle": title,
+                    "kind": kind,
+                }),
+            })
+        }
         _ => None,
     }
 }
@@ -146,6 +168,6 @@ pub fn owns_modal_message(message: &Value) -> bool {
     text_field(message, "type") == Some("sessionAction")
         && matches!(
             text_field(message, "action"),
-            Some("rename" | "note" | "makeCoordinator")
+            Some("rename" | "note" | "makeCoordinator" | "linkWork")
         )
 }

@@ -28,14 +28,10 @@ pub fn space_landing_project_ids(core: &Core, inputs: &SidebarInputs, now_ms: u6
         return Vec::new();
     }
     let machine = machine_key(&inputs.ui.selected_machine_id);
-    let Some(wire) = core
-        .presentation()
-        .machine(&machine)
-        .and_then(|machine| machine.side_state().spaces.as_ref())
-    else {
+    let Some(wire) = super::workspaces::window_spaces(core.presentation(), inputs, &machine) else {
         return Vec::new();
     };
-    let spaces = SpacesState::from_wire(wire);
+    let spaces = SpacesState::from_wire(&wire);
     let section_key = inputs.ui.section_key();
     let selected = resolve_selected_space(
         &spaces,

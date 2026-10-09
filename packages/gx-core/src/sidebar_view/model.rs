@@ -556,7 +556,17 @@ impl SidebarViewModel {
             remote_machine: remote_context(None),
             is_stale,
         });
+        let window_workspace = super::workspaces::window_workspace(store, effective, &machine);
+        let loaded = store.loaded(&machine);
         for project_id in meta.grouped_project_ids() {
+            // Bots belong to no workspace; every other project shows in its workspace's windows.
+            if let (Some(workspace), Some(loaded)) = (&window_workspace, loaded) {
+                if meta.bot_profile(project_id).is_none()
+                    && !workspace.shows_project(loaded, project_id)
+                {
+                    continue;
+                }
+            }
             let project_key = ProjectKey {
                 machine: machine.clone(),
                 project_id: project_id.clone(),
@@ -719,9 +729,8 @@ impl SidebarViewModel {
             ui: &effective.ui,
             settings: &effective.settings,
             host: &effective.host,
-            spaces: side_state
-                .and_then(|side| side.spaces.as_ref())
-                .map(SpacesState::from_wire),
+            spaces: super::workspaces::window_spaces(store, effective, &machine)
+                .map(|spaces| SpacesState::from_wire(&spaces)),
             spaces_enabled: super::machine_spaces::spaces_enabled_on(store, effective, &machine),
             collections: match side_state.and_then(|side| side.project_collections.as_ref()) {
                 // A document has arrived for this machine, so the daemon is authoritative from
@@ -924,6 +933,8 @@ fn project_context(
         bot_profile: meta.bot_profile(project_id).map(str::to_string),
         bot_gateway_running: project.bot_gateway_running == Some(true),
         bot_runs_today: project.bot_runs_today.unwrap_or_default(),
+        work_mode: project.work_mode,
+        work_linear: project.work_linear,
     })
 }
 

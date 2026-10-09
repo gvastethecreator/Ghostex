@@ -12,6 +12,7 @@ mod owned_windows;
 mod registry;
 mod routing;
 mod slots;
+mod window_workspace;
 
 pub(crate) use open::*;
 pub(crate) use registry::*;

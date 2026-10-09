@@ -111,7 +111,9 @@ pub(super) async fn route_sessions_http(
                     &project_id,
                     &session_id,
                 )?;
-                if crate::empty_session_cleanup::requests_empty_session_cleanup(params) {
+                if crate::empty_session_cleanup::requests_empty_session_cleanup(params)
+                    && crate::empty_session_cleanup::cleanup_applies(&state.paths, &session)
+                {
                     empty_session_cleanup_runtime::schedule_empty_session_cleanup(
                         state.clone(),
                         project_id,

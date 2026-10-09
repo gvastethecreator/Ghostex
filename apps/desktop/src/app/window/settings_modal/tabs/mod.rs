@@ -15,6 +15,7 @@ pub(crate) mod os_integration;
 pub(crate) mod projects;
 pub(crate) mod remote;
 pub(crate) mod theme;
+pub(crate) mod workspaces;
 
 use super::model::SettingsTabId;
 use super::store::SettingsStore;
@@ -45,6 +46,7 @@ pub(crate) fn settings_tab_view(
         SettingsTabId::OsIntegration => os_integration::os_integration_tab_view(store, cx),
         SettingsTabId::Extensions => extensions::extensions_tab_view(store, window, cx),
         SettingsTabId::Accounts => accounts::accounts_tab_view(store, window, cx),
+        SettingsTabId::Workspaces => workspaces::workspaces_tab_view(store, cx),
         // TAB-ARMS: one arm per page.
     }
 }

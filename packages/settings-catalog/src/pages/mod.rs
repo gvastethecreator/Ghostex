@@ -11,6 +11,7 @@ mod open_targets;
 mod os_integration;
 mod projects;
 mod remote;
+mod workspaces;
 
 use crate::rows::Page;
 use crate::Platform;
@@ -29,5 +30,6 @@ pub fn pages(platform: Platform) -> Vec<Page> {
         os_integration::page(),
         projects::page(),
         remote::page(),
+        workspaces::page(),
     ]
 }

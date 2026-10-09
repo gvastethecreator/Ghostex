@@ -66,6 +66,21 @@ impl PresentationStore {
                 side.project_collections.as_ref() != Some(&collections);
             side.project_collections = Some(collections);
         }
+        // A workspaces change re-filters the same Spaces row and project list, so it raises the
+        // Spaces change flag instead of a flag of its own.
+        if let Some(workspaces) = snapshot.sidebar_workspaces.take() {
+            summary.side_state.spaces |= side.workspaces.as_ref() != Some(&workspaces);
+            side.workspaces = Some(workspaces);
+        } else if snapshot
+            .capabilities
+            .as_ref()
+            .is_some_and(|capabilities| !capabilities.workspaces)
+        {
+            // CDXC:Workspaces 2026-10-09 WHY:
+            // A daemon that says it has no workspaces (the Workspaces built-in extension turned off) drops the document a change frame delivered earlier, so the tile and the window's workspace filter go away with it. A daemon too old to send capabilities keeps it.
+            summary.side_state.spaces |= side.workspaces.is_some();
+            side.workspaces = None;
+        }
         if let Some(spaces) = snapshot.sidebar_spaces.take() {
             summary.side_state.spaces = side.spaces.as_ref() != Some(&spaces);
             side.spaces = Some(spaces);
@@ -372,6 +387,10 @@ impl PresentationStore {
                 summary.side_state.custom_session_tags =
                     side.custom_session_tags.as_ref() != Some(&state);
                 side.custom_session_tags = Some(state);
+            }
+            SideStateUpdate::Workspaces(state) => {
+                summary.side_state.spaces = side.workspaces.as_ref() != Some(&state);
+                side.workspaces = Some(state);
             }
         }
         summary

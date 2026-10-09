@@ -542,6 +542,54 @@ impl GhostexGpuiApp {
         );
     }
 
+    /// The machine tabs this window draws: [`Self::remote_machine_tabs`] less the remote machines
+    /// placed in another workspace on this computer (gx-core `window_machine_tabs`).
+    pub(super) fn gx_store_window_machine_tabs(
+        &self,
+        inputs: &ghostex_gx_core::SidebarInputs,
+    ) -> Vec<MachineTabInput> {
+        ghostex_gx_core::window_machine_tabs(
+            self.gx_store.core.presentation(),
+            inputs.host.window_workspace_id.as_deref(),
+            self.gx_store.remote.tabs(),
+        )
+    }
+
+    /// A remote machine's tab that this window no longer draws because it is in another workspace
+    /// (the window switched, or the machine was moved) hands the list back to this computer, as a
+    /// tab that went away does (`gx_store_correct_selected_machine_tab`).
+    pub(super) fn gx_store_leave_machine_outside_window_workspace(
+        &mut self,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let selected = self.gx_store.sidebar_ui.selected_machine_id();
+        if selected == ghostex_gx_core::LOCAL_MACHINE_ID
+            || !self.gx_store.sidebar_ui.restored()
+            || !self
+                .gx_store
+                .remote
+                .tabs
+                .iter()
+                .any(|machine| machine.machine_id == selected)
+            || self
+                .gx_store
+                .sidebar_list
+                .last_inputs
+                .host
+                .machines
+                .iter()
+                .any(|machine| machine.machine_id == selected)
+        {
+            return;
+        }
+        self.gx_store_apply_sidebar_ui_intent(
+            ghostex_gx_core::SidebarUiIntent::SelectMachine {
+                machine_id: ghostex_gx_core::LOCAL_MACHINE_ID.to_string(),
+            },
+            cx,
+        );
+    }
+
     /// The machine tabs: this computer, then every machine the user has enabled, in settings order.
     fn remote_machine_tabs(&self, ordered: &[(String, String)]) -> Vec<MachineTabInput> {
         let mut tabs = vec![MachineTabInput {

@@ -339,13 +339,14 @@ impl GhostexGpuiApp {
 
     pub(crate) fn render_native_sidebar_menu(
         &self,
+        window: &Window,
         cx: &mut gpui::Context<Self>,
     ) -> Option<AnyElement> {
         use crate::app::window::frosted_host::{
             FrostedHostKind, SIDEBAR_MENU_HOST_LEVELS, frosted_hosting_active, show_frosted_host,
         };
         let Some(menu) = self.native_sidebar.menu.as_ref() else {
-            hide_sidebar_menu_hosts(0, cx);
+            hide_sidebar_menu_hosts(0, window.window_handle(), cx);
             return None;
         };
         let sidebar = self.native_sidebar.bounds;
@@ -414,10 +415,10 @@ impl GhostexGpuiApp {
                     cx,
                 );
             }
-            hide_sidebar_menu_hosts(count, cx);
+            hide_sidebar_menu_hosts(count, menu.window, cx);
             return Some(deferred(layers).with_priority(20).into_any_element());
         }
-        hide_sidebar_menu_hosts(0, cx);
+        hide_sidebar_menu_hosts(0, menu.window, cx);
         Some(
             deferred(layers.child(panels))
                 .with_priority(20)
@@ -890,12 +891,15 @@ pub(super) fn measure_menu_panel(
     }
 }
 
-/// Hides the sidebar menu's panel windows from `from` up.
-fn hide_sidebar_menu_hosts(from: usize, cx: &mut gpui::App) {
+/// Hides the sidebar menu's panel windows from `from` up, but only those sitting over `over`.
+///
+/// CDXC:Sidebar 2026-10-09 WHY:
+/// The panel host windows are shared by every workspace window, while each workspace window has its own sidebar and menu. Hiding them unconditionally let a second window without a menu hide the first window's open menu on each of its frames, and the first window showed it again on its next one, so the menu flickered while two windows were open.
+fn hide_sidebar_menu_hosts(from: usize, over: gpui::AnyWindowHandle, cx: &mut gpui::App) {
     use crate::app::window::frosted_host::{
-        FrostedHostKind, SIDEBAR_MENU_HOST_LEVELS, hide_frosted_host,
+        FrostedHostKind, SIDEBAR_MENU_HOST_LEVELS, hide_frosted_host_over,
     };
     for level in from..usize::from(SIDEBAR_MENU_HOST_LEVELS) {
-        hide_frosted_host(FrostedHostKind::SidebarMenu(level as u8), cx);
+        hide_frosted_host_over(FrostedHostKind::SidebarMenu(level as u8), over, cx);
     }
 }

@@ -443,6 +443,17 @@ pub(crate) const SUPPLEMENTAL_ROWS: &[Supplemental] = &[
         user_only: false,
     },
     Supplemental {
+        key: "workspacesHidden",
+        tab: EXTENSIONS,
+        group: None,
+        section: "official",
+        section_title: "Built-in",
+        title: "Turn off Workspaces",
+        subtitle: "Turn off Workspaces and work mode everywhere: the workspace button, the Workspaces page in Settings, Work mode on projects, the Work view, Linear and GitHub links on sessions and the workspace commands. Off by default; your workspaces, links, keys and team connections are kept.",
+        options: &[],
+        user_only: false,
+    },
+    Supplemental {
         key: "defaultEditorCommand",
         tab: OPEN_TARGETS,
         group: None,

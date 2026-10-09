@@ -185,6 +185,7 @@ fn snapshot_publishes_session_lifecycle_state_and_capability_flags() {
             "sessionSettlement": true,
             "sessionSnooze": true,
             "spaces": true,
+            "workspaces": crate::workspaces::workspaces_feature_enabled(),
             "worktreeSessions": true,
         }))
     );
@@ -451,6 +452,7 @@ fn the_git_status_capability_follows_the_sidebar_version_gate() {
                 "sessionSettlement": true,
                 "sessionSnooze": true,
                 "spaces": true,
+                "workspaces": crate::workspaces::workspaces_feature_enabled(),
                 "worktreeSessions": true,
             }),
             "settings {settings} must advertise sessionGitStatus {expected_git_status} \

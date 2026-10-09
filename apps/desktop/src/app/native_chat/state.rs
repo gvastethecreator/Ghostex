@@ -462,7 +462,11 @@ impl NativeChatView {
                     }
                 } else if input.read(cx).focus_handle(cx).is_focused(window) {
                     // A focus edge the listeners below missed is caught up by the field's next change.
-                    this.composer_focus_gained(window, cx);
+                    // The field holding its window's focus while that window is inactive (an app
+                    // modal is up) is not a gain: the listeners report it once the window is active.
+                    if window.is_window_active() {
+                        this.composer_focus_gained(window, cx);
+                    }
                     this.update_suggestion_selection(cx);
                 } else {
                     this.composer_focus_lost(cx);

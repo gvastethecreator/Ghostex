@@ -66,6 +66,26 @@ impl GhostexGpuiApp {
         }
     }
 
+    /// Sleeps one project's views and leaves their tabs in place: the active project's awake
+    /// views through the tab strip's own Sleep, a parked project's browser pages the way its
+    /// per-tab sleep drops them. A workspace switch sleeps the projects outside the new workspace
+    /// with it too (workspace_windows/window_workspace.rs).
+    pub(crate) fn sleep_project_views(&mut self, project_id: &str, cx: &mut gpui::Context<Self>) {
+        if self.agents_workspace_project_id.as_deref() == Some(project_id) {
+            for mode in self.project_editor_shell.lifecycle_modes() {
+                if self.project_editor_shell.is_mode_awake(mode) {
+                    self.sleep_titlebar_view(mode, cx);
+                }
+            }
+        } else {
+            self.sleep_parked_browser_project(project_id, cx);
+            // Its active view is no longer held awake for the way back in (`active_view_awake`).
+            if let Some(state) = self.project_view_states_by_project.get_mut(project_id) {
+                state.active_view_awake = false;
+            }
+        }
+    }
+
     /// Answers the Space menu's `sleepSpace`, whose `scope` is `space`, `inactive` or `others`.
     /// Returns `true` when the command is one, whether or not it resolved to any work.
     pub(crate) fn gx_store_run_sidebar_space_sleep(
@@ -89,19 +109,7 @@ impl GhostexGpuiApp {
         };
         let plan: SpaceSleepPlan = plans.plan(scope).clone();
         for project_id in &plan.project_ids {
-            if self.agents_workspace_project_id.as_deref() == Some(project_id.as_str()) {
-                for mode in self.project_editor_shell.lifecycle_modes() {
-                    if self.project_editor_shell.is_mode_awake(mode) {
-                        self.sleep_titlebar_view(mode, cx);
-                    }
-                }
-            } else {
-                self.sleep_parked_browser_project(project_id, cx);
-                // Its active view is no longer held awake for the way back in (`active_view_awake`).
-                if let Some(state) = self.project_view_states_by_project.get_mut(project_id) {
-                    state.active_view_awake = false;
-                }
-            }
+            self.sleep_project_views(project_id, cx);
         }
         if !plan.session_ids.is_empty() {
             self.dispatch_native_sidebar_ui(

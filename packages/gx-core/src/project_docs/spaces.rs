@@ -63,17 +63,18 @@ impl SpacesDocument {
             let Some(space) = self.state.spaces.get(space_id) else {
                 continue;
             };
-            spaces.insert(
-                space_id.clone(),
-                json!({
-                    "color": space.color,
-                    "icon": space.icon,
-                    "memberCollectionIds": space.member_collection_ids,
-                    "memberProjectIds": space.member_project_ids,
-                    "name": space.name,
-                    "spaceId": space.space_id,
-                }),
-            );
+            let mut wire = json!({
+                "color": space.color,
+                "icon": space.icon,
+                "memberCollectionIds": space.member_collection_ids,
+                "memberProjectIds": space.member_project_ids,
+                "name": space.name,
+                "spaceId": space.space_id,
+            });
+            if let Some(workspace_id) = &space.workspace_id {
+                wire["workspaceId"] = json!(workspace_id);
+            }
+            spaces.insert(space_id.clone(), wire);
         }
         json!({ "order": self.state.order, "spaces": Value::Object(spaces) })
     }

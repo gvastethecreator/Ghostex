@@ -62,6 +62,9 @@ mod sidebar_ui_storage;
 mod sidebar_snapshot;
 pub(crate) mod terminal_lifecycle;
 mod web_commands;
+mod work_links;
+mod work_mode;
+mod workspaces;
 mod workspace_groups;
 pub(crate) mod web_transport;
 

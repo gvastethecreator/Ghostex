@@ -37,6 +37,28 @@ pub(crate) fn titlebar_tooltip(
         .build(window, cx)
 }
 
+/// How far below the pointer a list row's tooltip starts: past the pointer's arrow, so the
+/// bubble never sits under the pointer's tip.
+const LIST_ROW_TOOLTIP_DROP: f32 = 20.0;
+
+/// The tooltip for a row in a list (a file's path, say): the titlebar tooltip's text, wrapped to
+/// the room beside the pointer instead of cut at the list's edge, and dropped below the pointer.
+///
+/// CDXC:Tooltips 2026-10-09 DECISION:
+/// User, of the files list's path tooltips: "the tooltip here should appear below the button of the current element so I can't hover on it (it blocks clicks)" and "this tooltip is showing cut off when the files list is not floating". A row's tooltip opens below the pointer, clear of its arrow, and wraps to the room it has (the floating list's own window, or the space beside a native pane) instead of running one line past the edge; its window never takes the pointer (CDXC:Tooltips 2026-10-09 in titlebar_popup_chrome.rs). `titlebar_tooltip` stays one fixed-height line for the titlebar strip.
+pub(crate) fn list_row_tooltip(
+    text: impl Into<gpui_component::text::Text>,
+    window: &mut Window,
+    cx: &mut gpui::App,
+) -> gpui::AnyView {
+    Tooltip::new(text)
+        .mt(px(LIST_ROW_TOOLTIP_DROP))
+        .mb_0()
+        .text_size(px(TITLEBAR_TOOLTIP_TEXT_SIZE))
+        .line_height(px(TITLEBAR_TOOLTIP_LINE_HEIGHT))
+        .build(window, cx)
+}
+
 pub(crate) fn titlebar_popup_menu_width(kind: GpuiTitlebarPopupKind) -> f32 {
     match kind {
         GpuiTitlebarPopupKind::AccountUsage(_) => 380.0,

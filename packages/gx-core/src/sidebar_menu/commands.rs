@@ -26,6 +26,12 @@ impl MenuCommand {
         &self.0
     }
 
+    /// A top-level command the host answers itself (the workspace tile's menu,
+    /// `sidebar_menu/workspace.rs`).
+    pub(crate) fn host(command: Value) -> Self {
+        Self(command)
+    }
+
     /// `{ type: 'command', message }`: forwarded to the runtime's gxserver client untouched.
     pub(crate) fn command(message: Value) -> Self {
         Self(json!({ "type": "command", "message": message }))
@@ -282,6 +288,17 @@ impl MenuCommand {
     pub(crate) fn agentbox_session(session_id: &str, action: &str) -> Self {
         Self(json!({ "type": "agentboxSessionAction", "sessionId": session_id, "action": action }))
     }
+
+    /// `{ type: 'sessionAction', sessionId, action: 'linkWork', kind }`: opens the Link to picker
+    /// for one kind (`pullRequest`, `linearIssue`, `linearProject`, `githubIssue`).
+    pub(crate) fn link_work(session_id: &str, kind: &str) -> Self {
+        Self(json!({
+            "type": "sessionAction",
+            "sessionId": session_id,
+            "action": "linkWork",
+            "kind": kind,
+        }))
+    }
 }
 
 /// The gxserver-bound messages a `command` row carries. One function per message so the set the
@@ -324,6 +341,10 @@ pub(crate) mod message {
             "sleeping": true,
             "source": "sleepBelow",
         })
+    }
+
+    pub(crate) fn sleep_sessions(session_ids: &[String]) -> Value {
+        json!({ "type": "setSessionsSleeping", "sessionIds": session_ids, "sleeping": true })
     }
 
     pub(crate) fn unsnooze_session(session_id: &str) -> Value {
@@ -369,6 +390,11 @@ pub(crate) mod message {
             "sessionId": session_id,
             "detailsText": details_text,
         })
+    }
+
+    /// Any text a Copy row offers (a branch, a Linear ID, a link), straight to the clipboard.
+    pub(crate) fn copy_text(text: &str) -> Value {
+        json!({ "type": "copyText", "text": text })
     }
 
     pub(crate) fn postpone_delayed_send(session_id: &str, delay_ms: i64) -> Value {
@@ -421,6 +447,17 @@ pub(crate) mod message {
 
     pub(crate) fn copy_project_remote_url(remote_url: &str) -> Value {
         json!({ "type": "copyWorkspaceProjectRemoteUrl", "remoteUrl": remote_url })
+    }
+
+    /// Answered by `/api/setSessionWorkLinks` (server/src/work_mode/links.rs): `links` is merged
+    /// into the session's hand-set links (`{ clear: true }` puts every kind back to automatic).
+    pub(crate) fn set_session_work_links(session_id: &str, links: Value) -> Value {
+        json!({ "type": "setSessionWorkLinks", "sessionId": session_id, "links": links })
+    }
+
+    /// Answered by `/api/setProjectWorkMode` (server/src/work_mode/).
+    pub(crate) fn set_project_work_mode(project_id: &str, enabled: bool) -> Value {
+        json!({ "type": "setProjectWorkMode", "projectId": project_id, "enabled": enabled })
     }
 
     pub(crate) fn wake_project_sleeping_sessions(group_id: &str) -> Value {

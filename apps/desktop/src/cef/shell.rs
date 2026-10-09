@@ -139,6 +139,7 @@ mod remote_browser;
 mod request_handling;
 mod site_requests;
 mod v8_bridges;
+mod workspace_browser;
 
 pub(crate) use browser::*;
 pub(crate) use browser_appearance::*;
@@ -152,3 +153,4 @@ pub(crate) use remote_browser::*;
 pub(crate) use request_handling::*;
 pub(crate) use site_requests::*;
 pub(crate) use v8_bridges::*;
+pub(crate) use workspace_browser::*;

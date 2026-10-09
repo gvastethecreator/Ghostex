@@ -11,7 +11,7 @@ use serde_json::Value;
 use crate::de::{Rows, null_as_default};
 use crate::side_state::{
     CustomSessionTagsState, SidebarProjectCollectionsState, SidebarSpacesState,
-    WorkspaceSessionGroupsState,
+    SidebarWorkspacesState, WorkspaceSessionGroupsState,
 };
 use crate::tri::Tri;
 
@@ -49,6 +49,9 @@ pub struct PresentationSnapshot {
     pub sidebar_spaces_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_session_tags: Option<CustomSessionTagsState>,
+    /// Absent on a daemon without workspaces (`capabilities.workspaces`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sidebar_workspaces: Option<SidebarWorkspacesState>,
 }
 
 impl PresentationSnapshot {
@@ -81,6 +84,10 @@ pub struct PresentationCapabilities {
     pub spaces: bool,
     #[serde(default, deserialize_with = "crate::de::null_as_default")]
     pub worktree_sessions: bool,
+    /// The daemon has workspaces: `sidebarWorkspaces`, `workspaceId` on projects and Spaces, and
+    /// the workspace routes. Without it a client shows the machine unfiltered.
+    #[serde(default, deserialize_with = "crate::de::null_as_default")]
+    pub workspaces: bool,
 }
 
 /// One synthetic group per project today (`<projectId>:active`). User-made groups live in
@@ -181,6 +188,33 @@ pub struct PresentationProject {
     /// project and from an older daemon.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bot_runs_today: Option<u64>,
+    /// Work mode is on for this project (server/src/work_mode/). Present only when true.
+    #[serde(
+        default,
+        deserialize_with = "crate::de::null_as_default",
+        skip_serializing_if = "is_false"
+    )]
+    pub work_mode: bool,
+    /// Work mode is on and a Linear key is set for this project, so it can create Linear tickets.
+    /// Present only when true.
+    #[serde(
+        default,
+        deserialize_with = "crate::de::null_as_default",
+        skip_serializing_if = "is_false"
+    )]
+    pub work_linear: bool,
+    /// The workspace this project belongs to; absent = the default workspace (and on an older
+    /// daemon). A worktree project follows its parent checkout's workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    /// The project shows in every workspace (the Ghostex config folder's project, which holds the
+    /// Help chats). Present only when true.
+    #[serde(
+        default,
+        deserialize_with = "crate::de::null_as_default",
+        skip_serializing_if = "is_false"
+    )]
+    pub every_workspace: bool,
 }
 
 impl PresentationProject {
@@ -393,6 +427,113 @@ pub struct PresentationAgentbox {
     pub pending: bool,
 }
 
+open_string_enum! {
+    /// The combined result of a pull request's checks.
+    WorkChecksState {
+        Passing => "passing",
+        Failing => "failing",
+        Pending => "pending",
+    }
+}
+
+/// What a session in a work-mode project is linked to (server/src/work_mode/). Only sessions of
+/// projects with work mode on carry it, so its presence is what makes a sidebar card two lines.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresentationSessionWork {
+    /// The checkout's branch; absent on the default branch or a detached HEAD.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pull_request: Option<PresentationWorkPullRequest>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub linear_issues: Vec<PresentationWorkLinearIssue>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub github_issues: Vec<PresentationWorkGithubIssue>,
+    /// A Linear project is a release the team works on, never a repo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub linear_project: Option<PresentationWorkLinearProject>,
+    /// Some link was set by hand (`ghostex link-session`, the Link to menu), so "Back to
+    /// automatic" has something to undo.
+    #[serde(
+        default,
+        deserialize_with = "crate::de::null_as_default",
+        skip_serializing_if = "std::ops::Not::not"
+    )]
+    pub hand_set: bool,
+    /// The linked PR is merged and the user has not answered the Clean up / Keep offer for it yet
+    /// (server/src/work_mode/cleanup.rs).
+    #[serde(
+        default,
+        deserialize_with = "crate::de::null_as_default",
+        skip_serializing_if = "std::ops::Not::not"
+    )]
+    pub offer_cleanup: bool,
+}
+
+impl PresentationSessionWork {
+    /// Whether anything is linked, which is what earns the card its second line.
+    pub fn has_links(&self) -> bool {
+        self.pull_request.is_some()
+            || !self.linear_issues.is_empty()
+            || !self.github_issues.is_empty()
+            || self.linear_project.is_some()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresentationWorkPullRequest {
+    #[serde(deserialize_with = "crate::de::lenient_u64")]
+    pub number: u64,
+    pub state: PrState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Absent until the checks were read, and for a PR without checks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checks: Option<WorkChecksState>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresentationWorkLinearIssue {
+    /// `SPX-1245`.
+    pub identifier: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Linear's workflow state type: `triage`, `backlog`, `unstarted`, `started`, `completed` or
+    /// `canceled`. Absent until Linear answered (no API key, or not fetched yet).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_type: Option<String>,
+    /// The team's own name for the state, e.g. "In Review".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresentationWorkGithubIssue {
+    #[serde(deserialize_with = "crate::de::lenient_u64")]
+    pub number: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// `open` or `closed`; absent until `gh` answered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresentationWorkLinearProject {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
 /// One session row. Unique only together with `project_id`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -594,6 +735,9 @@ pub struct PresentationSession {
     pub stashed_prompt_count: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub git_status: Option<SessionGitStatus>,
+    /// Present only for a session of a project with work mode on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work: Option<PresentationSessionWork>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delayed_send_deadline_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -505,6 +505,9 @@ fn native_group(
                 background_work_count: section.background_work_count,
                 question_count: section.question_count,
                 session_ids: section.session_ids.clone(),
+                menu: menus
+                    .section_menu(group, section)
+                    .map(|items| Arc::new(menu_to_json(&items))),
             })
             .collect(),
         title: core.title.clone(),
@@ -615,6 +618,11 @@ fn project_context(group: &GroupView) -> Option<Value> {
             "botGatewayRunning".to_string(),
             Value::Bool(context.bot_gateway_running),
         );
+    }
+    // The Work view and the sidebar's briefcase show while any project has Work mode on
+    // (native_sidebar/work_chips.rs, app/work_view/).
+    if context.work_mode {
+        object.insert("workMode".to_string(), Value::Bool(true));
     }
     Some(Value::Object(object))
 }
@@ -928,6 +936,11 @@ fn build_session(
         favicon_data_url: row.favicon_data_url.clone(),
         has_composer_draft: row.has_composer_draft,
         queued_prompt_count: row.queued_prompt_count.unwrap_or(0),
+        work: row
+            .work
+            .as_ref()
+            .filter(|work| work.has_links())
+            .map(|work| Arc::new(work.clone())),
         details,
     }
 }

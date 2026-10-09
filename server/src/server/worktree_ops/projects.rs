@@ -237,6 +237,8 @@ pub(crate) fn register_project_worktree_path(
     params.insert("name".to_string(), Value::String(name.to_string()));
     params.insert("path".to_string(), Value::String(path.to_string()));
     let project = repository.add_project_path(&params)?;
+    // It joins its parent checkout's workspace and takes its Work mode.
+    let project = crate::workspaces::place_worktree_project(&repository, &db, project)?;
     let project_id = value_text(&project, "projectId")?;
     schedule_presentation_project_delta(state, &db, &repository, &project_id, delta_type)?;
     Ok(project)

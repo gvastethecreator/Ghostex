@@ -60,6 +60,7 @@ How to use this file:
 #### Chat
 
 - **Default view for compatible agents** `preferredAgentInterface` (one of terminal | chat; default chat): Automatically switch to chat as soon as Ghostex detects that an agent session supports it. Option labels: terminal = Terminal, chat = Chat.
+- **Close empty sessions when starting a new one** `closeEmptySessionsOnNew` (boolean, default false) [advanced]: When you start a new session, close this project's other sessions that have nothing typed, drafted or queued. Only applies when Chat is the default view for that agent; with Terminal it never runs.
 - **Chat font family** `sessionChatFontFamily` (text, default (empty)): Use any installed font in chat messages and the prompt composer.
 - **Default chat zoom (%)** `sessionChatZoomPercent` (number 70 to 200 step 5 default 100): Scale the desktop chat interface, including messages and the prompt composer, from 70% to 200% in 5% steps. Default: 100%.
 - **Custom transcript width** `sessionChatCustomTranscriptWidthEnabled` (boolean, default false): Let the transcript use a different width from the prompt composer.
@@ -401,6 +402,7 @@ How to use this file:
 - **Open In** `openIn` (Settings UI row without a settings key; use `ghostex settings open`): Open the active project or a session's folder in your editor, terminal or file manager from the Open button and the Open In menus.
 - **Spaces** `spaces` (Settings UI row without a settings key; use `ghostex settings open`): Group projects into Spaces and switch between them from a row of icons at the top of the sidebar, or by swiping.
 - **Cloud Boxes** `cloudBoxes` (Settings UI row without a settings key; use `ghostex settings open`): Run agent sessions in isolated boxes, in Docker on this computer or in the cloud, from New Thread's Run on choice or Run in a Box in the Select Agent menu.
+- **Workspaces** `workspaces` (Settings UI row without a settings key; use `ghostex settings open`): Keep each company's projects, Spaces, browser sign-ins and Claude account in its own workspace, and turn on work mode: Linear tickets and GitHub pull requests on your sessions, the Work view and your team's Slack flow.
 - **Extensions** `extensionsButton` (Settings UI row without a settings key; use `ghostex settings open`): An entry in the work area header’s ⋯ menu that opens this Extensions page.
 - **Chromium runtime (CEF)** `cef` (Settings UI row without a settings key; use `ghostex settings open`): Install, reinstall or uninstall the optional web runtime used by the Browser, the Code view, website and extension views, and HTML files in Files.
 - **Hide Bots** `botsHidden` (boolean, default true): Stop offering Bots, the sidebar mode with one row per Hermes profile. Hidden by default; offered only where the Hermes CLI is installed.
@@ -409,6 +411,7 @@ How to use this file:
 - **Turn off Open In** `openInTitlebarButtonHidden` (boolean, default false): Turn off Open In everywhere: the Open button, the Open In page in Settings and the Open In menus. Your apps and custom commands are kept.
 - **Spaces** `sidebarSpacesEnabled` (boolean, default false): Turn on Spaces: a row of Space icons at the top of the sidebar, Space menus, and the Space settings. Off by default; your saved Spaces are kept while it is off.
 - **Turn off Cloud Boxes** `cloudBoxesHidden` (boolean, default true): Turn off Cloud Boxes everywhere: the Cloud Boxes page in Settings, the Run on choice of a new thread, Run in a Box in the Select Agent menu and the agentbox commands. Off by default; your boxes and box settings are kept. Only on macOS and Linux.
+- **Turn off Workspaces** `workspacesHidden` (boolean, default true): Turn off Workspaces and work mode everywhere: the workspace button, the Workspaces page in Settings, Work mode on projects, the Work view, Linear and GitHub links on sessions and the workspace commands. Off by default; your workspaces, links, keys and team connections are kept.
 ### Extensions Store
 
 - **Extension store** `store` (Settings UI row without a settings key; use `ghostex settings open`): Browse audited extensions, install them, and manage what is already installed.
@@ -483,6 +486,8 @@ How to use this file:
 - **Ticket key** `ticketKey` (Settings UI row without a settings key; use `ghostex settings open`): Three-letter prefix used for Linear-style ticket numbers on the Project board.
 - **Beads directory** `beadsDirectory` (Settings UI row without a settings key; use `ghostex settings open`): Absolute path the Project board reads its Beads workspace (.beads) from.
 - **Docs directory** `docsDirectory` (Settings UI row without a settings key; use `ghostex settings open`): Extra folder this project's Files view shows, in addition to its own docs.
+- **Work mode** `projectWorkMode` (Settings UI row without a settings key; use `ghostex settings open`): Turn work mode on or off for this project: Linear tickets, GitHub pull requests and the Work view.
+- **Project Linear API key** `projectLinearApiKey` (Settings UI row without a settings key; use `ghostex settings open`): A Linear key for this project only, used instead of its workspace's or the shared key.
 ### Portless
 
 - **Portless** `portlessEnabled` (boolean, default false): Route project dev servers through named local addresses instead of raw ports.
@@ -519,6 +524,34 @@ How to use this file:
 - **Easy Connect binary** `binary` (Settings UI row without a settings key; use `ghostex settings open`): Path and version of the Easy Connect binary.
 - **gxserver** `gxserver` (Settings UI row without a settings key; use `ghostex settings open`): Local API the app and phones talk to.
 - **Raw Easy Connect status** `rawStatus` (Settings UI row without a settings key; use `ghostex settings open`): Raw Easy Connect status JSON for bug reports.
+## Workspaces (tab `workspaces`)
+
+### Workspaces
+
+- **Workspace name** `workspaceName` (Settings UI row without a settings key; use `ghostex settings open`): The name and letter shown on the workspace button left of your Spaces.
+- **Workspace color** `workspaceColor` (Settings UI row without a settings key; use `ghostex settings open`): The color of the workspace button.
+- **Work or Personal** `workspaceKind` (Settings UI row without a settings key; use `ghostex settings open`): Work turns work mode on for the workspace's projects by default; Personal leaves it off.
+- **Linear API key** `workspaceLinearApiKey` (Settings UI row without a settings key; use `ghostex settings open`): The Linear key this workspace's projects use, unless a project sets its own.
+- **Claude account** `workspaceClaudeAccount` (Settings UI row without a settings key; use `ghostex settings open`): Which of your Claude accounts agents in this workspace's projects use.
+- **Browser sign-ins** `workspaceBrowserSignins` (Settings UI row without a settings key; use `ghostex settings open`): Each workspace's Browser keeps its own cookies; sign out of every site here.
+- **New workspace** `newWorkspace` (Settings UI row without a settings key; use `ghostex settings open`): Add a workspace, for example one per company you work for.
+### Team
+
+- **Team (Convex)** `teamConvex` (Settings UI row without a settings key; use `ghostex settings open`): Join your team's Convex project with an invite link, copy an invite link for a teammate, or leave the team.
+- **Set up a new team** `teamSetup` (Settings UI row without a settings key; use `ghostex settings open`): Deploy Ghostex's functions to your own Convex project with ghostex team deploy in a terminal.
+- **Slack app manifest** `slackAppManifest` (Settings UI row without a settings key; use `ghostex settings open`): Copy the manifest that creates your team's Slack app.
+- **Slack bot token and signing secret** `slackSecrets` (Settings UI row without a settings key; use `ghostex settings open`): Stored in your team's Convex project with ghostex team slack-connect.
+- **Your Slack user** `slackUser` (Settings UI row without a settings key; use `ghostex settings open`): Your Slack member ID, so @Ghostex commands you send in Slack reach this computer.
+- **Linear for the team** `teamLinearKey` (Settings UI row without a settings key; use `ghostex settings open`): The team-wide Linear key Slack commands use to find and create tickets, set with ghostex team linear-connect.
+### Team flow
+
+- **Working channel** `teamWorkingChannel` (Settings UI row without a settings key; use `ghostex settings open`): The Slack channel where each ticket gets its one working thread.
+- **Watch-only channels** `teamWatchOnlyChannels` (Settings UI row without a settings key; use `ghostex settings open`): Slack channels where a request is forwarded to the ticket's working thread and only gets a 👀.
+- **Repos for new work** `teamChannelRepos` (Settings UI row without a settings key; use `ghostex settings open`): Which repo and Linear team new work from each Slack channel goes to.
+- **Where new work runs** `teamDefaultRunPlace` (Settings UI row without a settings key; use `ghostex settings open`): Cloud or this computer, for @Ghostex in Slack without cloud or local.
+- **Never work without a ticket** `teamNeverWithoutTicket` (Settings UI row without a settings key; use `ghostex settings open`): Ghostex finds the ticket in the thread or creates one in Linear before any session starts. Always on.
+- **Team instructions** `teamInstructions` (Settings UI row without a settings key; use `ghostex settings open`): Your team's rules, added to every session Ghostex starts from Slack.
+- **Team-flow steps** `teamFlowSteps` (Settings UI row without a settings key; use `ghostex settings open`): The steps each ticket shows on the Work page: reorder, rename, remove or add them, or reset to the default.
 ## Hotkeys (tab `hotkeys`)
 
 ### Projects

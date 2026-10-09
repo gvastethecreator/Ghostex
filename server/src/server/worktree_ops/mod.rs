@@ -1,11 +1,13 @@
 use super::*;
 
+pub mod chosen_branch;
 pub mod common;
 pub mod delete;
 pub mod projects;
 pub mod rename;
 pub mod sessions;
 
+pub(crate) use chosen_branch::*;
 pub(crate) use common::*;
 pub(crate) use delete::*;
 pub(crate) use projects::*;

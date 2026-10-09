@@ -258,6 +258,20 @@ pub const GHOSTEX_OFFICIAL_EXTENSIONS: J = J::Arr(&[
         ("settingsPages", J::Arr(&[J::Str("cloudBoxes")])),
         ("platforms", J::Arr(&[J::Str("macos"), J::Str("linux")])),
     ]),
+    // CDXC:Workspaces 2026-10-09 DECISION:
+    // User: "Please make the workspaces feature as a built in extension in the app: when enabled we show the workspaces page in settings and we show the switcher and we allow enabling work mode etc." A whole-feature entry like Cloud Boxes, off by default, with a new key (`workspacesHidden`, default on = hidden) because the settings file stores every default. Off hides the workspace tile, Move to workspace, the Work Mode row, Link to, Create Linear ticket, the briefcase button, the Work view, work chips, the Workspaces page and the work-mode rows on Settings > Projects; gxserver treats work mode as off for every project, publishes no workspaces, runs no team sync and applies no workspace Claude account, so every window shows every project as before workspaces. Saved workspaces, links, Linear keys and team connections are kept, so turning it on restores everything.
+    // SEE-ALSO: server/src/workspaces/feature.rs (gxserver's gate), packages/gx-core/src/sidebar_view/inputs.rs (`workspaces_enabled`).
+    J::Obj(&[
+        ("description", J::Str("Keep each company's projects, Spaces, browser sign-ins and Claude account in its own workspace, and turn on work mode: Linear tickets and GitHub pull requests on your sessions, the Work view and your team's Slack flow.")),
+        ("category", J::Str("features")),
+        ("id", J::Str("workspaces")),
+        ("placement", J::Str("feature")),
+        ("settingsKey", J::Str("workspacesHidden")),
+        ("appWide", J::Bool(true)),
+        ("title", J::Str("Workspaces")),
+        ("settingsPages", J::Arr(&[J::Str("workspaces")])),
+        ("settingKeys", J::Arr(&[J::Str("projectWorkMode"), J::Str("projectLinearApiKey")])),
+    ]),
     J::Obj(&[
         ("description", J::Str("An entry in the work area header’s ⋯ menu that opens this Extensions page.")),
         ("category", J::Str("menus-and-panels")),

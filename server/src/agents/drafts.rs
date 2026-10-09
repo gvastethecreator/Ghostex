@@ -23,9 +23,10 @@ session, sleeping, and daemon restarts, whether or not anything has been typed
 into it, and leaves the sidebar by exactly two routes: the user deletes it, or
 it is promoted. There is no navigate-away discard and no boot-time sweep of
 empty drafts any more — an empty draft is a session the user made on purpose.
-Since 2026-10-04 one more route exists: the user's next new session in the same
-project closes it while it is still fully empty (CDXC:Sessions 2026-10-04 in
-empty_session_cleanup.rs).
+Since 2026-10-04 one more route exists, off by default since 2026-10-09: with the
+advanced `closeEmptySessionsOnNew` setting on and a Chat agent, the user's next new
+session in the same project closes it while it is still fully empty (CDXC:Sessions
+2026-10-09 in empty_session_cleanup.rs).
 */
 
 use std::path::{Path, PathBuf};

@@ -235,6 +235,7 @@ pub(crate) fn claude_transcript_lineage_record(
             return None;
         }
         let leaf_marker = match extract_string(record.get("leafUuid")) {
+            Some(leaf) if leaf == CLAUDE_REWIND_SETTLED_LEAF_SENTINEL => return None,
             Some(leaf) => TranscriptLeafMarker::Row(leaf),
             None => TranscriptLeafMarker::Empty,
         };
@@ -379,6 +380,8 @@ fn claude_interrupted_message_id(record: &Map<String, Value>) -> Option<String> 
 
 const CLAUDE_QUEUE_RECORD_TYPE: &str = "queue-operation";
 const CLAUDE_LEAF_MARKER_RECORD_TYPE: &str = "last-prompt";
+/// CDXC:SessionChat 2026-10-09 WHY: After Escape rewinds an unanswered prompt, Claude Code writes an explicit `last-prompt` naming the nil UUID right AFTER the next turn's first rows (its `rowsQueued` bookkeeping): it names no row and rewinds nothing, and the turn carries on from those rows. Read as a leaf marker it was a rewind to a row that never exists: the live follower answered it with a fresh snapshot while it was still the newest line, the cutoff dropped every older row, and the chat showed only the new turn from then on (twice on 2026-10-09). So it is bookkeeping, like a non-explicit row.
+const CLAUDE_REWIND_SETTLED_LEAF_SENTINEL: &str = "00000000-0000-0000-0000-000000000000";
 const CLAUDE_ATTACHMENT_RECORD_TYPE: &str = "attachment";
 const CLAUDE_QUEUED_COMMAND_ATTACHMENT: &str = "queued_command";
 

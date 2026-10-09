@@ -25,27 +25,6 @@
   <a href="media/readme/gx-hero-dark.jpg"><picture><source media="(prefers-color-scheme: dark)" srcset="media/readme/gx-hero-dark.gif" /><img src="media/readme/gx-hero-light.gif" alt="Ghostex with see-through glass over a moving meadow: projects and agent sessions in the sidebar, a chat in the middle and the view picker on the right" width="960" /></picture></a>
 </p>
 
-<div align="center">
-  <table>
-    <tr>
-      <td width="50%" align="center"><a href="#a-real-chat-view-for-every-agent"><img src="media/readme/gx-diff.jpg" alt="A chat showing the agent's code change as a diff" width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#agents-that-run-agents"><img src="media/readme/gx-threads.jpg" alt="A coordinator with its threads in the sidebar and the Threads panel" width="100%" /></a></td>
-    </tr>
-    <tr>
-      <td width="50%" align="center"><a href="#any-agent-swap-on-the-fly"><img src="media/readme/gx-agent-picker.gif" alt="The model picker switching between agents" width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#embedded-chromium-browser"><img src="media/readme/gx-browser-pane.jpg" alt="A chat next to the built-in browser" width="100%" /></a></td>
-    </tr>
-    <tr>
-      <td width="50%" align="center"><a href="#ios-and-android-apps-with-easy-connect-or-tailscale"><img src="media/readme/gx-phone.gif" alt="Pairing the phone app, then sessions and a chat on the phone" width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#find-any-past-session"><img src="media/readme/gx-search.gif" alt="Searching every past prompt" width="100%" /></a></td>
-    </tr>
-    <tr>
-      <td width="50%" align="center"><a href="#a-real-chat-view-for-every-agent"><img src="media/readme/gx-question.jpg" alt="An agent's question shown as a card with options" width="100%" /></a></td>
-      <td width="50%" align="center"><a href="#also-in-the-box"><img src="media/readme/gx-views.jpg" alt="The view picker with Code, Browser, Kanban, Automate, Files, Terminal, Linear and Jira" width="100%" /></a></td>
-    </tr>
-  </table>
-</div>
-
 Ghostex is built for developers who keep many agents alive at once. A chat view for every agent, a native Rust/GPUI shell, embedded Chromium panes, and a mobile app share one workspace, and every session survives restarts.
 
 ## Features
@@ -56,7 +35,7 @@ Ghostex is built for developers who keep many agents alive at once. A chat view 
 
 <br/>
 
-### A real chat view for every agent
+### Chat & CLI views
 
 Talk to Claude Code, Codex, or any other agent in a proper chat GUI: clickable images, readable diffs, queued prompts, sub-agents in view, and a full editor for long messages. If you ever need the raw CLI, it is one hotkey away and your draft comes with you.
 

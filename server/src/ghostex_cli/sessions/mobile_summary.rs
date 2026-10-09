@@ -174,6 +174,10 @@ pub(super) fn to_mobile_session_list(result: &Value) -> Value {
                             "isChat".to_string(),
                             json!(is_mobile_chats_collection_project(project)),
                         );
+                        // CDXC:WorkMode 2026-10-09 WHY: the phone's project menu ticks its Work Mode row from this; the inventory rows are raw project rows, so the switch is read with the same rule the presentation snapshot uses and sent only when true, like the snapshot's own `workMode`.
+                        if crate::work_mode::project_work_mode(project) {
+                            project_map.insert("workMode".to_string(), json!(true));
+                        }
                         Value::Object(project_map)
                     })
                     .collect(),
@@ -580,6 +584,8 @@ fn to_mobile_session_summary(session: &Value) -> Value {
      * round trip or a git binary of its own.
      */
     insert_js(&mut map, "gitStatus", &[s("gitStatus")]);
+    // CDXC:WorkMode 2026-10-09 WHY: the same second-whitelist trap as the keys around it: the phone's Copy submenu needs the session's PR, Linear and issue links, and `to_cli_session` forwarding `work` is not enough because this compactor drops everything it does not name.
+    insert_non_null(&mut map, "work", s("work"));
     /*
      * CDXC:SessionChat 2026-08-21-b:
      * The phone's session-row queue badge reads these two. This compactor is a

@@ -156,6 +156,13 @@ impl GhostexGpuiApp {
                     );
                 });
             }
+            // The Work page's requests (app/work_view/bridge.rs).
+            (
+                ProjectWorkareaCefSurfaceSlotKey::Work,
+                cef::ProjectWorkareaBridgeEvent::ProjectBoardRequest(payload),
+            ) => {
+                self.receive_work_view_request(payload, cx);
+            }
             (
                 ProjectWorkareaCefSurfaceSlotKey::Kanban
                 | ProjectWorkareaCefSurfaceSlotKey::Automate,

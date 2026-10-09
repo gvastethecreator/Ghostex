@@ -146,7 +146,7 @@ pub(crate) fn titlebar_mode_view_tab_hidden_settings_key(
         TitlebarMode::Manage => Some(DOCS_VIEW_TAB_HIDDEN_SETTINGS_KEY),
         TitlebarMode::Terminal => Some(TERMINAL_VIEW_TAB_HIDDEN_SETTINGS_KEY),
         TitlebarMode::BotFeed => Some(BOT_AUTOMATIONS_HIDDEN_SETTINGS_KEY),
-        TitlebarMode::Agents | TitlebarMode::Extension(_) => None,
+        TitlebarMode::Agents | TitlebarMode::Work | TitlebarMode::Extension(_) => None,
     }
 }
 
@@ -166,6 +166,7 @@ pub(crate) fn gpui_titlebar_mode_plugin_display_name(mode: TitlebarMode) -> &'st
         TitlebarMode::Manage => "Files",
         TitlebarMode::Terminal => "Terminal",
         TitlebarMode::BotFeed => "Automations",
+        TitlebarMode::Work => "Work",
         TitlebarMode::Extension(id) => id.as_str(),
     }
 }

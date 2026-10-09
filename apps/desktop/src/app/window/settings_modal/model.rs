@@ -20,16 +20,18 @@ pub(crate) enum SettingsTabId {
     Hotkeys,
     Debugging,
     About,
+    Workspaces,
 }
 
 impl SettingsTabId {
     /// The rail order (`createSettingsSidebarPages`); OS Integration and Debugging are filtered
     /// by the shell, and About is pinned to the rail's bottom.
-    pub(crate) const RAIL_ORDER: [SettingsTabId; 15] = [
+    pub(crate) const RAIL_ORDER: [SettingsTabId; 16] = [
         SettingsTabId::General,
         SettingsTabId::Theme,
         SettingsTabId::Agents,
         SettingsTabId::Accounts,
+        SettingsTabId::Workspaces,
         SettingsTabId::Integrations,
         SettingsTabId::CloudBoxes,
         SettingsTabId::Extensions,
@@ -61,6 +63,7 @@ impl SettingsTabId {
             SettingsTabId::Hotkeys => "hotkeys",
             SettingsTabId::Debugging => "debugging",
             SettingsTabId::About => "about",
+            SettingsTabId::Workspaces => "workspaces",
         }
     }
 
@@ -86,6 +89,7 @@ impl SettingsTabId {
             SettingsTabId::Hotkeys => "Hotkeys",
             SettingsTabId::Debugging => "Debugging",
             SettingsTabId::About => "About",
+            SettingsTabId::Workspaces => "Workspaces",
         }
     }
 
@@ -107,6 +111,7 @@ impl SettingsTabId {
             SettingsTabId::Hotkeys => "modals/settings/keyboard.svg",
             SettingsTabId::Debugging => "modals/settings/bug.svg",
             SettingsTabId::About => "modals/settings/info-circle.svg",
+            SettingsTabId::Workspaces => "modals/settings/briefcase.svg",
         }
     }
 }

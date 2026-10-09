@@ -197,18 +197,22 @@ impl GhostexGpuiApp {
         }
         // CDXC:Sidebar 2026-09-23 WHY:
         // The sessions reveal takes keyboard focus, and interacting with either floating panel or its chat's child windows can activate another window. Main-window inactivity alone therefore dismissed the Windows reveal on the next poll; keep the panel while its own interaction owns focus.
+        // CDXC:Sidebar 2026-10-09 WHY:
+        // Only focus leaving the panel's own windows dismisses it, not their being inactive. With a second workspace window open, that window is usually the active one when the pointer reaches this window's edge, so the panel was taken away on the poll right after it opened. The pointer leaving still slides it away.
         #[cfg(not(target_os = "macos"))]
-        if !window.is_window_active()
-            && !self.floating_reveal_chat_child_active(cx)
-            && self.floating_reveal.panel.as_ref().is_some_and(|panel| {
-                !panel
-                    .window
+        if let Some(panel) = self.floating_reveal.panel.as_ref() {
+            let panel_window = panel.window;
+            let focused = window.is_window_active()
+                || self.floating_reveal_chat_child_active(cx)
+                || panel_window
                     .update(cx, |_, window, _| window.is_window_active())
-                    .unwrap_or(false)
-            })
-        {
-            self.close_floating_reveal(cx);
-            return false;
+                    .unwrap_or(false);
+            if focused {
+                self.floating_reveal.focus_held = true;
+            } else if self.floating_reveal.focus_held {
+                self.close_floating_reveal(cx);
+                return false;
+            }
         }
         let _ = window;
         self.update_floating_reveal(false, false, cx);
@@ -319,7 +323,7 @@ impl GhostexGpuiApp {
             let Some(app) = app.upgrade() else {
                 return;
             };
-            let (options, content, width) = {
+            let (main_native_view, options, content, width) = {
                 let this = app.read(cx);
                 if this.floating_reveal.panel.is_some() || !this.floating_reveal_eligible() {
                     return;
@@ -335,6 +339,7 @@ impl GhostexGpuiApp {
                 };
                 let bounds = this.floating_reveal_frame(opening_width);
                 (
+                    this.parent_ns_view,
                     gpui::WindowOptions {
                         window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
                         display_id: this.main_window_popup_owner().display_for(bounds, cx),
@@ -364,6 +369,12 @@ impl GhostexGpuiApp {
             let observed = app.clone();
             let result = cx.open_window(options, move |window, cx| {
                 window.set_background_corner_radius(gpui::px(FLOATING_PANEL_CORNER_RADIUS));
+                // CDXC:Sidebar 2026-10-09 WHY:
+                // GPUI owns a Windows pop-up by whichever window is active when it opens. A hover reveal over this workspace window while another one was active was owned by that other window: it stacked with it and moved with it instead of with this one.
+                #[cfg(target_os = "windows")]
+                crate::app::window::own_gpui_popup_window(window, main_native_view);
+                #[cfg(not(target_os = "windows"))]
+                let _ = main_native_view;
                 let view = cx.new(|cx| FloatingRevealWindow {
                     app: observed.downgrade(),
                     _subscription: cx.observe(&observed, |_, _, cx| cx.notify()),
@@ -518,6 +529,7 @@ impl GhostexGpuiApp {
         {
             self.floating_reveal.outside_since = None;
             self.floating_reveal.slide = FloatingRevealSlide::default();
+            self.floating_reveal.focus_held = false;
         }
         if hosted_agents_column {
             self.reconcile_agents_pane_surfaces(cx);

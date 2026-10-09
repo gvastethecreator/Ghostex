@@ -547,11 +547,7 @@ fn space_of_group(core: &Core, inputs: &SidebarInputs, group: &GroupView) -> Opt
     }
     let machine = machine_key(&inputs.ui.selected_machine_id);
     let spaces = SpacesState::from_wire(
-        core.presentation()
-            .machine(&machine)?
-            .side_state()
-            .spaces
-            .as_ref()?,
+        &super::workspaces::window_spaces(core.presentation(), inputs, &machine)?.into_owned(),
     );
     let section_key = inputs.ui.section_key();
     let selection = resolve_selected_space(

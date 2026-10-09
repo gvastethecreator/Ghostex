@@ -498,13 +498,18 @@ fn attach_host_window(window: &mut Window, parent: *mut std::ffi::c_void, kind: 
 
 /// On Windows a host is a pop-up owned by its parent window (`own_gpui_popup_window`)
 /// (`WindowKind::PopUp` with `focus: false`). A tooltip's window is clipped to its bubble
-/// (`set_frosted_surface`), so it covers nothing it could catch.
+/// (`set_frosted_surface`), and the pointer passes through the bubble itself
+/// (`make_gpui_popup_window_click_through`), as on macOS.
 ///
 /// CDXC:ContextMenus 2026-09-28 WHY:
 /// GPUI activates even a `focus: false` pop-up when it is clicked, so a click on a frosted menu row deactivated the owner window first, and the owner's deactivation observer (which closes the sidebar menu when Ghostex loses focus) took the menu down before the click reached the row. The host keeps activation on its owner, as the macOS host and the titlebar dropdowns do, and as every frosted surface expects: the owner keeps the keyboard.
 #[cfg(target_os = "windows")]
-fn attach_host_window(window: &mut Window, parent: *mut std::ffi::c_void, _: FrostedHostKind) {
-    super::make_gpui_popup_window_non_activating(window);
+fn attach_host_window(window: &mut Window, parent: *mut std::ffi::c_void, kind: FrostedHostKind) {
+    if kind == FrostedHostKind::Tooltip {
+        super::make_gpui_popup_window_click_through(window);
+    } else {
+        super::make_gpui_popup_window_non_activating(window);
+    }
     super::own_gpui_popup_window(window, parent);
 }
 

@@ -103,6 +103,20 @@ pub(crate) fn project_presentation_project(project: &Value) -> Value {
             Value::from(crate::bot_feed::published_bot_runs_today(profile)),
         );
     }
+    if crate::work_mode::project_work_mode(project) {
+        output.insert("workMode".to_string(), Value::Bool(true));
+        if crate::work_mode::project_has_linear_key(project) {
+            output.insert("workLinear".to_string(), Value::Bool(true));
+        }
+    }
+    if crate::workspaces::workspaces_feature_enabled() {
+        if let Some(workspace_id) = crate::workspaces::stored_project_workspace_id(project) {
+            output.insert("workspaceId".to_string(), json!(workspace_id));
+        }
+        if crate::workspaces::project_in_every_workspace(project) {
+            output.insert("everyWorkspace".to_string(), Value::Bool(true));
+        }
+    }
     Value::Object(output)
 }
 
@@ -244,6 +258,12 @@ pub(crate) fn project_presentation_session(
         crate::session_git_status::effective_session_git_cwd(session, Some(project))
             .and_then(|cwd| crate::session_git_status::published_session_git_status(&cwd)),
     );
+    // CDXC:WorkMode 2026-10-09 SEE-ALSO: `PresentationSession.work` in packages/gx-protocol/src/presentation.rs; absent outside work mode, and built from caches only (server/src/work_mode/).
+    insert_optional_value(
+        &mut output,
+        "work",
+        crate::work_mode::presentation_session_work(project, session),
+    );
     output.insert("groupId".to_string(), Value::String(group_id.to_string()));
     /*
     CDXC:SessionSleep 2026-08-22:
@@ -290,6 +310,14 @@ pub(crate) fn project_presentation_session(
     output.insert("isPinned".to_string(), value_field(session, "isPinned"));
     output.insert("isParked".to_string(), value_field(session, "isParked"));
     merge_object(&mut output, title);
+    // In work mode a session the person never renamed is titled by its branch.
+    if let Some(branch_title) = crate::work_mode::work_display_title(
+        project,
+        session,
+        output.get("titleSource").and_then(Value::as_str),
+    ) {
+        output.insert("displayTitle".to_string(), Value::String(branch_title));
+    }
     output.insert("kind".to_string(), value_field(session, "kind"));
     output.insert(
         "lastActiveAt".to_string(),

@@ -24,10 +24,12 @@ const NEW_WINDOW_CASCADE_OFFSET: f32 = 28.0;
 pub(crate) enum WorkspaceWindowStart {
     /// A window the app reopens at launch from its saved slot; the first one leads.
     Restore { slot: u32, lead: bool },
-    /// File > New Window: a fresh slot, on the project of the window it was opened from.
+    /// File > New Window: a fresh slot, on the project and workspace of the window it was opened
+    /// from, or on the workspace the workspace tile's menu chose.
     New {
         slot: u32,
         active_project_id: Option<String>,
+        workspace_id: Option<String>,
     },
 }
 
@@ -132,6 +134,19 @@ pub(crate) fn open_new_workspace_window_from(
     source: Option<(gpui::AnyWindowHandle, gpui::WeakEntity<GhostexGpuiApp>)>,
     cx: &mut App,
 ) {
+    let workspace_id = source.as_ref().and_then(|(_, app)| {
+        app.upgrade()
+            .and_then(|app| app.read(cx).gx_store_window_workspace_id())
+    });
+    open_new_workspace_window_on(source, workspace_id, cx);
+}
+
+/// A New Window on `workspace_id` (`None` = the default workspace), cascaded from `source`.
+pub(crate) fn open_new_workspace_window_on(
+    source: Option<(gpui::AnyWindowHandle, gpui::WeakEntity<GhostexGpuiApp>)>,
+    workspace_id: Option<String>,
+    cx: &mut App,
+) {
     let (frame, active_project_id) = source
         .and_then(|(handle, app)| {
             handle
@@ -155,6 +170,7 @@ pub(crate) fn open_new_workspace_window_from(
     let start = WorkspaceWindowStart::New {
         slot,
         active_project_id,
+        workspace_id,
     };
     match open_workspace_window(
         workspace_window_options(window_bounds, display_id),
@@ -210,6 +226,7 @@ pub(crate) fn open_workspace_window(
         }
         let view = GhostexGpuiApp::new_workspace_window(window, &start, cx)
             .expect("failed to create Ghostex app");
+        view.update(cx, |app, _| app.restore_window_workspace(&start));
         let window_handle = gpui::Window::window_handle(window);
         register_workspace_window(
             window_handle,

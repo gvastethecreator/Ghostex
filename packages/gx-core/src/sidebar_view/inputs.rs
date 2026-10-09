@@ -520,6 +520,9 @@ pub struct SidebarHostInputs {
     /// The empty state reads it to tell a first run from a list the user emptied.
     pub recent_project_count: usize,
     pub unavailable: UnavailableState,
+    /// The workspace this window shows on this computer (saved with the window). `None` = the
+    /// default workspace. Remote machines' sections are not filtered by workspace.
+    pub window_workspace_id: Option<String>,
 }
 
 impl SidebarHostInputs {

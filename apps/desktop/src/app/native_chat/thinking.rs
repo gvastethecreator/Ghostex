@@ -113,39 +113,58 @@ impl NativeChatView {
                     .gap(px(4.0 * s))
                     .child(text_body)
                     .when(capped, |column| {
-                        column.child(
-                            div()
-                                .id(format!("thinking-toggle:{id}"))
-                                .flex()
-                                .items_center()
-                                .gap(px(4.0 * s))
-                                .text_size(px(14.0 * s))
-                                .text_color(p.muted)
-                                .chat_cursor_pointer()
-                                .hover(|style| style.text_color(p.foreground))
-                                .child(
-                                    gpui::svg()
-                                        .path(if expanded {
-                                            "titlebar/chevron-up.svg"
-                                        } else {
-                                            "titlebar/chevron-down.svg"
-                                        })
-                                        .size(px(14.0 * s))
-                                        .text_color(p.muted),
-                                )
-                                .child(if expanded { "Show less" } else { "Show more" })
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.anchor_disclosure_toggle(&toggle_key, !expanded);
-                                    if expanded {
-                                        this.expanded.remove(&toggle_key);
-                                    } else {
-                                        this.expanded.insert(toggle_key.clone());
-                                    }
-                                    cx.notify();
-                                })),
-                        )
+                        column.child(self.show_more_toggle(
+                            format!("thinking-toggle:{id}"),
+                            toggle_key,
+                            expanded,
+                            p,
+                            cx,
+                        ))
                     }),
             )
+            .into_any_element()
+    }
+
+    /// The "Show more" / "Show less" line under a shortened body (a long thought, a long prompt),
+    /// which opens or closes the disclosure `key`.
+    pub(super) fn show_more_toggle(
+        &self,
+        element_id: String,
+        key: String,
+        expanded: bool,
+        p: &ChatAppearance,
+        cx: &Context<Self>,
+    ) -> AnyElement {
+        let s = p.scale;
+        div()
+            .id(element_id)
+            .flex()
+            .items_center()
+            .gap(px(4.0 * s))
+            .text_size(px(14.0 * s))
+            .text_color(p.muted)
+            .chat_cursor_pointer()
+            .hover(|style| style.text_color(p.foreground))
+            .child(
+                gpui::svg()
+                    .path(if expanded {
+                        "titlebar/chevron-up.svg"
+                    } else {
+                        "titlebar/chevron-down.svg"
+                    })
+                    .size(px(14.0 * s))
+                    .text_color(p.muted),
+            )
+            .child(if expanded { "Show less" } else { "Show more" })
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.anchor_disclosure_toggle(&key, !expanded);
+                if expanded {
+                    this.expanded.remove(&key);
+                } else {
+                    this.expanded.insert(key.clone());
+                }
+                cx.notify();
+            }))
             .into_any_element()
     }
 }

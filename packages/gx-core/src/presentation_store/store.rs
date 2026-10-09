@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use ghostex_gx_protocol::{
     CustomSessionTagsState, PresentationSession, SidebarProjectCollectionsState,
-    SidebarSpacesState, WorkspaceSessionGroupsState,
+    SidebarSpacesState, SidebarWorkspacesState, WorkspaceSessionGroupsState,
 };
 use serde_json::Value;
 
@@ -26,6 +26,9 @@ pub struct SideState {
     /// daemon that does not publish it.
     pub spaces_enabled: Option<bool>,
     pub custom_session_tags: Option<CustomSessionTagsState>,
+    /// The daemon's workspaces; `None` from a daemon without them, whose projects and Spaces show
+    /// unfiltered.
+    pub workspaces: Option<SidebarWorkspacesState>,
 }
 
 /// One side-state replacement, from a change frame or from a local edit of a client-owned
@@ -37,6 +40,7 @@ pub enum SideStateUpdate {
     ProjectCollections(SidebarProjectCollectionsState),
     Spaces(SidebarSpacesState),
     CustomSessionTags(CustomSessionTagsState),
+    Workspaces(SidebarWorkspacesState),
 }
 
 /// Whether a machine's presentation has arrived.

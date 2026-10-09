@@ -30,6 +30,8 @@ fn opens_in_browser(kind: GpuiAppModalKind) -> bool {
             | GpuiAppModalKind::NewCoordinator
             | GpuiAppModalKind::MakeCoordinator
             | GpuiAppModalKind::Feedback
+            | GpuiAppModalKind::CreateLinearTicket
+            | GpuiAppModalKind::WorkLinkPicker
     )
 }
 
@@ -89,6 +91,10 @@ impl GhostexGpuiApp {
             GpuiAppModalKind::NewCoordinator => self.open_gpui_new_coordinator_modal(message, cx),
             GpuiAppModalKind::MakeCoordinator => self.open_gpui_make_coordinator_modal(message, cx),
             GpuiAppModalKind::Feedback => self.open_gpui_feedback_modal(cx),
+            GpuiAppModalKind::CreateLinearTicket => {
+                self.open_gpui_create_linear_ticket_modal(message, cx)
+            }
+            GpuiAppModalKind::WorkLinkPicker => self.open_gpui_work_link_picker_modal(message, cx),
             _ => {}
         }
     }

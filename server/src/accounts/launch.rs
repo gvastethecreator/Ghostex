@@ -210,6 +210,7 @@ pub(crate) fn apply_new_session(
     db: &Connection,
     agent_id: &str,
     icon: Option<&str>,
+    workspace_claude_account_id: Option<&str>,
     runtime: &mut Map<String, Value>,
 ) -> Result<Option<String>, DomainStateError> {
     let Some(provider) = agent_provider(agent_id, icon) else {
@@ -228,10 +229,22 @@ pub(crate) fn apply_new_session(
     let registry = store::read(db)?;
     // CDXC:AgentProviders 2026-09-11 DECISION: User: use the current CLI login until an account is added to Ghostex for that provider (2026-09-09); once accounts exist, a launch without an explicit account uses the provider's Account for new sessions rule from Settings (Most limit remaining by default, see default_account.rs), which supersedes the lowest-slot choice. When that rule yields no account the launch keeps the current CLI login, so a normal CLI launch needs no account switcher.
     let snapshot = super::runtime::current_snapshot();
+    // CDXC:Workspaces 2026-10-09 DECISION:
+    // User: each workspace can pick which of the user's Claude accounts its agents use; it applies when a session starts in one of the workspace's projects, unless the user picked an account for that session. A picked account (`accountId`) wins, then the workspace's account (while it is still registered), then the provider's rule.
+    let workspace_account = workspace_claude_account_id
+        .filter(|_| provider == Provider::Claude)
+        .filter(|id| {
+            registry
+                .accounts
+                .iter()
+                .any(|account| account.id == *id && account.provider == provider)
+        })
+        .map(str::to_string);
     let id = runtime
         .get("accountId")
         .and_then(Value::as_str)
         .map(str::to_string)
+        .or(workspace_account)
         .or_else(|| {
             super::default_account::quick_launch_account(&registry, &snapshot, provider)
                 .map(|a| a.id.clone())

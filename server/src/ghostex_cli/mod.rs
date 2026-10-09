@@ -42,6 +42,10 @@ pub mod tailcat_tunnel;
 pub mod usage;
 pub mod wait;
 pub mod web;
+mod team;
+mod team_slack;
+mod work_mode;
+mod workspace;
 
 use rpc::{CliError, CliResult};
 
@@ -262,6 +266,11 @@ fn is_known_command(name: &str) -> bool {
         "paired-device-seen",
         "pin-session",
         "park-session",
+        "work-mode",
+        "workspace",
+        "team",
+        "slack",
+        "link-session",
         "delayed-send",
         "close-after-done",
         "send-text",
@@ -624,6 +633,26 @@ fn run_command(name: &str, args: &[String]) -> CliResult<()> {
             fail_on_not_ok,
             args,
         ),
+        "work-mode" => {
+            require_built_in(ghostex_settings_catalog::built_in_extensions::WORKSPACES)?;
+            work_mode::work_mode_command(args)
+        }
+        "workspace" => {
+            require_built_in(ghostex_settings_catalog::built_in_extensions::WORKSPACES)?;
+            workspace::workspace_command(args)
+        }
+        "team" => {
+            require_built_in(ghostex_settings_catalog::built_in_extensions::WORKSPACES)?;
+            team::team_command(args)
+        }
+        "slack" => {
+            require_built_in(ghostex_settings_catalog::built_in_extensions::WORKSPACES)?;
+            team_slack::slack_command(args)
+        }
+        "link-session" => {
+            require_built_in(ghostex_settings_catalog::built_in_extensions::WORKSPACES)?;
+            work_mode::link_session_command(args)
+        }
         "delayed-send" => {
             // `--cancel` clears the armed automation; otherwise the parser
             // accepts the timer and both agent-completion trigger modes.
@@ -873,7 +902,8 @@ fn run_command(name: &str, args: &[String]) -> CliResult<()> {
     }
 }
 
-/// A verb of a built-in extension that is off (Actions, Spaces) answers "turned off".
+/// A verb of a built-in extension that is off (Actions, Spaces, Cloud Boxes, Workspaces) answers
+/// "turned off".
 fn require_built_in(id: &str) -> CliResult<()> {
     built_in_extensions::require_built_in_extension(id)
 }

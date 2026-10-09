@@ -293,6 +293,12 @@ pub(super) fn parse_project_path(rest: &[String], flags: &Flags) -> Value {
         "path",
         flag_json(flags, "path").or_else(|| rest_string(rest, 0)),
     );
+    // `--workspace <name|id>`: gxserver resolves either; without it the project stays in Personal.
+    set_or_remove(
+        &mut map,
+        "workspaceId",
+        flag_json(flags, "workspace").or_else(|| flag_json(flags, "workspaceId")),
+    );
     Value::Object(map)
 }
 

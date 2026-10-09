@@ -382,6 +382,27 @@ pub(crate) fn gpui_project_settings_project_from_domain_project(
         project_board_config
             .and_then(|config| gpui_trimmed_json_string_field(config, "docsDirectory")),
     );
+    // Settings → Projects → Work mode (settings_modal/tabs/projects/work_mode.rs): the switch and
+    // the workspace whose Linear key the project falls back to (server/src/work_mode/project.rs,
+    // server/src/workspaces/projects.rs).
+    let launch_settings = project
+        .get("launchSettings")
+        .and_then(serde_json::Value::as_object);
+    item.insert(
+        "workMode".to_string(),
+        serde_json::Value::Bool(
+            launch_settings
+                .and_then(|settings| settings.get("workMode"))
+                .and_then(serde_json::Value::as_bool)
+                == Some(true),
+        ),
+    );
+    gpui_insert_optional_nonempty_string(
+        &mut item,
+        "workspaceId",
+        launch_settings
+            .and_then(|settings| gpui_trimmed_json_string_field(settings, "workspaceId")),
+    );
     Some(serde_json::Value::Object(item))
 }
 
@@ -412,6 +433,12 @@ pub(crate) fn gpui_project_settings_project_from_presentation_project(
             .get("worktree")
             .and_then(serde_json::Value::as_object)
             .and_then(|worktree| gpui_trimmed_json_string_field(worktree, "parentProjectId")),
+    );
+    item.insert(
+        "workMode".to_string(),
+        serde_json::Value::Bool(
+            project.get("workMode").and_then(serde_json::Value::as_bool) == Some(true),
+        ),
     );
     Some(serde_json::Value::Object(item))
 }

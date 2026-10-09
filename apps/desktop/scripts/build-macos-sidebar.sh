@@ -22,6 +22,7 @@ build_cef_sidebar_bundle_if_needed() {
 		--path "$GPUI_DIR/vite.config.ts" \
 		--path "$GPUI_DIR/tsconfig.json" \
 		--path "$GPUI_DIR/manage.html" \
+		--path "$GPUI_DIR/work.html" \
 		--path "$GPUI_DIR/sidebar" \
 		--path "$GPUI_DIR/views" \
 		--path "$REPO_ROOT/packages/core-ui" \
@@ -34,6 +35,7 @@ build_cef_sidebar_bundle_if_needed() {
 	bundle_outputs=(
 		"$REPO_ROOT/packages/core-ui/styles/shadcn.generated.css"
 		"$GPUI_DIR/dist/sidebar/manage.html"
+		"$GPUI_DIR/dist/sidebar/work.html"
 	)
 	if cache_matches "cef-sidebar-bundle" "$bundle_digest" "${bundle_outputs[@]}"; then
 		echo "CEF sidebar bundle is current; skipping web build."

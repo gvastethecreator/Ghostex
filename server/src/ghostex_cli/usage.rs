@@ -246,8 +246,8 @@ pub fn usage() -> String {
             "Move a project in the desktop sidebar order",
         ),
         format_help_command(
-            "add-project <path> [--name name] [--create-if-missing]",
-            "Add a project to Ghostex; --create-if-missing creates the folder first",
+            "add-project <path> [--name name] [--create-if-missing] [--workspace name|id]",
+            "Add a project to Ghostex (in Personal unless --workspace names another workspace); --create-if-missing creates the folder first",
         ),
         format_help_command(
             "group-project (--project-id id|--path path|--name name) --group title",
@@ -439,6 +439,38 @@ pub fn usage() -> String {
         format_help_command(
             "park-session <selector> [true|false] --json",
             "Park or unpark a session, honoring Sleep session when parking",
+        ),
+        format_help_command(
+            "work-mode on|off [--project-id id|--path path] | status | linear-key [--project-id id] [--clear]",
+            "Turn work mode on or off for a project (default: the current folder), or save the Linear API key from stdin",
+        ),
+        format_help_command(
+            "work-mode create-ticket --title t [--description d] [--team-id id] [--linear-project-id id] [--no-assign] [--start] | start <SPX-1245|#218|PR link> [--pr 412] [--agent id] [--model m] [--effort e]",
+            "Create a Linear ticket (assigned to you), or start an agent on a ticket in a worktree on its branch, linked to it; nothing is sent to the agent",
+        ),
+        format_help_command(
+            "workspace list | create <name> [--kind work|personal] | rename <workspace> <new name> | move-project <project> <workspace> | delete <workspace>",
+            "List this computer's workspaces and their projects, create, rename or delete one, or move a project (by id, name or folder) into one; a workspace is named by id or name",
+        ),
+        format_help_command(
+            "team join <invite link> [--name n] [--slack-user U…] | status | invite | identity [--slack-user U…] [--linear-user id] | threads <ticket> | ping | leave | deploy [--team-name n] [--project slug] [--convex-team slug] [--dev]  (each takes --workspace name|id)",
+            "Connect a Work workspace to its team's Convex project: join with an invite link, or deploy Ghostex's functions with your Convex CLI login",
+        ),
+        format_help_command(
+            "team flow [show] | set [--working-channel C…] [--watch-only C1,C2] [--default-run cloud|local] [--linear-team KEY] [--qc-owner U…] [--instructions-file path] | map <channel> --repo owner/name [--project name] [--linear-team KEY] [--linear-project name] | unmap <channel>",
+            "Read or change the team's Slack flow: the working channel, watch-only channels, which repo each channel's work goes to, where new work runs, and the team instructions",
+        ),
+        format_help_command(
+            "team slack-manifest [--name n] | slack-connect | linear-connect [--dev]",
+            "Print the Slack app manifest for this team; store the Slack bot token and signing secret, or a Linear API key, on the team's Convex project (read from stdin)",
+        ),
+        format_help_command(
+            "slack post [--session <session>] \"<text>\" [--final]",
+            "Post to the Slack working thread of the session's ticket; --final also posts it once in the threads the request came from",
+        ),
+        format_help_command(
+            "link-session <selector> [--pr n|url|none] [--linear SPX-1,SPX-2|none] [--issue n|none] [--linear-project name|none] [--auto] | --candidates pullRequest|linearIssue|linearProject|githubIssue [--query text]",
+            "Link a session to a PR, Linear or GitHub issues and a Linear project; --auto goes back to what its branch says; --candidates lists what the Link to picker suggests",
         ),
         format_help_command(
             "tag-session <id> <tag|none>",

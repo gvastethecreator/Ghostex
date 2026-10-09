@@ -148,6 +148,18 @@ impl GhostexGpuiApp {
         if self.gx_store_run_sidebar_git(&command, cx) {
             return;
         }
+        // A project's Work Mode switch and a session card's work chips (gx_store/work_mode.rs).
+        if self.gx_store_run_work_mode(&command, cx) {
+            return;
+        }
+        // The workspace tile's menu and a project's Move to workspace (gx_store/workspaces.rs).
+        if self.gx_store_run_workspaces(&command, cx) {
+            return;
+        }
+        // A session's Link to menu rows and a merged PR's Clean up / Keep chips (gx_store/work_links.rs).
+        if self.gx_store_run_work_links(&command, cx) {
+            return;
+        }
         // A row on a REMOTE machine: its sleep, wake, close, fork, flags, snooze and Full Reload
         // are calls down that machine's tunnel, sent through the same function the old runtime's
         // bridge message reaches, and nothing local moves (gx_store/sidebar_remote.rs).

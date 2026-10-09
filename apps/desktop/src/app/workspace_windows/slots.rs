@@ -110,6 +110,7 @@ fn discard_workspace_window_slot_files(slot: u32) {
         slot,
     ));
     let _ = fs::remove_file(frame_state_path(slot));
+    super::window_workspace::discard_window_workspace(slot);
 }
 
 /// Where the slot's window was when the app last quit, kept on a display that still exists.

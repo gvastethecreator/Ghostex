@@ -54,7 +54,7 @@ question ("installed" and "logged in") and it exits non-zero for either failure,
 so a machine without `gh` degrades to no PR badges with one cheap spawn every
 `GH_AVAILABILITY_TTL`.
 */
-fn gh_cli_is_available() -> bool {
+pub(crate) fn gh_cli_is_available() -> bool {
     static CACHE: OnceLock<Mutex<Option<(Instant, bool)>>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(None));
     if let Ok(cache) = cache.lock() {
@@ -112,7 +112,7 @@ fn run_git_probe_command_counted(
     run_command_with_timeout(command, GIT_COMMAND_TIMEOUT, abandoned_readers)
 }
 
-fn run_gh_command(cwd: Option<&str>, args: &[&str]) -> Option<String> {
+pub(crate) fn run_gh_command(cwd: Option<&str>, args: &[&str]) -> Option<String> {
     let mut command = Command::new("gh");
     command
         .args(args)

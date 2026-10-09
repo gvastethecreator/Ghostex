@@ -192,11 +192,12 @@ pub(super) fn ensure_gxserver_project_for_path(
     project_path: &str,
     flags: &Flags,
 ) -> CliResult<Value> {
-    let result = rpc::call_gxserver_rpc(
-        "/api/addProjectPath",
-        &json!({ "path": project_path }),
-        flags,
-    )?;
+    let mut params = json!({ "path": project_path });
+    // `--workspace <name|id>` puts a new project there; without it, Personal.
+    if let Some(workspace) = flags.string_value("workspace") {
+        params["workspaceId"] = json!(workspace);
+    }
+    let result = rpc::call_gxserver_rpc("/api/addProjectPath", &params, flags)?;
     Ok(result.get("project").cloned().unwrap_or(Value::Null))
 }
 

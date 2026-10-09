@@ -35,6 +35,8 @@ fn chat_section(
             cx,
         ));
     }
+    // CDXC:Sessions 2026-10-09 DECISION: the New-session cleanup is an Advanced setting, off by default, that only runs for Chat; gxserver enforces the Chat condition.
+    rows.extend(page.toggle(g, s, "closeEmptySessionsOnNew", "Close empty sessions when starting a new one", "When you start a new session, close this project's other sessions that have nothing typed, drafted or queued. Only applies when Chat is the default view for that agent; with Terminal it never runs.", false, cx));
     if g.visible(s, "sessionChatFontFamily") {
         let spec = g.spec(
             "sessionChatFontFamily",

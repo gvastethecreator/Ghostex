@@ -136,6 +136,10 @@ pub(crate) struct FloatingRevealState {
     /// When the pointer left the panel, for the dismissal delay.
     #[cfg(not(target_os = "macos"))]
     pub(crate) outside_since: Option<Instant>,
+    /// The panel, its workspace window or one of its chat's windows has been active since the
+    /// panel opened, so focus leaving all of them now is the user going elsewhere.
+    #[cfg(not(target_os = "macos"))]
+    pub(crate) focus_held: bool,
     #[cfg(not(target_os = "macos"))]
     pub(crate) slide: FloatingRevealSlide,
 }

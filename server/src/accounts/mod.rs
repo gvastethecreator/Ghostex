@@ -1,5 +1,5 @@
 pub(crate) mod claude_background;
-mod claude_resets;
+pub(crate) mod claude_resets;
 mod codex_blockers;
 pub(crate) mod continuation;
 pub(crate) mod default_account;
@@ -23,6 +23,6 @@ pub(crate) mod restart_verification;
 pub(crate) mod runtime;
 pub(crate) mod session_identity;
 pub(crate) mod setup;
-mod setup_terminal;
+pub(crate) mod setup_terminal;
 pub(crate) mod store;
 pub(crate) mod switch_progress;

@@ -60,7 +60,7 @@ pub(crate) struct RuntimeFactsCounters {
 
 impl SidebarRuntimeFacts {
     /// The HUD, or `None` before the store's first composition.
-    pub(super) fn hud(&self) -> Option<&Arc<Value>> {
+    pub(crate) fn hud(&self) -> Option<&Arc<Value>> {
         self.hud.as_ref()
     }
 
