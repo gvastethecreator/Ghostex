@@ -141,6 +141,29 @@ pub(crate) fn provider(project: &Value, session: &Value) -> Option<Provider> {
         _ => None,
     }
 }
+/// The account provider of a launcher agent, read the way `apply_new_session` reads it: the icon family, else the agent id.
+pub(crate) fn agent_provider(agent_id: &str, icon: Option<&str>) -> Option<Provider> {
+    match icon.unwrap_or(agent_id) {
+        "claude" => Some(Provider::Claude),
+        "codex" => Some(Provider::Codex),
+        _ => None,
+    }
+}
+/// Whether a launcher agent (the sidebar HUD's `agentId`, `icon` and `command`) starts sessions on its own login, so the launcher offers it no account.
+pub(crate) fn agent_uses_own_login(agent_id: &str, icon: Option<&str>, command: &str) -> bool {
+    agent_provider(agent_id, icon).is_some_and(|provider| uses_own_login(command, provider))
+}
+/// CDXC:AgentProviders 2026-10-09 DECISION:
+/// User (#212): a session that runs on its own login (see `uses_own_login`) offers no account choice anywhere: the chat's Switch Account panel, the sidebar row and the terminal bar flyouts, and the launcher and New Thread picker show none, and gxserver refuses a manual or automatic switch, because wrapping the command in an account helper would replace the login the command chose. A session that already has an account keeps the account flow.
+/// SEE-ALSO: `usesOwnLogin` on the chat read (session_chat_read.rs, gx-chat-core `account_providers`), on the accounts answer's `session` (endpoint.rs, gx-core `session_account_page`) and on the HUD agent buttons (sidebar_hud/buttons.rs, gx-core `LauncherAgent`, the desktop New Thread picker).
+pub(crate) fn session_uses_own_login(provider: Provider, session: &Value) -> bool {
+    let runtime = &session["runtimeSettings"];
+    runtime["accountId"].as_str().is_none()
+        && runtime["accountBaseCommand"]
+            .as_str()
+            .or_else(|| runtime["agentCommand"].as_str())
+            .is_some_and(|base| uses_own_login(base, provider))
+}
 pub(crate) fn command(home: &Path, account: &SavedAccount) -> Result<String, DomainStateError> {
     validate_identity(home, account)?;
     let executable = helpers::executable(home, account.provider.helper()).ok_or_else(|| {
@@ -189,10 +212,8 @@ pub(crate) fn apply_new_session(
     icon: Option<&str>,
     runtime: &mut Map<String, Value>,
 ) -> Result<Option<String>, DomainStateError> {
-    let provider = match icon.unwrap_or(agent_id) {
-        "claude" => Provider::Claude,
-        "codex" => Provider::Codex,
-        _ => return Ok(None),
+    let Some(provider) = agent_provider(agent_id, icon) else {
+        return Ok(None);
     };
     // CDXC:AgentProviders 2026-10-08 WHY:
     // Upstream #208: a custom agent whose command sets its own profile (CLAUDE_CONFIG_DIR or CODEX_HOME) or runs a wrapper such as `claude-personal` had that profile replaced by cswap's session profile, or failed to launch, as soon as any account was registered. Such a command already chose its login, so it runs as-is. The sidebar launcher sends the rule's account as `accountId`, so an automatic choice cannot be told apart from a picked one here.
@@ -338,6 +359,142 @@ pub(crate) fn effective_policy(registry: &Registry, provider: Provider, session:
 mod tests {
     use super::*;
 
+    /// Commands that name the provider CLI or its account helper, so they keep the account flow.
+    const PROVIDER_COMMANDS: &[(Provider, &str)] = &[
+        (Provider::Claude, "claude"),
+        (
+            Provider::Claude,
+            "claude --dangerously-skip-permissions --model opus --effort high",
+        ),
+        (
+            Provider::Claude,
+            "claude --resume 0b1c2d --model 'opus[1m]'",
+        ),
+        (
+            Provider::Claude,
+            "claude --append-system-prompt-file '/Users/me/.ghostex/coordinator.md'",
+        ),
+        (Provider::Claude, "/opt/homebrew/bin/claude --model sonnet"),
+        (Provider::Claude, "~/.local/bin/claude"),
+        (
+            Provider::Claude,
+            "'/Users/me/My Tools/claude' --model sonnet",
+        ),
+        (Provider::Claude, "env FOO=bar claude"),
+        (Provider::Claude, "env -u ANTHROPIC_API_KEY claude"),
+        (Provider::Claude, "env -u CLAUDE_CONFIG_DIR claude"),
+        (
+            Provider::Claude,
+            "GHOSTEX_PROMPT_EDITING_ENABLED=1 VISUAL='ghostex-editor --wait' claude",
+        ),
+        (Provider::Claude, "CODEX_HOME=/tmp/x claude"),
+        (Provider::Claude, "command claude"),
+        (Provider::Claude, "exec claude --model opus"),
+        (Provider::Claude, "export FOO=1; claude"),
+        (
+            Provider::Claude,
+            "cswap run 2 --share-history -- --model opus",
+        ),
+        (
+            Provider::Claude,
+            "'/Users/me/.local/bin/cswap' run '1' --share-history --",
+        ),
+        (
+            Provider::Claude,
+            r"& 'C:\Users\me\.local\bin\cswap.exe' run '1' --share-history -- --model opus",
+        ),
+        (
+            Provider::Claude,
+            r"& 'C:\Users\me\.local\bin\claude.exe' --model opus",
+        ),
+        (Provider::Claude, r"& 'C:\Program Files\nodejs\claude.cmd'"),
+        (
+            Provider::Claude,
+            r"C:\Users\me\AppData\Roaming\npm\claude.cmd --model opus",
+        ),
+        (
+            Provider::Claude,
+            r"& $env:LOCALAPPDATA\Programs\claude\claude.exe",
+        ),
+        (Provider::Claude, "claude.EXE"),
+        (Provider::Claude, "claude.ps1 --model opus"),
+        (Provider::Claude, "Claude"),
+        (
+            Provider::Claude,
+            "$env:GHOSTEX_PROMPT_EDITING_ENABLED='1'; claude",
+        ),
+        (Provider::Claude, "$env:FOO = 'a b'; claude"),
+        (
+            Provider::Claude,
+            "npx @anthropic-ai/claude-code --model opus",
+        ),
+        (Provider::Claude, "bunx @anthropic-ai/claude-code@latest"),
+        (Provider::Claude, "mise exec -- claude"),
+        (Provider::Claude, "claude 'unfinished"),
+        (Provider::Claude, ""),
+        (Provider::Codex, "codex"),
+        (
+            Provider::Codex,
+            "codex --yolo -c model_reasoning_effort=high resume 019a",
+        ),
+        (Provider::Codex, "CLAUDE_CONFIG_DIR=/tmp/x codex"),
+        (Provider::Codex, "xswap run 1 --share-history -- --yolo"),
+        (
+            Provider::Codex,
+            r"& 'C:\Users\me\AppData\Local\Programs\codex-swap\xswap.exe' run '1' --share-history --",
+        ),
+        (
+            Provider::Codex,
+            r"& 'C:\Users\me\AppData\Roaming\npm\codex.cmd' --yolo",
+        ),
+        (Provider::Codex, "npx @openai/codex"),
+    ];
+
+    /// (provider, command, sets the profile directory): commands that keep their own login.
+    const OWN_LOGIN_COMMANDS: &[(Provider, &str, bool)] = &[
+        (
+            Provider::Claude,
+            "CLAUDE_CONFIG_DIR=\"$HOME/.claude-alt\" command claude",
+            true,
+        ),
+        (
+            Provider::Claude,
+            "CLAUDE_CONFIG_DIR=~/.claude-profiles/work claude --model opus",
+            true,
+        ),
+        (Provider::Claude, "env CLAUDE_CONFIG_DIR=/x claude", true),
+        (
+            Provider::Claude,
+            "export CLAUDE_CONFIG_DIR=/x; claude",
+            true,
+        ),
+        (
+            Provider::Claude,
+            r"$env:CLAUDE_CONFIG_DIR='C:\Users\me\.claude-work'; claude",
+            true,
+        ),
+        (
+            Provider::Claude,
+            r"$env:claude_config_dir = 'C:\x'; & 'C:\Users\me\.local\bin\claude.exe'",
+            true,
+        ),
+        (Provider::Claude, "claude-personal", false),
+        (Provider::Claude, "claude-personal --model opus", false),
+        (Provider::Claude, "~/bin/claude-work --resume abc", false),
+        (Provider::Claude, "c2", false),
+        (
+            Provider::Codex,
+            "CODEX_HOME=~/.codex-profiles/work codex",
+            true,
+        ),
+        (
+            Provider::Codex,
+            r"$env:CODEX_HOME='C:\x'; codex --yolo",
+            true,
+        ),
+        (Provider::Codex, "codex-work", false),
+    ];
+
     /// What account assignment did before custom agents could keep their own login.
     fn assigned_before(base: &str, provider: Provider) -> bool {
         reusable_account_command(base, provider.id())
@@ -347,101 +504,66 @@ mod tests {
 
     #[test]
     fn provider_commands_keep_the_account_flow() {
-        let claude = [
-            "claude",
-            "claude --dangerously-skip-permissions --model opus --effort high",
-            "claude --resume 0b1c2d --model 'opus[1m]'",
-            "claude --append-system-prompt-file '/Users/me/.ghostex/coordinator.md'",
-            "/opt/homebrew/bin/claude --model sonnet",
-            "~/.local/bin/claude",
-            "'/Users/me/My Tools/claude' --model sonnet",
-            "env FOO=bar claude",
-            "env -u ANTHROPIC_API_KEY claude",
-            "env -u CLAUDE_CONFIG_DIR claude",
-            "GHOSTEX_PROMPT_EDITING_ENABLED=1 VISUAL='ghostex-editor --wait' claude",
-            "CODEX_HOME=/tmp/x claude",
-            "command claude",
-            "exec claude --model opus",
-            "export FOO=1; claude",
-            "cswap run 2 --share-history -- --model opus",
-            "'/Users/me/.local/bin/cswap' run '1' --share-history --",
-            r"& 'C:\Users\me\.local\bin\cswap.exe' run '1' --share-history -- --model opus",
-            r"& 'C:\Users\me\.local\bin\claude.exe' --model opus",
-            r"& 'C:\Program Files\nodejs\claude.cmd'",
-            r"C:\Users\me\AppData\Roaming\npm\claude.cmd --model opus",
-            r"& $env:LOCALAPPDATA\Programs\claude\claude.exe",
-            "claude.EXE",
-            "claude.ps1 --model opus",
-            "Claude",
-            "$env:GHOSTEX_PROMPT_EDITING_ENABLED='1'; claude",
-            "$env:FOO = 'a b'; claude",
-            "npx @anthropic-ai/claude-code --model opus",
-            "bunx @anthropic-ai/claude-code@latest",
-            "mise exec -- claude",
-            "claude 'unfinished",
-            "",
-        ];
-        let codex = [
-            "codex",
-            "codex --yolo -c model_reasoning_effort=high resume 019a",
-            "CLAUDE_CONFIG_DIR=/tmp/x codex",
-            "xswap run 1 --share-history -- --yolo",
-            r"& 'C:\Users\me\AppData\Local\Programs\codex-swap\xswap.exe' run '1' --share-history --",
-            r"& 'C:\Users\me\AppData\Roaming\npm\codex.cmd' --yolo",
-            "npx @openai/codex",
-        ];
-        for (provider, commands) in [
-            (Provider::Claude, &claude[..]),
-            (Provider::Codex, &codex[..]),
-        ] {
-            for base in commands {
-                assert!(!uses_own_login(base, provider), "{base}");
-            }
+        for (provider, base) in PROVIDER_COMMANDS {
+            assert!(!uses_own_login(base, *provider), "{base}");
         }
     }
 
     #[test]
     fn own_login_commands_are_only_profile_assignments_or_other_executables() {
-        // (command, sets the profile directory): every other own-login command was refused by account assignment before.
-        let claude = [
-            (
-                "CLAUDE_CONFIG_DIR=\"$HOME/.claude-alt\" command claude",
-                true,
-            ),
-            (
-                "CLAUDE_CONFIG_DIR=~/.claude-profiles/work claude --model opus",
-                true,
-            ),
-            ("env CLAUDE_CONFIG_DIR=/x claude", true),
-            ("export CLAUDE_CONFIG_DIR=/x; claude", true),
-            (
-                r"$env:CLAUDE_CONFIG_DIR='C:\Users\me\.claude-work'; claude",
-                true,
-            ),
-            (
-                r"$env:claude_config_dir = 'C:\x'; & 'C:\Users\me\.local\bin\claude.exe'",
-                true,
-            ),
-            ("claude-personal", false),
-            ("claude-personal --model opus", false),
-            ("~/bin/claude-work --resume abc", false),
-            ("c2", false),
-        ];
-        let codex = [
-            ("CODEX_HOME=~/.codex-profiles/work codex", true),
-            (r"$env:CODEX_HOME='C:\x'; codex --yolo", true),
-            ("codex-work", false),
-        ];
-        for (provider, commands) in [
-            (Provider::Claude, &claude[..]),
-            (Provider::Codex, &codex[..]),
-        ] {
-            for (base, sets_profile) in commands {
-                assert!(uses_own_login(base, provider), "{base}");
-                if !sets_profile {
-                    assert!(!assigned_before(base, provider), "{base}");
-                }
+        // Every own-login command that does not set the profile directory was refused by account assignment before.
+        for (provider, base, sets_profile) in OWN_LOGIN_COMMANDS {
+            assert!(uses_own_login(base, *provider), "{base}");
+            if !sets_profile {
+                assert!(!assigned_before(base, *provider), "{base}");
             }
+        }
+    }
+
+    #[test]
+    fn provider_sessions_and_launcher_agents_keep_their_accounts() {
+        for (provider, base) in PROVIDER_COMMANDS {
+            for key in ["agentCommand", "accountBaseCommand"] {
+                let session = json!({ "runtimeSettings": { key: base } });
+                assert!(!session_uses_own_login(*provider, &session), "{base}");
+            }
+            assert!(!agent_uses_own_login(provider.id(), None, base), "{base}");
+            assert!(
+                !agent_uses_own_login("custom-1", Some(provider.id()), base),
+                "{base}"
+            );
+        }
+        // A built-in session with no saved command, and agents that are not Claude or Codex.
+        assert!(!session_uses_own_login(
+            Provider::Claude,
+            &json!({ "runtimeSettings": {} })
+        ));
+        assert!(!agent_uses_own_login("gemini", None, "claude-personal"));
+        assert!(!agent_uses_own_login(
+            "custom-1",
+            Some("gemini"),
+            "CLAUDE_CONFIG_DIR=/x claude"
+        ));
+    }
+
+    #[test]
+    fn own_login_sessions_and_launcher_agents_offer_no_account() {
+        for (provider, base, _) in OWN_LOGIN_COMMANDS {
+            let session = json!({ "runtimeSettings": { "agentCommand": base } });
+            assert!(session_uses_own_login(*provider, &session), "{base}");
+            // The saved base command decides, as it does for a launch.
+            let session = json!({
+                "runtimeSettings": { "accountBaseCommand": base, "agentCommand": provider.id() }
+            });
+            assert!(session_uses_own_login(*provider, &session), "{base}");
+            // A session that already runs on an account keeps the account flow.
+            let session =
+                json!({ "runtimeSettings": { "agentCommand": base, "accountId": "claude:1" } });
+            assert!(!session_uses_own_login(*provider, &session), "{base}");
+            assert!(
+                agent_uses_own_login("custom-1", Some(provider.id()), base),
+                "{base}"
+            );
         }
     }
 }

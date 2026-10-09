@@ -537,6 +537,9 @@ pub(crate) fn publish(
         session["sessionId"].as_str().unwrap_or(""),
     )
 }
+/// Why a session on its own login cannot be switched (see `launch::session_uses_own_login`).
+pub(crate) const OWN_LOGIN_SWITCH_REFUSED: &str =
+    "This agent uses its own login, set in its command, so Ghostex doesn't switch its account.";
 pub(crate) fn select(
     state: &AppState,
     repository: &DomainRepository<'_>,
@@ -550,6 +553,9 @@ pub(crate) fn select(
     crate::agentbox::refuse_for_agentbox_session(session, "Switching the account")?;
     let provider = launch::provider(project, session)
         .ok_or_else(|| DomainStateError::bad_request("Unsupported account provider."))?;
+    if launch::session_uses_own_login(provider, session) {
+        return Err(DomainStateError::bad_request(OWN_LOGIN_SWITCH_REFUSED));
+    }
     let current = session
         .pointer("/runtimeSettings/accountId")
         .and_then(Value::as_str);
@@ -815,6 +821,9 @@ fn state_value(
             let account_id =
                 super::session_identity::display_account_id(registry, p, &session, home);
             value["session"] = json!({"provider":p,"accountId":account_id,"override":session.pointer("/runtimeSettings/accountPolicyOverride"),"policy":launch::effective_policy(registry,p,&session),"recovery":session.pointer("/runtimeSettings/accountRecovery"),"accountSwitch":session.pointer("/runtimeSettings/accountSwitch")});
+            if launch::session_uses_own_login(p, &session) {
+                value["session"]["usesOwnLogin"] = json!(true);
+            }
         }
     }
     Ok(value)

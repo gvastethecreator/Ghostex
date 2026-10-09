@@ -249,6 +249,8 @@ fn agents(value: &Value) -> Vec<LauncherAgent> {
                         .get("icon")
                         .and_then(Value::as_str)
                         .map(str::to_string),
+                    uses_own_login: agent.get("usesOwnLogin").and_then(Value::as_bool)
+                        == Some(true),
                 })
                 .collect()
         })

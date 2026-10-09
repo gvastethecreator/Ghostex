@@ -68,6 +68,7 @@ fn new_thread_picker_agent_from_hud(value: &Value) -> Option<NewThreadPickerAgen
         icon_path,
         icon_svg_size,
         icon_accent,
+        uses_own_login: value.get("usesOwnLogin").and_then(Value::as_bool) == Some(true),
     })
 }
 

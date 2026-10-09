@@ -38,6 +38,7 @@ fn agent(light: bool, agent_id: &str, name: &str, icon: Option<&str>) -> NewThre
         icon_path,
         icon_svg_size,
         icon_accent,
+        uses_own_login: false,
     }
 }
 

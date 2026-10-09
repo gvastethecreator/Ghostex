@@ -160,6 +160,14 @@ fn sidebar_agent_button_value(
     }
     button.insert("isDefault".to_string(), Value::Bool(is_default));
     button.insert("name".to_string(), Value::String(name.to_string()));
+    // Read by the launcher and the New Thread picker, which then offer this agent no account.
+    if crate::accounts::launch::agent_uses_own_login(
+        agent_id,
+        (!icon.is_empty()).then_some(icon),
+        command,
+    ) {
+        button.insert("usesOwnLogin".to_string(), Value::Bool(true));
+    }
     Value::Object(button)
 }
 

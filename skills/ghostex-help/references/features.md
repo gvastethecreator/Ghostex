@@ -1228,8 +1228,11 @@ with it. When the rule finds no account, new sessions use the current CLI login.
 A custom agent that brings its own login keeps it: when its command sets
 `CLAUDE_CONFIG_DIR` (or `CODEX_HOME` for Codex), or runs your own wrapper
 script instead of `claude` or `codex`, Ghostex runs the command as-is and picks
-no account for it. Keep such a profile in `~/.claude-profiles/<name>` (or
-`~/.codex-profiles/<name>`) so Ghostex finds its conversations, then choose
+no account for it. The launcher, the New Thread picker and the chat list no
+accounts for that agent, Switch Account in the sidebar and terminal bar menus
+says "Uses its own login", and Ghostex never moves its sessions to an account,
+not even at a usage limit. Keep such a profile in `~/.claude-profiles/<name>`
+(or `~/.codex-profiles/<name>`) so Ghostex finds its conversations, then choose
 Install hook for that agent in Settings > Agents. Ghostex's skills live in
 `~/.claude/skills` (or `~/.codex/skills`); link the profile's `skills` folder
 there to use them.

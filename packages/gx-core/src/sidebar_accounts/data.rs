@@ -61,11 +61,14 @@ pub struct AgentAccount {
     pub reset_credits: Option<ResetCredits>,
 }
 
-/// `AgentAccountsState.session`, the two fields the menus read.
+/// `AgentAccountsState.session`, the fields the menus read.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AccountSession {
     pub provider: Option<String>,
     pub account_id: Option<String>,
+    /// The session runs on its own login, so its flyout offers no account (gxserver's
+    /// `CDXC:AgentProviders 2026-10-09` in server/src/accounts/launch.rs).
+    pub uses_own_login: bool,
 }
 
 /// `AgentAccountsState`, the part the account menus read.
@@ -110,6 +113,7 @@ impl AccountsState {
             Some(Value::Object(session)) => Some(AccountSession {
                 provider: optional_text(session.get("provider")).ok_or_else(invalid)?,
                 account_id: optional_text(session.get("accountId")).ok_or_else(invalid)?,
+                uses_own_login: truthy(session.get("usesOwnLogin")),
             }),
             Some(_) => return Err(invalid()),
         };
@@ -146,6 +150,9 @@ impl AccountsState {
                     .as_ref()
                     .map_or(Value::Null, |id| Value::String(id.clone())),
             );
+            if session.uses_own_login {
+                entry.insert("usesOwnLogin".to_string(), Value::Bool(true));
+            }
             object.insert("session".to_string(), Value::Object(entry));
         }
         Value::Object(object)

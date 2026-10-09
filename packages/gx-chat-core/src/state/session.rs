@@ -44,6 +44,9 @@ pub struct SessionState {
     pub available_agents: Option<Value>,
     /// The same-family accounts a prompted session can resume under, reads alone.
     pub switchable_agents: Option<Value>,
+    /// The session runs on its own login (its command sets the profile or runs a wrapper), so it
+    /// offers no account. Reads alone, and only a read that says so changes it.
+    pub uses_own_login: bool,
     /// Model and effort read off the agent's screen. Absent means unchanged; merged by evidence.
     pub selected_options: Option<Value>,
     /// How many times `setSelectedOptions` was handed a NEW object, which is the identity family
@@ -118,6 +121,7 @@ impl Default for SessionState {
             session_agent_id: None,
             available_agents: None,
             switchable_agents: None,
+            uses_own_login: false,
             selected_options: None,
             selected_options_generation: 0,
             terminal_notice: None,

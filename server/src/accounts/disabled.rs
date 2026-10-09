@@ -185,7 +185,11 @@ pub(crate) fn recover(
     let (Some(pid), Some(sid)) = (old["projectId"].as_str(), old["sessionId"].as_str()) else {
         return Ok(false);
     };
-    if provider != Provider::Claude || !notice_shows_disabled(state, pid, sid) {
+    // A session on its own login has no Ghostex account to replace (CDXC:AgentProviders 2026-10-09 in launch.rs).
+    if provider != Provider::Claude
+        || launch::session_uses_own_login(provider, old)
+        || !notice_shows_disabled(state, pid, sid)
+    {
         return Ok(false);
     }
     let _gate = state
@@ -284,6 +288,7 @@ fn switch_if_disabled(state: &AppState, pid: &str, sid: &str) -> Result<bool, Do
         return Ok(false);
     };
     if launch::provider(&project, &session) != Some(Provider::Claude)
+        || launch::session_uses_own_login(Provider::Claude, &session)
         || switch_in_progress(&session)
     {
         return Ok(false);

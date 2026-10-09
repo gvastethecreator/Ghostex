@@ -64,6 +64,8 @@ pub(crate) struct SessionChatReadResolution {
     client learns about a project agent edit through the long-polled read.
     */
     switchable_agents: Option<Value>,
+    /// Whether the session runs on its own login, so the chat offers no account (CDXC:AgentProviders 2026-10-09 in accounts/launch.rs).
+    uses_own_login: bool,
     fingerprint: String,
 }
 
@@ -118,10 +120,16 @@ pub(crate) fn resolve_session_chat_read_state(
     } else {
         None
     };
-    let switchable_agents = repository
-        .get_project(project_id)?
+    let project = repository.get_project(project_id)?;
+    let switchable_agents = project
         .as_ref()
         .and_then(|project| crate::agents::switchable_session_agents_value(project, &session));
+    let uses_own_login = project
+        .as_ref()
+        .and_then(|project| crate::accounts::launch::provider(project, &session))
+        .is_some_and(|provider| {
+            crate::accounts::launch::session_uses_own_login(provider, &session)
+        });
     drop(session);
     drop(repository);
     drop(db);
@@ -286,6 +294,10 @@ pub(crate) fn resolve_session_chat_read_state(
         .as_ref()
         .map(Value::to_string)
         .hash(&mut hasher);
+    // Hashed only when set, so an ordinary session keeps the fingerprint it had.
+    if uses_own_login {
+        uses_own_login.hash(&mut hasher);
+    }
     let fingerprint = format!("{:016x}", hasher.finish());
 
     Ok(SessionChatReadResolution {
@@ -301,6 +313,7 @@ pub(crate) fn resolve_session_chat_read_state(
         queue,
         available_agents,
         switchable_agents,
+        uses_own_login,
         fingerprint,
     })
 }
@@ -483,6 +496,7 @@ pub(crate) async fn handle_read_session_chat_http(
         queue,
         available_agents,
         switchable_agents,
+        uses_own_login,
         fingerprint,
     } = resolution;
 
@@ -528,6 +542,8 @@ pub(crate) async fn handle_read_session_chat_http(
     if let Some(switchable_agents) = switchable_agents.clone() {
         result.insert("switchableAgents".to_string(), switchable_agents);
     }
+    // On every answer, so a client tells "this daemon says no" from an older daemon that never sends it.
+    result.insert("usesOwnLogin".to_string(), json!(uses_own_login));
     if let Some(session_agent_id) = session_agent_id.as_deref() {
         result.insert("sessionAgentId".to_string(), json!(session_agent_id));
     }

@@ -184,6 +184,8 @@ pub(crate) struct NewThreadPickerAgent {
     pub(crate) icon_path: Option<&'static str>,
     pub(crate) icon_svg_size: f32,
     pub(crate) icon_accent: u32,
+    /// The HUD's `usesOwnLogin`: the agent's command picks its own login, so it lists no accounts.
+    pub(crate) uses_own_login: bool,
 }
 
 impl NewThreadPickerAgent {
@@ -191,8 +193,12 @@ impl NewThreadPickerAgent {
         self.icon.as_deref().unwrap_or(&self.agent_id)
     }
 
-    /// Claude and Codex are the providers with Ghostex-managed accounts.
+    /// Claude and Codex are the providers with Ghostex-managed accounts, unless the agent's command
+    /// picks its own login.
     pub(crate) fn provider(&self) -> Option<&'static str> {
+        if self.uses_own_login {
+            return None;
+        }
         match self.family() {
             "claude" => Some("claude"),
             "codex" => Some("codex"),
