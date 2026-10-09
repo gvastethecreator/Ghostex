@@ -3,8 +3,8 @@
 //! empty" rule and the candidate list; `server/empty_session_cleanup_runtime.rs` reads each
 //! candidate's input box and closes it.
 //!
-//! CDXC:Sessions 2026-10-04 DECISION:
-//! User: "when i press the button to create a new session and we already have an empty session then please close the previous session if it doesn't have a pending draft and doesn't have anything queued and doesn't have any text in it basically. I don't want doing cmd + shift + o multiple times to keep multiple fully empty sessions in the sidebar for that project. It's easier to just open a new one and close the older unneeded ones automatically." A client sends `replaceEmptySessions: true` on `/api/createAgentSession` only for that user action (the new-session hotkey, a project's agent button or menu, the New Thread picker, the phone's new session); the close is the ordinary `/api/transitionSession` close, quiet, with one log line.
+//! CDXC:Sessions 2026-10-09 DECISION:
+//! User: "please disable the code that prevents having 2 empty sessions in the sidebar this code is buggy when the user has terminals as his preferred interface", then: "setting to enable this just for preferred chat view user (advanced). let's set disabled by default". The cleanup runs only when the advanced setting `closeEmptySessionsOnNew` is on (default off) and the new session's agent opens in Chat (its own Default view, else the Default Agent View, which means Chat when unset); with Terminal it never runs, even with the setting on. gxserver decides (`cleanup_applies`), so the desktop, the web build, the phone and the CLI all follow it, and clients may keep sending `replaceEmptySessions: true`. This supersedes the 2026-10-04 decision that closed a project's other fully empty sessions on every new-session action (the new-session hotkey, a project's agent button or menu, the New Thread picker, the phone's new session; the close is the ordinary quiet `/api/transitionSession` close with one log line). A client sends `replaceEmptySessions: true` on `/api/createAgentSession` only for those user actions.
 //!
 //! CDXC:Sessions 2026-10-06 WHY:
 //! Only a session made by that same user action carries the marker, so a session an agent, the CLI, a coordinator, the board or an automation started (it may be waiting for its task) is never a candidate. The marker stays on the row for its whole life, so "never prompted" must be positively known, never inferred from a signal that is missing: issue #204 saw sessions the user had been working in (mostly Claude) closed by the next new session, because the 2026-10-04 rule counted a session as never prompted when it was still a draft OR had no `lastActiveAt`, and each of those survives a real prompt (a prompt typed into the terminal whose hook was rejected or never arrived keeps the draft marker; a prompt whose turn was never seen as working leaves `lastActiveAt` empty). A candidate now has to pass every never-used signal at once: still a draft, never active, never seen working, no first user message from a hook, and no agent transcript on disk (agents write none before the first prompt); a session that was not created as a draft is never a candidate, since gxserver cannot see what was typed into its terminal. It must also have no chat draft text (parked ones included), nothing queued or armed, no note or stash, not be pinned, parked, favorited, tagged, renamed, a coordinator or thread, or armed for Close After Done, be idle, in the same folder, not shown by any client (a pane, the focused session, a phone attached to it), and its agent input box must read as empty; a box that cannot be read counts as holding text. This supersedes the 2026-10-04 WHY and its "or an agent that has never been active" rule, and "a draft is never thrown away on its own" (CDXC:Drafts 2026-08-29 in agents/drafts.rs) for exactly these sessions.
@@ -19,6 +19,8 @@ use crate::domain::{DomainRepository, DomainStateError};
 
 /// The `/api/createAgentSession` parameter a client sends for the user's new-session action.
 pub(crate) const REPLACE_EMPTY_SESSIONS_PARAM: &str = "replaceEmptySessions";
+/// The advanced Settings toggle (default off) that lets the cleanup run at all.
+const CLOSE_EMPTY_SESSIONS_SETTING: &str = "closeEmptySessionsOnNew";
 /// Server-owned: written at creation only when the create carried the parameter above.
 const NEW_SESSION_MARKER_KEY: &str = "userNewSession";
 
@@ -27,6 +29,35 @@ pub(crate) fn requests_empty_session_cleanup(params: &Map<String, Value>) -> boo
         .get(REPLACE_EMPTY_SESSIONS_PARAM)
         .and_then(Value::as_bool)
         == Some(true)
+}
+
+/// The cleanup may run for this new session: the advanced setting is on and the session's agent
+/// opens in Chat. An unreadable settings file means the setting is off.
+pub(crate) fn cleanup_applies(paths: &crate::paths::GxserverPaths, new_session: &Value) -> bool {
+    let Some(settings) = crate::session_lifecycle::read_sidebar_settings(paths) else {
+        return false;
+    };
+    if settings
+        .get(CLOSE_EMPTY_SESSIONS_SETTING)
+        .and_then(Value::as_bool)
+        != Some(true)
+    {
+        return false;
+    }
+    fn view(value: Option<&Value>) -> Option<&str> {
+        value
+            .and_then(Value::as_str)
+            .filter(|value| matches!(*value, "chat" | "terminal"))
+    }
+    let overrides = settings.pointer("/preferredAgentInterfaceOverrides");
+    let agent_override = crate::session_chat_composer::session_chat_composer_agent_id(new_session)
+        .and_then(|agent_id| {
+            view(overrides.and_then(|map| map.get(&agent_id))).map(str::to_string)
+        });
+    agent_override
+        .as_deref()
+        .or_else(|| view(settings.get("preferredAgentInterface")))
+        .is_none_or(|view| view == "chat")
 }
 
 /// Arms the marker beside the draft marker; a client cannot set it through `runtimeSettings`.

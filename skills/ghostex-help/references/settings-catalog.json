@@ -893,6 +893,21 @@
       "agentWritable": true
     },
     {
+      "key": "closeEmptySessionsOnNew",
+      "title": "Close empty sessions when starting a new one",
+      "subtitle": "When you start a new session, close this project's other sessions that have nothing typed, drafted or queued. Only applies when Chat is the default view for that agent; with Terminal it never runs.",
+      "tab": "settings",
+      "tabTitle": "General",
+      "group": "chat",
+      "groupTitle": "Chat",
+      "section": "chat",
+      "sectionTitle": "Chat",
+      "type": "boolean",
+      "default": false,
+      "advanced": true,
+      "agentWritable": true
+    },
+    {
       "key": "sessionChatFontFamily",
       "title": "Chat font family",
       "subtitle": "Use any installed font in chat messages and the prompt composer.",

@@ -467,6 +467,8 @@ pub const DEFAULT_GHOSTEX_SETTINGS: &[(&str, J)] = &[
     // No per-agent overrides: every agent follows the global Default Agent View
     // until the user picks a different view for that agent in Settings > Agents.
     ("preferredAgentInterfaceOverrides", J::Obj(&[])),
+    // CDXC:Sessions 2026-10-09 DECISION: User: "setting to enable this just for preferred chat view user (advanced). let's set disabled by default". Off until the user turns it on.
+    ("closeEmptySessionsOnNew", J::Bool(false)),
     ("sidebarCollapseAnimationDurationMs", J::Num(400.0)),
     ("panelAnimationSpeed", J::Str("normal")),
     ("closeSidePanelWithLastTab", J::Bool(true)),

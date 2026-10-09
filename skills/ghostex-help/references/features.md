@@ -117,14 +117,16 @@ view from the strip.
   Ctrl+Alt+Shift+F and rename is Ctrl+Shift+R, because Ctrl+R belongs to the
   terminal. While the Code editor itself has keyboard focus, Cmd+N and
   Cmd+Shift+O go to VS Code instead (New File, Go to Symbol).
-  A new chat that you leave without typing anything closes on its own, so empty
-  sessions do not pile up in the sidebar, and pressing Cmd+Shift+O again while
-  one is open takes you back to it. Starting a new session in a project (the
-  hotkey, the project's agent button or menu, the New Thread picker, or a
-  project's agent on the phone) also closes that project's other sessions that are
-  still completely empty: nothing sent, no chat draft, nothing queued, and no
-  text in the agent's input box. Once you type or send something it stays
-  like any other session.
+  Starting a new session always creates a new one; empty sessions stay in the
+  sidebar until you close them. An Advanced setting, Close empty sessions when
+  starting a new one (`closeEmptySessionsOnNew`, off by default), changes that:
+  with it on, starting a new session in a project (the hotkey, the project's
+  agent button or menu, the New Thread picker, or a project's agent on the
+  phone) also closes that project's other sessions that are still completely
+  empty: nothing sent, no chat draft, nothing queued, and no text in the agent's
+  input box. It only applies when Chat is the default view for that agent; with
+  Terminal as the default view it never runs. Once you type or send something a
+  session stays like any other.
   Cmd+Option+Arrow moves focus between the session panes and the Commands pane;
   it skips the view panel.
   Hotkeys: `createAgentSession`, `openNewThreadPalette`, `createSession`,
