@@ -456,7 +456,9 @@ impl GhostexGpuiApp {
                     .when(!selected, |this| {
                         this.hover(move |style| style.bg(hover_bg).text_color(strong))
                     })
-                    .tooltip(move |window, cx| titlebar_tooltip(display_path.clone(), window, cx))
+                    .tooltip(move |window, cx| {
+                        crate::app::helpers::list_row_tooltip(display_path.clone(), window, cx)
+                    })
                     .child(
                         div()
                             .flex_none()
@@ -823,7 +825,11 @@ impl GhostexGpuiApp {
                                     .text_color(p.muted)
                                     .child(badge)
                                     .tooltip(move |window, cx| {
-                                        titlebar_tooltip(tooltip.clone(), window, cx)
+                                        crate::app::helpers::list_row_tooltip(
+                                            tooltip.clone(),
+                                            window,
+                                            cx,
+                                        )
                                     }),
                             )
                         })
