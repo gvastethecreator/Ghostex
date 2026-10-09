@@ -8,53 +8,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
         <link>https://github.com/maddada/Ghostex/releases</link>
         <description>Sparkle appcast for Ghostex macOS releases.</description>
         <item>
-            <title>10.16.0</title>
-            <pubDate>Fri, 09 Oct 2026 01:15:42 +0000</pubDate>
-            <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v10.16.0</sparkle:fullReleaseNotesLink>
-            <sparkle:version>101600</sparkle:version>
-            <sparkle:shortVersionString>10.16.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Ghostex 10.16.0
-
-## 10.16.0 - 2026-10-09
-
-**Ghostex 10.16.0 is out.** Chat View no longer starts a terminal it doesn't need, the phone opens chats at once, custom agents can keep their own Claude or Codex login, and the Files editor handles wide tables, selections and long code lines properly.
-
-### ⚡ Speed
-- **Chat View no longer runs a terminal in the background:** a session's terminal starts the first time you switch to it, and your last three stay warm. Terminal View works exactly as before.
-- **On Windows, switching between Chat and Terminal resizes the agent straight away** instead of waiting for a size check.
-- **Settings > General > Faster rendering (experimental) redraws only what changed,** which uses less CPU while agents stream and you scroll; GPUI is updated to the latest upstream.
-
-### 💬 Chat
-- **`#123` issue and PR numbers link to the project's GitHub,** and only real 6- and 8-digit hex colors show a color swatch.
-- **Long code blocks are capped** with an expand button and scroll inside, charts draw in, and list markers and finished tasks are quieter.
-- **A message is never sent twice** when the computer is slow, and its preview bubble always clears.
-- **Codex's weekly limit shows in the status line** on plans that only have a weekly limit.
-- **View and Switch Account in More actions open on click and close on a second click.**
-- **A pane shows its blue attention outline** whenever its session's sidebar dot is blue.
-
-### 👤 Accounts
-- **Custom agents that use their own login keep it:** an agent that sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME`, or runs its own wrapper, runs as-is, and Ghostex shows "Uses its own login" instead of offering accounts, thanks to @landygg.
-- **Continue automatically is on by default,** and at a limit Ghostex uses another account.
-- **An account whose subscription access was disabled is skipped,** and a message to one of its sessions first moves it to an account with usage; Settings > Accounts says why it turned Manual.
-- **The terminal view's ⋯ menu offers Switch Account** for Claude and Codex, with each account's usage.
-
-### 📂 Files
-- **Wide tables fit the editor like the chat's,** wrapping long columns and scrolling sideways when they still can't fit, with Open in window, Copy as Markdown and Copy as CSV on hover.
-- **Typing over a selection replaces it,** wrapped code lines keep their background, and the editor's scrollbar is always shown.
-- **The floating files list opens only from its button** and slides in from the right, without moving the bar behind it.
-- **Files opened from outside the project before the last update open again** instead of asking to be reopened from a chat link.
-
-### 🪟 Windows and dialogs
-- **Menus with hotkeys widen to fit Windows' spelled-out shortcuts,** and modal scrollbars sit 1px from the window edge.
-
-### 📱 Phone
-- **Chats open at once:** a Chat View session no longer connects its terminal until you switch to it, and chat uses one warm connection per computer instead of a new SSH command per request.
-]]></description>
-            <enclosure url="https://github.com/maddada/Ghostex/releases/download/v10.16.0/ghostex-10.16.0-arm64.dmg" length="117020853" type="application/octet-stream" sparkle:edSignature="nWDx2lrnUelkG21uFzlLB1/W8o+TEy4JOirnIl5IL+anhojWqdci5ofWHxjx+SMMkCpIkcf0Bfvsq3wmrGRxDQ=="/>
-        </item>
-        <item>
             <title>10.15.5</title>
             <pubDate>Thu, 08 Oct 2026 09:07:10 +0000</pubDate>
             <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v10.15.5</sparkle:fullReleaseNotesLink>
@@ -310,6 +263,26 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
             <enclosure url="https://github.com/maddada/Ghostex/releases/download/v10.12.0/ghostex-10.12.0-arm64.dmg" length="112124003" type="application/octet-stream" sparkle:edSignature="DCaXDfaVNtv2ETX6I1Da9cQ6qVG8/dxWjrlaQXfVLS+AaraTvaVVuV1xAbIdPoxInG95EKyMs91W6C/h59tfCQ=="/>
         </item>
         <item>
+            <title>10.11.1</title>
+            <pubDate>Sun, 04 Oct 2026 15:25:58 +0000</pubDate>
+            <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v10.11.1</sparkle:fullReleaseNotesLink>
+            <sparkle:version>101101</sparkle:version>
+            <sparkle:shortVersionString>10.11.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[# Ghostex 10.11.1
+
+## 10.11.1 - 2026-10-04
+
+**Ghostex 10.11.1 is out.** On Windows, Ghostex's small pop-ups now stay with Ghostex instead of floating over other apps, and the agent menu keeps all its rows.
+
+### 🪟 Windows
+- **The chat's scroll-down and Esc pills, tooltips, toasts and menus no longer stay on top of other apps** after you switch away from Ghostex, including when one opens while Ghostex is in the background.
+- **The agent menu keeps its last rows,** New Coordinator… and Configure, when it opens right after a smaller menu.
+]]></description>
+            <enclosure url="https://github.com/maddada/Ghostex/releases/download/v10.11.1/ghostex-10.11.1-arm64.dmg" length="111299058" type="application/octet-stream" sparkle:edSignature="ccnHXynre505cfYBGsdRITwAipd088wbFtHa7QFCE37jiAVmSIohKzlPH7Lcn+/qAHnnnvRZ+bfr248YriXnDQ=="/>
+        </item>
+        <item>
             <title>3.26.1</title>
             <pubDate>Mon, 01 Jun 2026 18:43:20 +0400</pubDate>
             <sparkle:fullReleaseNotesLink>https://github.com/maddada/Ghostex/releases/tag/v3.26.1</sparkle:fullReleaseNotesLink>
@@ -321,6 +294,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: +R4+89v//Sza85/JBITEl1SU5WD8gSgInorwxdJ6/BJybTevcojSdgvbzNqdfhj7UGdepLtn4yxMcsfNCFMnAA==
-length: 25645
+edSignature: 956D4/8aJgfW8A589F8NGN+9ZMuTy7r2HZ8hbAgYBLNYi3yQvKsEcIyR1seUMl3CJJc0GG6W4/sJ9bhawxGRCA==
+length: 23145
 -->

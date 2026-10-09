@@ -150,7 +150,7 @@ pub(super) fn presentations(
 
 impl NativeChatView {
     /// CDXC:SessionChat 2026-10-09 DECISION:
-    /// User: "for the #123 thing please make those show as links at all times when mentioned and clicking on them should open that pr (when not 6 or 8 chars for the #1234 text (in the gpui chat view", then "for #123 if there's a letter in it then it's def a color so show the color thing if you can for that if u get me". A `#` and digits in prose (whole token, not in code, not a six- or eight-digit hex colour, which keeps its swatch; a token with a letter a-f at 3, 4, 6 or 8 hex digits is a colour too and never a link) links to `https://github.com/<owner>/<repo>/issues/<n>` of the project's `origin`, which GitHub redirects to the pull request when it is one; a project without a GitHub origin keeps it plain text. The detection is `issue_references` in gpui-component's text code.
+    /// User: "for the #123 thing please make those show as links at all times when mentioned and clicking on them should open that pr (when not 6 or 8 chars for the #1234 text (in the gpui chat view". A `#` and digits in prose (whole token, not in code, not a six- or eight-digit hex colour, which keeps its swatch) links to `https://github.com/<owner>/<repo>/issues/<n>` of the project's `origin`, which GitHub redirects to the pull request when it is one; a project without a GitHub origin keeps it plain text. The detection is `issue_references` in gpui-component's text code.
     ///
     /// The origin comes from the sidebar store's project row (gxserver's cached `gitRemoteOriginUrl`), read in a deferred call because the app entity may be mid-update while the chat renders.
     pub(super) fn refresh_issue_links(&self, cx: &mut gpui::Context<Self>) {

@@ -148,11 +148,6 @@ pub async fn run(args: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-/// What a client reaching this daemon through `ghostex server endpoint` may rely on.
-///
-/// CDXC:Mobile 2026-10-09 WHY: the phone retries a chat send whose HTTP request was lost on its SSH port forward only when gxserver dedupes `sendRequestId` (`session_chat_send_requests.rs`, `send_once`); an older daemon would type the message twice, and no other field tells the phone which it is talking to. SEE-ALSO: apps/mobile/app/src/chat/rust/machine-link.ts
-const ENDPOINT_CAPABILITIES: [&str; 1] = ["sendRequestLedger"];
-
 /// `gxserver endpoint` (`ghostex server endpoint`): the running daemon's local port and bearer token
 /// as JSON.
 ///
@@ -169,7 +164,6 @@ fn print_endpoint() -> Result<()> {
         "baseUrl": format!("http://127.0.0.1:{}", metadata.port),
         "authToken": auth.token,
         "protocolVersion": metadata.protocol_version,
-        "capabilities": ENDPOINT_CAPABILITIES,
     });
     println!("{}", serde_json::to_string(&endpoint)?);
     Ok(())
