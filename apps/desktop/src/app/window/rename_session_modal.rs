@@ -210,7 +210,7 @@ impl GpuiRenameSessionModalWindow {
             let end = input.value().len();
             input.set_selected_range(0..end, cx);
         });
-        Self {
+        let mut this = Self {
             host,
             palette: config.palette,
             prefs_path: config.prefs_path,
@@ -225,7 +225,12 @@ impl GpuiRenameSessionModalWindow {
             fit: ModalFit::fixed(),
             focus_handle: cx.focus_handle(),
             _subscriptions: vec![change_subscription],
-        }
+        };
+        this._subscriptions
+            .extend(super::popup_dismissal::close_app_modal_on_click_away(
+                window, cx,
+            ));
+        this
     }
 
     fn trimmed_title(&self) -> &str {

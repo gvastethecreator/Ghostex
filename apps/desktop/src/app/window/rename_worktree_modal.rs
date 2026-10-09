@@ -215,7 +215,7 @@ impl GpuiRenameWorktreeModalWindow {
             input.focus(window, cx);
             input.set_selected_range(0..length, cx);
         });
-        Self {
+        let mut this = Self {
             host,
             palette: ModalLegacyPalette::resolve(&config.palette),
             rename_branch: config.draft.rename_branch_default,
@@ -226,7 +226,12 @@ impl GpuiRenameWorktreeModalWindow {
             focus_handle: cx.focus_handle(),
             closed: false,
             _subscriptions: vec![subscription],
-        }
+        };
+        this._subscriptions
+            .extend(super::popup_dismissal::close_app_modal_on_click_away(
+                window, cx,
+            ));
+        this
     }
 
     fn preview(&self, cx: &App) -> RenamePreview {
