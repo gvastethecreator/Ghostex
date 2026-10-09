@@ -52,6 +52,22 @@ fn paste_not_accepted(error: &crate::session_chat_send::SessionChatSendError) ->
         && error.message == crate::session_chat_send::SESSION_CHAT_PASTE_NOT_ACCEPTED
 }
 
+/// Which step of a refused send failed, for the delivery card.
+fn send_write_failure(
+    error: &crate::session_chat_send::SessionChatSendError,
+) -> crate::session_chat_watchdog::SendWriteFailure {
+    use crate::session_chat_watchdog::SendWriteFailure;
+    if paste_not_accepted(error) {
+        SendWriteFailure::PasteNotShown
+    } else if error.message == crate::session_chat_send::SESSION_CHAT_PASTE_DOUBLED {
+        SendWriteFailure::PasteDoubled
+    } else if crate::session_chat_send_submit::is_not_submitted_failure(&error.message) {
+        SendWriteFailure::NotSubmitted
+    } else {
+        SendWriteFailure::TerminalUnresponsive
+    }
+}
+
 /// The send's steps from its paste check on (the check, Return, the submit check), with the
 /// check watching longer and without the settle the paste no longer needs.
 fn late_paste_steps(
@@ -619,6 +635,7 @@ pub(crate) async fn send_session_chat_message_with_draft(
             if let Some(send_probe) = send_probe {
                 crate::session_chat_watchdog::escalate_failed_session_chat_send(
                     send_probe,
+                    send_write_failure(&error),
                     session_chat_terminal_notice_publisher(
                         state,
                         &target.project_id,

@@ -215,6 +215,32 @@ pub fn start_session_chat_send_watchdog(
     );
 }
 
+/// Which step of a refused send failed; the delivery card names it.
+/// CDXC:AgentScreenDetection 2026-10-09 WHY:
+/// Every refused write used to share one card, "This session's terminal did not respond while the message was being typed into it". On one Windows machine all five of those cards (2026-10-04..07) were a paste that never showed in the input box (or Codex keeping a submitted message), with the terminal answering normally the whole time, and a 10.16.0 user reading it on macOS found "nothing special" in the terminal. The card says what actually failed so the next report names the step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SendWriteFailure {
+    /// The terminal refused the bytes or the input handshake never completed.
+    TerminalUnresponsive,
+    /// The message was typed but never appeared in the agent's input box.
+    PasteNotShown,
+    /// The input box ended up holding the message twice.
+    PasteDoubled,
+    /// The agent kept the message in its input box after Enter.
+    NotSubmitted,
+}
+
+impl SendWriteFailure {
+    pub(super) fn detail(self) -> &'static str {
+        match self {
+            Self::TerminalUnresponsive => "This session's terminal did not respond while the message was being typed into it, so the message was never delivered to the agent. Open the terminal to see what it is showing.",
+            Self::PasteNotShown => "The message was typed into the terminal but never appeared in the agent's input box, so it was not sent. Open the terminal to see what it is showing, then send it again.",
+            Self::PasteDoubled => "The message showed up twice in the agent's input box, so Ghostex cleared it instead of sending it. Send it again.",
+            Self::NotSubmitted => "The agent kept the message in its input box after Enter instead of sending it, so it was not sent. Open the terminal to see what it is showing.",
+        }
+    }
+}
+
 /*
 CDXC:AgentScreenDetection 2026-08-19:
 The flagship case never reaches the watchdog above: when the agent CLI is dead
@@ -231,6 +257,7 @@ the same way it supersedes a real one.
 */
 pub fn escalate_failed_session_chat_send(
     probe: SessionChatSendProbe,
+    failure: SendWriteFailure,
     publish: SessionChatWatchdogPublisher,
     read_state: SessionChatWatchdogStateReader,
 ) {
@@ -249,7 +276,7 @@ pub fn escalate_failed_session_chat_send(
                     probe.transcript_path.is_some(),
                     &publish,
                     &read_state,
-                    UndeliveredSendReason::WriteFailed,
+                    UndeliveredSendReason::WriteFailed(failure),
                 )
                 .await;
             })

@@ -42,12 +42,14 @@ pub(super) fn probe_claude_agent_liveness(
     };
     let mut registry_seen = false;
     let mut scanned = 0usize;
+    let mut truncated = false;
     for directory in claude_session_registry_dirs() {
         let Ok(entries) = std::fs::read_dir(&directory) else {
             continue;
         };
         for entry in entries.flatten() {
             if scanned >= CLAUDE_REGISTRY_SCAN_LIMIT {
+                truncated = true;
                 break;
             }
             let path = entry.path();
@@ -79,23 +81,31 @@ pub(super) fn probe_claude_agent_liveness(
     No record for our session. That only means "exited" for stock `claude`,
     whose registry we just proved this machine keeps: an `openclaude` fork may
     simply not write one, and the neighbouring stock entries would then frame it
-    for an exit it never had.
+    for an exit it never had. A scan cut short at the limit never saw the rest
+    of the registry, so it proves nothing either.
     */
-    if registry_seen && agent.map(str::trim) == Some("claude") {
+    if registry_seen && !truncated && agent.map(str::trim) == Some("claude") {
         ClaudeAgentLiveness::Exited
     } else {
         ClaudeAgentLiveness::Unknown
     }
 }
 
-/// Mirrors `resume_lookup::claude_project_roots`: the default home plus every
-/// `~/.claude-profiles/<profile>` Ghostex may have launched the agent under.
+/// Every Claude config dir Ghostex may have launched the agent under: the default home, each
+/// `~/.claude-profiles/<profile>`, and each Claude Swap account.
+/// CDXC:AgentScreenDetection 2026-10-09 WHY:
+/// `cswap run <N> --share-history` shares `projects/` and `history.jsonl` but gives every account its own `CLAUDE_CONFIG_DIR` (`<swap root>/sessions/<N>-<email>/`), so its live record is in that folder's `sessions/`. Reading only `~/.claude/sessions` found the other sessions' records but never this one, and every send whose transcript stayed quiet for 10 seconds showed "Claude Code is no longer running in this terminal" for a Claude that was running (50 such cards on one Windows machine by 2026-10-09).
 fn claude_session_registry_dirs() -> Vec<PathBuf> {
     let home = crate::resume_lookup::home_dir();
     let mut directories = vec![home.join(".claude").join("sessions")];
-    if let Ok(profiles) = std::fs::read_dir(home.join(".claude-profiles")) {
-        for profile in profiles.flatten() {
-            directories.push(profile.path().join("sessions"));
+    for parent in [
+        home.join(".claude-profiles"),
+        crate::accounts::claude_resets::swap_root(&home).join("sessions"),
+    ] {
+        if let Ok(profiles) = std::fs::read_dir(parent) {
+            for profile in profiles.flatten() {
+                directories.push(profile.path().join("sessions"));
+            }
         }
     }
     directories

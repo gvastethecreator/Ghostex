@@ -19,6 +19,12 @@ const CLAUDE_PASTED_PLACEHOLDER: &str = "[pastedtext";
 
 const CLAUDE_KEPT_MESSAGE: &str = "Claude Code kept the message in its input box instead of sending it, so nothing was sent and Ghostex cleared that input box.";
 
+/// Whether a send failed because the agent kept the message in its input box after the Return.
+pub(crate) fn is_not_submitted_failure(message: &str) -> bool {
+    message == CLAUDE_KEPT_MESSAGE
+        || message.contains("kept the message in its input box instead of sending it. Press")
+}
+
 /// The agents whose input box a send reads back after its Return.
 pub(crate) fn verifies_submission(agent: &str) -> bool {
     matches!(agent, "codex" | "claude" | "openclaude" | "empryo")

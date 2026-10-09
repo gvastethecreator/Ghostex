@@ -197,10 +197,10 @@ pub(super) enum UndeliveredSendReason {
     MismatchedInput {
         submitted_empty: bool,
     },
-    /// The send itself failed: the message was never typed into the terminal.
+    /// The send itself failed, so the message never reached the agent.
     /// Non-delivery is a FACT here, so there is nothing to suppress against and
     /// exactly one of the three verdicts is always published.
-    WriteFailed,
+    WriteFailed(SendWriteFailure),
 }
 
 /*
@@ -249,7 +249,7 @@ pub(super) async fn escalate_undelivered_send(
       - `reasoning_from_silence` — the verdict rests on nothing having been
         recorded. `MismatchedInput` does not: it recorded the wrong thing.
     */
-    let typed_into_terminal = reason != UndeliveredSendReason::WriteFailed;
+    let typed_into_terminal = !matches!(reason, UndeliveredSendReason::WriteFailed(_));
     let reasoning_from_silence = reason == UndeliveredSendReason::TranscriptSilent;
     let screen = crate::session_chat_send::capture_session_terminal_text(&probe.zmx_name).await;
     // CDXC:AgentScreenDetection 2026-09-13 DECISION:
@@ -340,7 +340,7 @@ pub(super) async fn escalate_undelivered_send(
             .with_detail(match reason {
                 UndeliveredSendReason::TranscriptSilent => "Your message was never recorded, and the Claude Code process that owned this session is no longer registered as running; it appears to have exited. Start it again in the terminal before sending more messages.",
                 UndeliveredSendReason::MismatchedInput { .. } => "Your message was not recorded. A different prompt was submitted in its place, and the Claude Code process that owned this session is no longer registered as running. Start it again in the terminal before sending more messages.",
-                UndeliveredSendReason::WriteFailed => "Your message could not be typed into this session, and the Claude Code process that owned it is no longer registered as running; it appears to have exited. Start it again in the terminal before sending more messages.",
+                UndeliveredSendReason::WriteFailed(_) => "Your message could not be sent to this session, and the Claude Code process that owned it is no longer registered as running; it appears to have exited. Start it again in the terminal before sending more messages.",
             })
             .with_screen_tail(screen_tail)
             .with_actions(vec![SessionChatTerminalNoticeAction::switch_to_terminal(
@@ -436,13 +436,13 @@ pub(super) async fn escalate_undelivered_send(
         .with_actions(vec![SessionChatTerminalNoticeAction::switch_to_terminal(
             "Open terminal",
         )]),
-        UndeliveredSendReason::WriteFailed => SessionChatTerminalNotice::new(
+        UndeliveredSendReason::WriteFailed(failure) => SessionChatTerminalNotice::new(
             SESSION_CHAT_NOTICE_DELIVERY_FAILED,
             SessionChatTerminalNoticeSeverity::Error,
             SessionChatTerminalNoticeSource::Watchdog,
             "Your message could not be sent to the agent",
         )
-        .with_detail("This session's terminal did not respond while the message was being typed into it, so the message was never delivered to the agent. Open the terminal to see what it is showing.")
+        .with_detail(failure.detail())
         .with_screen_tail(screen_tail)
         .with_actions(vec![SessionChatTerminalNoticeAction::switch_to_terminal(
             "Open terminal",
@@ -460,8 +460,8 @@ fn undelivered_prefix(reason: UndeliveredSendReason) -> &'static str {
         UndeliveredSendReason::MismatchedInput { .. } => {
             "Your message was not delivered. The agent recorded a different prompt in its place, and this is what its terminal is showing."
         }
-        UndeliveredSendReason::WriteFailed => {
-            "Your message could not be typed into this session's terminal. This is what it is showing instead."
+        UndeliveredSendReason::WriteFailed(_) => {
+            "Your message could not be sent to the agent. This is what its terminal is showing instead."
         }
     }
 }
