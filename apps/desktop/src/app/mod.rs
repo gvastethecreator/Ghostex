@@ -134,5 +134,6 @@ pub(crate) mod web_runtime_prompt_modal_lifecycle;
 pub(crate) mod workarea;
 pub(crate) mod workspace_events;
 pub(crate) mod workspace_reconcile;
+pub(crate) mod workspace_browser;
 pub(crate) mod workspace_terminals;
 pub(crate) mod workspace_windows;

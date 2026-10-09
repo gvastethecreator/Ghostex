@@ -506,6 +506,7 @@ pub fn shutdown() {
         context.borrow_mut().take();
     });
     clear_remote_browser_contexts();
+    clear_workspace_browser_contexts();
     platform::invalidate_message_pump();
     cef::shutdown();
     CEF_CONTEXT_INITIALIZED.store(false, Ordering::Release);

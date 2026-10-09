@@ -792,13 +792,18 @@ pub(crate) fn cef_request_context_for_profile(profile: &str) -> Result<cef::Requ
     if profile.starts_with("remote-") {
         return super::remote_browser::remote_browser_request_context(profile);
     }
+    if cef_profile_is_workspace(profile) {
+        return super::workspace_browser::workspace_browser_request_context(profile);
+    }
     /*
     CDXC:Browser 2026-07-16:
     Browser profile ids are app-global rather than project- or tab-scoped. The
     built-in Default profile uses CEF's pre-initialized durable global context,
     so ordinary logins survive app restarts and are visible from every
     Default-profile tab/project. Generated profiles remain separate and
-    memory-backed.
+    memory-backed. Workspace profiles (`workspace-<id>`) are disk-backed and
+    only reach here after their context reported itself initialized
+    (workspace_browser.rs).
 
     CDXC:CefRuntime 2026-07-09-03:40:
     First-party app-UI surfaces (sidebar, app modal, titlebar panels, project workareas) need durable localStorage for UI state (collapse state, Show more/less, project order), matching how the macOS sidebar WKWebViews use the persistent default WKWebsiteDataStore. They and the built-in Default Browser profile use CEF's global persistent request context, which is initialized with the runtime before synchronous browser creation. Creating a new disk-backed request context here races its asynchronous initialization and causes CreateBrowserSync to return null during app startup. Generated Browser profiles stay memory-backed.

@@ -651,7 +651,11 @@ impl GhostexGpuiApp {
             }
             profile
         } else {
-            profile_id.cef_profile_string()
+            let profile = self.browser_tab_cef_profile(profile_id);
+            if !self.prepare_workspace_browser_context(&profile, cx) {
+                return None;
+            }
+            profile
         };
         let popup_open_handler = self.browser_popup_open_handler(remote_machine_id, cx);
         let page_metadata_handler = self.browser_page_metadata_handler(tab_id, cx);

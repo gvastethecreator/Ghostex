@@ -160,10 +160,10 @@ impl GhostexGpuiApp {
         let mut profile = slot_key.cef_profile_id();
         let website_view = slot_key.titlebar_mode().website_provider().is_some();
         if website_view {
-            profile = self
-                .browser_profiles
-                .active_profile_id()
-                .cef_profile_string();
+            profile = self.browser_tab_cef_profile(self.browser_profiles.active_profile_id());
+            if !self.prepare_workspace_browser_context(&profile, cx) {
+                return None;
+            }
         }
         if let ProjectWorkareaCefSurfaceSlotKey::Extension(id) = slot_key {
             if !website_view
