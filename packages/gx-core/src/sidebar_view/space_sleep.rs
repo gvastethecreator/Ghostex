@@ -123,11 +123,7 @@ pub fn plan_space_sleep(
     }
     let machine = machine_key(&inputs.ui.selected_machine_id);
     let spaces = SpacesState::from_wire(
-        core.presentation()
-            .machine(&machine)?
-            .side_state()
-            .spaces
-            .as_ref()?,
+        &super::workspaces::window_spaces(core.presentation(), inputs, &machine)?.into_owned(),
     );
     let selection = if space_id == OTHER_SPACE_ID {
         SpaceSelection::Other

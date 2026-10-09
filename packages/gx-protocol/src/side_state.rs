@@ -82,6 +82,10 @@ pub struct SidebarSpace {
     pub member_collection_ids: Vec<String>,
     #[serde(default, deserialize_with = "crate::de::null_as_default")]
     pub member_project_ids: Vec<String>,
+    /// The workspace this Space belongs to; absent = the default workspace (and on an older
+    /// daemon). gxserver keeps a stored id when a client writes the Space without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
 }
 
 /// Spaces: saved sidebar filters. An empty Space is valid and kept.
@@ -115,4 +119,69 @@ pub struct CustomSessionTagsState {
     pub order: Vec<String>,
     #[serde(default, deserialize_with = "crate::de::null_as_default")]
     pub tags: BTreeMap<String, CustomSessionTag>,
+}
+
+/// One workspace: a company (kind `work`) or Personal, with its own projects, Spaces, Linear key,
+/// Claude account and browser sign-ins.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SidebarWorkspace {
+    pub workspace_id: String,
+    #[serde(default, deserialize_with = "crate::de::null_as_default")]
+    pub name: String,
+    /// Lowercase `#rrggbb`.
+    #[serde(default, deserialize_with = "crate::de::null_as_default")]
+    pub color: String,
+    /// One character drawn on the workspace tile.
+    #[serde(default, deserialize_with = "crate::de::null_as_default")]
+    pub letter: String,
+    /// `work` or `personal`; sets the work-mode default of the workspace's projects.
+    #[serde(default, deserialize_with = "crate::de::null_as_default")]
+    pub kind: String,
+    /// The saved Claude account (`/api/agentAccounts` id) this workspace's agents launch with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_account_id: Option<String>,
+}
+
+impl SidebarWorkspace {
+    pub fn is_work(&self) -> bool {
+        self.kind == "work"
+    }
+}
+
+/// Workspaces. A project or Space with no `workspaceId` belongs to `defaultWorkspaceId`, which
+/// always exists.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SidebarWorkspacesState {
+    #[serde(default, deserialize_with = "crate::de::null_as_default")]
+    pub default_workspace_id: String,
+    #[serde(default, deserialize_with = "crate::de::null_as_default")]
+    pub order: Vec<String>,
+    #[serde(default, deserialize_with = "crate::de::null_as_default")]
+    pub workspaces: BTreeMap<String, SidebarWorkspace>,
+}
+
+impl SidebarWorkspacesState {
+    /// The default workspace's id (`personal` when the document came without one).
+    pub fn default_id(&self) -> &str {
+        if self.default_workspace_id.is_empty() {
+            "personal"
+        } else {
+            &self.default_workspace_id
+        }
+    }
+
+    /// Workspaces in display order.
+    pub fn ordered(&self) -> impl Iterator<Item = &SidebarWorkspace> {
+        self.order.iter().filter_map(|id| self.workspaces.get(id))
+    }
+
+    /// `id` when it names a workspace, else the default workspace's id.
+    pub fn resolve<'a>(&'a self, id: Option<&'a str>) -> &'a str {
+        match id {
+            Some(id) if self.workspaces.contains_key(id) => id,
+            _ => self.default_id(),
+        }
+    }
 }

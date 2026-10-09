@@ -197,6 +197,18 @@ pub fn project_header_menu_rows(
         )
         .with_hotkey("createSession"),
     );
+    // CDXC:WorkMode 2026-10-09 DECISION:
+    // User: "We need a button to create a linear ticket to start work in the ... dropdown in the project header" (also from the Work page). Only a work-mode project of this computer with a Linear key has it; New session itself stays on main with no worktree.
+    if project.work_linear && !group.is_remote && !group.is_stale {
+        actions.insert(
+            0,
+            MenuItem::row(
+                "Create Linear Ticket…",
+                "brand-linear",
+                MenuCommand::project_action(group_id, "createLinearTicket", None),
+            ),
+        );
+    }
     actions.append(&mut pinned_actions(group_id, project, settings, host));
     actions
 }

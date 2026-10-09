@@ -20,19 +20,35 @@
 //! apps/desktop/src/app/native_sidebar/.
 
 mod branch;
+mod candidates;
+mod cleanup;
 mod credentials;
+mod feeds;
 mod github;
+mod item_details;
+mod items;
 mod linear;
+mod linear_tickets;
 mod links;
 mod presentation;
 mod project;
 mod refresh;
+mod start_work;
+mod team_flow;
 
 pub(crate) use branch::*;
+pub(crate) use candidates::*;
+pub(crate) use cleanup::*;
 pub(crate) use credentials::*;
+pub(crate) use feeds::*;
 pub(crate) use github::*;
+pub(crate) use item_details::*;
+pub(crate) use items::*;
 pub(crate) use linear::*;
+pub(crate) use linear_tickets::*;
 pub(crate) use links::*;
 pub(crate) use presentation::*;
 pub(crate) use project::*;
 pub(crate) use refresh::*;
+pub(crate) use start_work::*;
+pub(crate) use team_flow::*;

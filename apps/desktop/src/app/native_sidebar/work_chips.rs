@@ -42,6 +42,11 @@ struct Chip {
     /// The PR's checks mark, drawn after the number.
     trailing: Option<(&'static str, Hsla)>,
     url: Option<String>,
+    /// A sidebar command the chip sends instead of opening `url` (the Clean up / Keep offer).
+    action: Option<serde_json::Value>,
+    /// The ticket a click opens in the Work view, as `/api/readWorkItem` names it; the link is
+    /// what opens when the window cannot show the Work view (gx_store/work_mode.rs).
+    work_item: Option<serde_json::Value>,
     tooltip: String,
 }
 
@@ -58,6 +63,15 @@ impl GhostexGpuiApp {
     ) -> Option<AnyElement> {
         let work = session.work.as_ref()?;
         let scale = appearance.scale;
+        let project_id = ghostex_gx_core::SessionKey::parse_sidebar_session_id(&session.session_id)
+            .filter(|key| key.machine.is_local())
+            .map(|key| key.project_id);
+        let work_item = |mut item: serde_json::Value| {
+            if let Some(project_id) = &project_id {
+                item["projectId"] = json!(project_id);
+            }
+            Some(item)
+        };
         let mut chips: Vec<Chip> = Vec::new();
         if let Some(pr) = &work.pull_request {
             let (icon, color, state_label) = match pr.state.as_str() {
@@ -81,10 +95,54 @@ impl GhostexGpuiApp {
                 label: format!("#{}", pr.number),
                 trailing: checks.map(|(icon, color, _)| (icon, rgb(color).into())),
                 url: pr.url.clone(),
+                action: None,
+                work_item: work_item(json!({
+                    "pullRequest": pr.url.clone().unwrap_or_else(|| pr.number.to_string()),
+                })),
                 tooltip: match checks {
                     Some((_, _, checks)) => format!("PR #{} · {state_label} · {checks}", pr.number),
                     None => format!("PR #{} · {state_label}", pr.number),
                 },
+            });
+        }
+        // CDXC:WorkMode 2026-10-09 WHY:
+        // The merged-PR offer is two chips on the card itself rather than a toast: toasts in this
+        // app have no buttons and vanish, while the offer has to wait for an answer and leave
+        // every client when it is given (gxserver stores it, server/src/work_mode/cleanup.rs).
+        if work.offer_cleanup {
+            let pr_number = work.pull_request.as_ref().map(|pr| pr.number).unwrap_or_default();
+            chips.push(Chip {
+                key: "cleanup",
+                icon: "titlebar/archive.svg",
+                icon_color: rgb(MERGED_PURPLE).into(),
+                label: "Clean up".to_string(),
+                trailing: None,
+                url: None,
+                action: Some(json!({
+                    "type": "answerWorkCleanup",
+                    "sessionId": session.session_id,
+                    "answer": "cleanUp",
+                })),
+                work_item: None,
+                tooltip: format!(
+                    "PR #{pr_number} is merged. Remove this session's worktree and park the session."
+                ),
+            });
+            chips.push(Chip {
+                key: "keep",
+                icon: "titlebar/x.svg",
+                icon_color: appearance.muted,
+                label: "Keep".to_string(),
+                trailing: None,
+                url: None,
+                action: Some(json!({
+                    "type": "answerWorkCleanup",
+                    "sessionId": session.session_id,
+                    "answer": "keep",
+                })),
+                work_item: None,
+                tooltip: "Keep this session and its worktree. Ghostex won't ask again for this PR."
+                    .to_string(),
             });
         }
         if let Some(first) = work.linear_issues.first() {
@@ -102,6 +160,8 @@ impl GhostexGpuiApp {
                 },
                 trailing: None,
                 url: first.url.clone(),
+                action: None,
+                work_item: work_item(json!({ "linearIssue": first.identifier })),
                 tooltip: work
                     .linear_issues
                     .iter()
@@ -139,6 +199,8 @@ impl GhostexGpuiApp {
                 },
                 trailing: None,
                 url: first.url.clone(),
+                action: None,
+                work_item: work_item(json!({ "githubIssue": first.number })),
                 tooltip: work
                     .github_issues
                     .iter()
@@ -169,6 +231,8 @@ impl GhostexGpuiApp {
                 label: project.name.clone(),
                 trailing: None,
                 url: project.url.clone(),
+                action: None,
+                work_item: None,
                 tooltip: format!("Linear project: {}", project.name),
             });
         }
@@ -217,10 +281,21 @@ fn render_chip(
     let muted = appearance.muted;
     let foreground = appearance.foreground;
     let tooltip = chip.tooltip.clone();
-    let url = chip.url.clone();
+    let click = chip
+        .action
+        .clone()
+        .or_else(|| {
+            chip.url.clone().map(
+                |url| json!({"type": "openWorkLink", "url": url, "workItem": chip.work_item.clone()}),
+            )
+        });
     div()
         .id(format!("native-session-work-{}-{session_id}", chip.key))
-        .role(gpui::Role::Link)
+        .role(if chip.action.is_some() {
+            gpui::Role::Button
+        } else {
+            gpui::Role::Link
+        })
         .aria_label(chip.tooltip.clone())
         .flex()
         .flex_shrink_0()
@@ -233,7 +308,7 @@ fn render_chip(
         .when_some(chip.trailing, |chip, (icon, color)| {
             chip.child(titlebar_svg_icon(icon, 12.0 * scale, color))
         })
-        .when_some(url, |chip, url| {
+        .when_some(click, |chip, click| {
             chip.cursor_pointer()
                 .hover(move |style| {
                     style
@@ -245,7 +320,7 @@ fn render_chip(
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_click(cx.listener(move |app, _, _, cx| {
                     cx.stop_propagation();
-                    app.dispatch_native_sidebar_ui(json!({"type": "openWorkLink", "url": url}), cx);
+                    app.dispatch_native_sidebar_ui(click.clone(), cx);
                 }))
         })
         .when(show_tooltip, |chip| {
@@ -280,5 +355,40 @@ fn linear_glyph(state_type: Option<&str>, state_name: Option<&str>) -> (&'static
         // Linear has not answered yet (no API key, or not fetched): the plain ring, in Linear's
         // colour so the chip still reads as a Linear issue.
         None => ("titlebar/circle.svg", LINEAR_INDIGO),
+    }
+}
+
+impl super::model::NativeSidebarGroup {
+    /// The project id of a group whose project has Work mode on, on this computer; `None` for
+    /// every other group (the snapshot sets `workMode` on work-mode projects only,
+    /// gx_store/sidebar_snapshot.rs).
+    pub(crate) fn work_mode_project_id(&self) -> Option<&str> {
+        if self.remote_machine_context.is_some() {
+            return None;
+        }
+        let context = self.project_context.as_ref()?;
+        if context.get("workMode").and_then(serde_json::Value::as_bool) != Some(true) {
+            return None;
+        }
+        context
+            .pointer("/editor/projectId")
+            .and_then(serde_json::Value::as_str)
+            .filter(|project_id| !project_id.is_empty())
+    }
+}
+
+impl super::model::NativeSidebarSnapshot {
+    /// The work-mode projects the sidebar shows, once each: what the Work view lists and whether
+    /// the briefcase shows (app/work_view/).
+    pub(crate) fn work_mode_project_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = Vec::new();
+        for group in &self.groups {
+            if let Some(project_id) = group.work_mode_project_id() {
+                if !ids.iter().any(|id| id == project_id) {
+                    ids.push(project_id.to_string());
+                }
+            }
+        }
+        ids
     }
 }

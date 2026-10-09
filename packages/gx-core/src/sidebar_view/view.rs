@@ -171,6 +171,8 @@ pub struct ProjectContextView {
     pub bot_gateway_running: bool,
     /// Work mode is on for this project (server/src/work_mode/), which ticks its menu item.
     pub work_mode: bool,
+    /// Work mode is on and a Linear key is set, so its menu offers Create Linear ticket.
+    pub work_linear: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

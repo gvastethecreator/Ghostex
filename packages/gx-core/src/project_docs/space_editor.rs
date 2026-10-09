@@ -54,6 +54,9 @@ pub struct SpaceEditorResult {
     pub member_project_id: Option<String>,
     /// The machine whose document the result edits. `None` is this computer.
     pub remote_machine_id: Option<String>,
+    /// The workspace a NEW Space joins: the window's, on this computer. `None` = the default
+    /// workspace.
+    pub workspace_id: Option<String>,
 }
 
 impl SpaceEditorResult {
@@ -76,6 +79,7 @@ impl SpaceEditorResult {
             member_collection_id: text("memberCollectionId"),
             member_project_id: text("memberProjectId"),
             remote_machine_id: text("remoteMachineId"),
+            workspace_id: text("workspaceId"),
         })
     }
 }
@@ -171,6 +175,7 @@ fn update_space(
             member_collection_ids: space.member_collection_ids.clone(),
             member_project_ids: space.member_project_ids.clone(),
             space_id: space.space_id.clone(),
+            workspace_id: space.workspace_id.clone(),
         },
     );
     Some(SpacesDocument {
@@ -214,6 +219,7 @@ fn create_space(
                     member_collection_ids: &space.member_collection_ids,
                     member_project_ids: &space.member_project_ids,
                     name: &space.name,
+                    workspace_id: space.workspace_id.as_deref(),
                 },
             )
         })
@@ -227,6 +233,7 @@ fn create_space(
             member_collection_ids: EMPTY_MEMBERS,
             member_project_ids: EMPTY_MEMBERS,
             name,
+            workspace_id: result.workspace_id.as_deref(),
         },
     ));
     let state = SpacesState::sanitize(&order, raw);

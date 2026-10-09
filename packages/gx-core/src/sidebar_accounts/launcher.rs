@@ -202,17 +202,22 @@ impl LauncherAccounts {
         hide_account_emails: bool,
     ) -> Vec<AccountMenuStep> {
         let provider = agent.and_then(agent_provider);
-        if let (true, Some(agent), Some(provider), Some(data)) = (
+        if let (true, Some(agent), Some(_), Some(_)) = (
             command.action == "launch",
             agent,
             provider,
             self.data.as_ref(),
         ) {
+            // CDXC:Workspaces 2026-10-09 WHY:
+            // The launcher's own launch sends no account: gxserver resolves the provider's rule
+            // itself (`accounts::launch::apply_new_session`), and an `accountId` on a create now
+            // means the user picked that account, so the workspace's Claude account can win over
+            // the rule. Sending the rule's pick as `accountId` made every launch look picked.
             return vec![
                 AccountMenuStep::Launch {
                     group_id: command.group_id.clone(),
                     agent_id: agent.agent_id.clone(),
-                    account_id: data.quick_launch_account_id(provider).map(str::to_string),
+                    account_id: None,
                 },
                 close(command),
             ];

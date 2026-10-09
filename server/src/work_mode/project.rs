@@ -12,8 +12,12 @@ pub(crate) fn project_work_mode(project: &Value) -> bool {
         .unwrap_or(false)
 }
 
-/// Turns work mode on or off. `launchSettings` is replaced whole on update, so the rest of it is
-/// read first and written back unchanged.
+/// Turns work mode on or off by hand. `launchSettings` is replaced whole on update, so the rest of
+/// it is read first and written back unchanged.
+///
+/// CDXC:WorkMode 2026-10-09 WHY:
+/// A hand-set value is stored even when it is `false` and loses `workModeFromWorkspace`, so moving
+/// the project or changing its workspace's kind keeps it (`crate::workspaces::place_project_in_workspace`).
 pub(crate) fn set_project_work_mode(
     repository: &DomainRepository<'_>,
     project: &Value,
@@ -28,11 +32,8 @@ pub(crate) fn set_project_work_mode(
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
-    if enabled {
-        launch_settings.insert("workMode".to_string(), Value::Bool(true));
-    } else {
-        launch_settings.remove("workMode");
-    }
+    launch_settings.insert("workMode".to_string(), Value::Bool(enabled));
+    launch_settings.remove("workModeFromWorkspace");
     let mut update = Map::new();
     update.insert("projectId".to_string(), json!(project_id));
     update.insert("launchSettings".to_string(), Value::Object(launch_settings));

@@ -105,7 +105,11 @@ fn in_backoff(cache: &LinearCache, fingerprint: u64) -> bool {
 }
 
 /// One GraphQL call. `Err` carries a sentence fit to show a person.
-fn linear_graphql(api_key: &str, query: &str, variables: Value) -> Result<Value, String> {
+pub(super) fn linear_graphql(
+    api_key: &str,
+    query: &str,
+    variables: Value,
+) -> Result<Value, String> {
     let api_key = api_key.trim();
     // Personal API keys go in as they are; OAuth tokens need the Bearer scheme.
     let authorization = if api_key.starts_with("lin_oauth_") {

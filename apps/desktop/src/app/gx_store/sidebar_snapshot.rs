@@ -619,6 +619,11 @@ fn project_context(group: &GroupView) -> Option<Value> {
             Value::Bool(context.bot_gateway_running),
         );
     }
+    // The Work view and the sidebar's briefcase show while any project has Work mode on
+    // (native_sidebar/work_chips.rs, app/work_view/).
+    if context.work_mode {
+        object.insert("workMode".to_string(), Value::Bool(true));
+    }
     Some(Value::Object(object))
 }
 

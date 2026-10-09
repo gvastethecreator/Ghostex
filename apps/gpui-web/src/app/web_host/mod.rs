@@ -9,6 +9,7 @@ mod host_messages;
 mod modals;
 mod project_path_actions;
 mod toasts;
+mod work_view;
 mod workspace;
 
 pub(crate) use toasts::WebToasts;

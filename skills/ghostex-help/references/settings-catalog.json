@@ -10476,6 +10476,83 @@
       "agentWritable": false
     },
     {
+      "key": "workspaceName",
+      "title": "Workspace name",
+      "subtitle": "The name and letter shown on the workspace button left of your Spaces.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "workspaceColor",
+      "title": "Workspace color",
+      "subtitle": "The color of the workspace button.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "workspaceKind",
+      "title": "Work or Personal",
+      "subtitle": "Work turns work mode on for the workspace's projects by default; Personal leaves it off.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "workspaceLinearApiKey",
+      "title": "Linear API key",
+      "subtitle": "The Linear key this workspace's projects use, unless a project sets its own.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "workspaceClaudeAccount",
+      "title": "Claude account",
+      "subtitle": "Which of your Claude accounts agents in this workspace's projects use.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "workspaceBrowserSignins",
+      "title": "Browser sign-ins",
+      "subtitle": "Each workspace's Browser keeps its own cookies; sign out of every site here.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
+      "key": "newWorkspace",
+      "title": "New workspace",
+      "subtitle": "Add a workspace, for example one per company you work for.",
+      "tab": "workspaces",
+      "tabTitle": "Workspaces",
+      "section": "workspaces",
+      "sectionTitle": "Workspaces",
+      "type": "ui",
+      "agentWritable": false
+    },
+    {
       "key": "expandCollapsedProjectsOnJump",
       "title": "Expand collapsed projects on jump",
       "subtitle": "Expand a collapsed project when a project-jump hotkey lands on it.",

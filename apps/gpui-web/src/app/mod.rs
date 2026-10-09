@@ -38,6 +38,8 @@ mod rename_session_modal_lifecycle;
 mod rename_worktree_modal_lifecycle;
 mod session_note_modal_lifecycle;
 mod new_coordinator_modal_lifecycle;
+mod work_link_picker_modal_lifecycle;
+mod create_linear_ticket_modal_lifecycle;
 #[allow(dead_code)]
 pub(crate) mod sidebar_direct_focus {
     include!(concat!(env!("OUT_DIR"), "/sidebar_direct_focus.rs"));

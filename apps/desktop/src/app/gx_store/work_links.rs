@@ -1,0 +1,127 @@
+//! Work mode's session-link commands: the Link to submenu's Unlink and Back to automatic rows, the
+//! picker's pick, and a merged-PR card's Clean up / Keep chips.
+//!
+//! SEE-ALSO: packages/gx-core/src/sidebar_menu/link_menu.rs (the rows), apps/desktop/src/app/
+//! work_link_picker_modal_lifecycle.rs (the picker), apps/desktop/src/app/native_sidebar/
+//! work_chips.rs (the chips), server/src/server/route_http/work_links.rs (`/api/answerWorkCleanup`).
+
+use ghostex_gx_core::SessionKey;
+use serde_json::{Map, Value, json};
+
+use super::gx_rpc;
+use crate::GhostexGpuiApp;
+
+impl GhostexGpuiApp {
+    /// Answers the wrapped `setSessionWorkLinks` (Unlink, Back to automatic) and the top-level
+    /// `answerWorkCleanup` (a card's Clean up / Keep chip). Both name the row by its sidebar id.
+    pub(crate) fn gx_store_run_work_links(
+        &mut self,
+        command: &Value,
+        cx: &mut gpui::Context<Self>,
+    ) -> bool {
+        match command.get("type").and_then(Value::as_str) {
+            Some("command")
+                if command["message"].get("type").and_then(Value::as_str)
+                    == Some("setSessionWorkLinks") =>
+            {
+                let message = &command["message"];
+                if let Some(session) = local_session(message.get("sessionId")) {
+                    self.gx_store_set_session_work_links(
+                        &session.project_id,
+                        &session.session_id,
+                        message.get("links").cloned().unwrap_or(Value::Null),
+                        cx,
+                    );
+                }
+                true
+            }
+            Some("answerWorkCleanup") => {
+                let answer = command.get("answer").and_then(Value::as_str);
+                if let (Some(session), Some(answer @ ("cleanUp" | "keep"))) =
+                    (local_session(command.get("sessionId")), answer)
+                {
+                    self.gx_store_answer_work_cleanup(session, answer, cx);
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// `/api/setSessionWorkLinks` with `links` merged into the request; the session's card picks
+    /// the change up from the presentation delta gxserver sends.
+    pub(crate) fn gx_store_set_session_work_links(
+        &mut self,
+        project_id: &str,
+        session_id: &str,
+        links: Value,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let mut params = links.as_object().cloned().unwrap_or_else(Map::new);
+        params.insert("projectId".to_string(), json!(project_id));
+        params.insert("sessionId".to_string(), json!(session_id));
+        cx.spawn(async move |this, cx| {
+            let result = gx_rpc(None, "/api/setSessionWorkLinks", Value::Object(params)).await;
+            if let Err(error) = result {
+                let _ = this.update(cx, |this, cx| {
+                    this.dispatch_gpui_workspace_action_toast(
+                        "error",
+                        "Couldn't change the session's links",
+                        &error.message,
+                        cx,
+                    );
+                });
+            }
+        })
+        .detach();
+    }
+
+    fn gx_store_answer_work_cleanup(
+        &mut self,
+        session: SessionKey,
+        answer: &str,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let params = json!({
+            "projectId": session.project_id,
+            "sessionId": session.session_id,
+            "answer": answer,
+        });
+        let clean_up = answer == "cleanUp";
+        cx.spawn(async move |this, cx| {
+            let result = gx_rpc(None, "/api/answerWorkCleanup", params).await;
+            let _ = this.update(cx, |this, cx| match result {
+                Ok(answer) if clean_up => {
+                    if answer.get("keptDirtyWorktree").and_then(Value::as_bool) == Some(true) {
+                        this.dispatch_gpui_workspace_action_toast(
+                            "warning",
+                            "Session parked, worktree kept",
+                            "The worktree has uncommitted changes, so it was not removed.",
+                            cx,
+                        );
+                    }
+                }
+                Ok(_) => {}
+                Err(error) => this.dispatch_gpui_workspace_action_toast(
+                    "error",
+                    if clean_up {
+                        "Couldn't clean up the session"
+                    } else {
+                        "Couldn't save your answer"
+                    },
+                    &error.message,
+                    cx,
+                ),
+            });
+        })
+        .detach();
+    }
+}
+
+/// This computer's session behind a sidebar row id; another machine's row has no Link to menu.
+fn local_session(sidebar_session_id: Option<&Value>) -> Option<SessionKey> {
+    sidebar_session_id
+        .and_then(Value::as_str)
+        .and_then(SessionKey::parse_sidebar_session_id)
+        .filter(|session| session.machine.is_local())
+}

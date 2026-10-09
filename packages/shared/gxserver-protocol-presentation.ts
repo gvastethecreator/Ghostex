@@ -139,6 +139,10 @@ export interface GxserverPresentationProject {
   botRunsToday?: number;
   /** Work mode is on for this project (server/src/work_mode/); present only when true. */
   workMode?: true;
+  /** Work mode is on and a Linear key is set for this project; present only when true. */
+  workLinear?: true;
+  /** The workspace this project belongs to (server/src/workspaces/); absent = the default workspace. */
+  workspaceId?: string;
   /*
   CDXC:Icons 2026-07-29 (discovered icons):
   The icon the PROJECT ITSELF ships, discovered server-side inside the checkout
@@ -245,6 +249,8 @@ export interface GxserverPresentationCapabilities {
    * context submenu, not even the built-in Other view.
    */
   spaces?: boolean;
+  /** `sidebarWorkspaces`, `workspaceId` on projects and Spaces, and the workspace routes. */
+  workspaces?: boolean;
   /**
    * CDXC:Worktrees 2026-07-29:
    * `/api/createWorktreeSession` + `/api/removeSessionWorktree` are served by
@@ -278,6 +284,10 @@ export interface GxserverPresentationSessionWork {
   githubIssues?: Array<{ number: number; title?: string; state?: "open" | "closed"; url?: string }>;
   /** A Linear project is a release the team works on, never a repo. */
   linearProject?: { name: string; url?: string };
+  /** Some link was set by hand, so "Back to automatic" has something to undo. */
+  handSet?: true;
+  /** The linked PR is merged and its Clean up / Keep offer is unanswered (server/src/work_mode/cleanup.rs). */
+  offerCleanup?: true;
 }
 
 /** The agentbox sandbox a session's agent runs in (`PresentationAgentbox` in gx-protocol). */
@@ -542,11 +552,30 @@ export interface GxserverSidebarSpace {
   memberProjectIds: readonly string[];
   name: string;
   spaceId: string;
+  /** The workspace the Space belongs to; absent = the default workspace. */
+  workspaceId?: string;
 }
 
 export interface GxserverSidebarSpacesState {
   order: readonly string[];
   spaces: Readonly<Record<string, GxserverSidebarSpace>>;
+}
+
+/** One workspace (server/src/workspaces/store.rs). `kind` sets its projects' work-mode default. */
+export interface GxserverSidebarWorkspace {
+  claudeAccountId?: string;
+  color: string;
+  kind: "work" | "personal";
+  letter: string;
+  name: string;
+  workspaceId: string;
+}
+
+/** Projects and Spaces with no `workspaceId` belong to `defaultWorkspaceId`, which always exists. */
+export interface GxserverSidebarWorkspacesState {
+  defaultWorkspaceId: string;
+  order: readonly string[];
+  workspaces: Readonly<Record<string, GxserverSidebarWorkspace>>;
 }
 
 export interface GxserverWorkspaceSessionGroup {
@@ -653,6 +682,7 @@ export interface GxserverPresentationSnapshot {
   sessions: readonly GxserverPresentationSession[];
   sidebarProjectCollections?: GxserverSidebarProjectCollectionsState;
   sidebarSpaces?: GxserverSidebarSpacesState;
+  sidebarWorkspaces?: GxserverSidebarWorkspacesState;
   customSessionTags?: GxserverCustomSessionTagsState;
   workspaceGroups?: GxserverWorkspaceSessionGroupsState;
 }

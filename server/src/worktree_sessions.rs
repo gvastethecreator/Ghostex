@@ -32,6 +32,9 @@ pub const WORKTREE_TEMP_BRANCH_PREFIX: &str = "ghostex/";
 pub const WORKTREE_TEMP_BRANCH_SUFFIX_LENGTH: usize = 8;
 /// Runtime-settings key holding the marker described at the top of this file.
 pub const WORKTREE_SESSION_RUNTIME_KEY: &str = "worktreeSession";
+/// Marker flag for a session started on a branch the caller named (a work-mode ticket branch):
+/// the auto-rename never touches it.
+pub const WORKTREE_SESSION_CHOSEN_BRANCH_KEY: &str = "branchChosen";
 /// Cadence of the temp-branch auto-rename pass.
 pub const WORKTREE_BRANCH_RENAME_SWEEP_INTERVAL_SECONDS: u64 = 60;
 /// At most this many branches are renamed per pass, so a machine that somehow
@@ -283,9 +286,20 @@ its original placeholder title source, and only once.
 - the recorded branch is still the `ghostex/<8hex>` temp shape (a branch already
   renamed, or one the user renamed by hand, is finished business),
 - the session has a REAL title: different from the one gxserver created it with,
-  and no longer the placeholder title source every fresh row starts on.
+  and no longer the placeholder title source every fresh row starts on,
+- the session was not started on a branch the caller chose (a work-mode ticket
+  branch carries `branchChosen`; it already has its final name).
 */
 pub fn plan_worktree_branch_rename(session: &Value) -> Option<WorktreeBranchRenamePlan> {
+    let chosen_branch = session
+        .pointer(&format!(
+            "/runtimeSettings/{WORKTREE_SESSION_RUNTIME_KEY}/{WORKTREE_SESSION_CHOSEN_BRANCH_KEY}"
+        ))
+        .and_then(Value::as_bool)
+        == Some(true);
+    if chosen_branch {
+        return None;
+    }
     let marker = read_worktree_session_marker(session)?;
     if marker.renamed_at.is_some() || !is_worktree_temp_branch(&marker.branch) {
         return None;

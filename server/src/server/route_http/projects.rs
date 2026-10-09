@@ -28,6 +28,8 @@ pub(super) async fn route_projects_http(
             &body_json,
             |repository, db, params, _| {
                 let project = repository.create_project(params)?;
+                let project =
+                    crate::workspaces::place_added_project(repository, db, project, params)?;
                 let project_id = value_text(&project, "projectId")?;
                 schedule_presentation_project_delta(
                     &state,
@@ -210,6 +212,8 @@ pub(super) async fn route_projects_http(
             &body_json,
             |repository, db, params, _| {
                 let project = repository.add_project_path(params)?;
+                let project =
+                    crate::workspaces::place_added_project(repository, db, project, params)?;
                 let project_id = value_text(&project, "projectId")?;
                 schedule_presentation_project_delta(
                     &state,
@@ -232,6 +236,8 @@ pub(super) async fn route_projects_http(
                 move |repository, db, params, _| {
                     let project_params = create_quick_project_params(&home_dir, params)?;
                     let project = repository.add_project_path(&project_params)?;
+                    let project =
+                        crate::workspaces::place_added_project(repository, db, project, params)?;
                     let project_id = value_text(&project, "projectId")?;
                     schedule_presentation_project_delta(
                         &quick_project_state,

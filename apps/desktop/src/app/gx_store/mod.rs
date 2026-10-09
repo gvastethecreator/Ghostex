@@ -134,7 +134,9 @@ mod space_editor;
 mod space_sleep;
 mod space_switch;
 pub(crate) mod terminal_lifecycle;
+mod work_links;
 mod work_mode;
+mod workspaces;
 mod workspace_groups;
 
 /// The client-storage doors, for the other Rust hosts in this app that own catalogued stores of

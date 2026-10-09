@@ -163,6 +163,7 @@ impl GhostexGpuiApp {
                 ProjectWorkareaCefSurfaceSlotKey::Kanban
                     | ProjectWorkareaCefSurfaceSlotKey::Automate
                     | ProjectWorkareaCefSurfaceSlotKey::Manage
+                    | ProjectWorkareaCefSurfaceSlotKey::Work
             )
         };
         let live = self

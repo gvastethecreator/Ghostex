@@ -9,6 +9,7 @@ use crate::protocol::rpc_success;
 use crate::work_mode::{
     linear_api_key_summary, merge_work_links, project_work_mode, resolve_work_mode_project,
     set_project_work_mode, store_linear_api_key, verify_linear_api_key, write_work_links,
+    LinearKeyScope,
 };
 
 use super::super::work_mode_sync::{publish_project_work_mode_change, spawn_work_mode_refresh};
@@ -41,7 +42,9 @@ pub(super) async fn route_work_mode_http(
                             })?;
                     let project = resolve_work_mode_project(repository, params)?;
                     let project_id = value_text(&project, "projectId")?;
-                    let project = if project_work_mode(&project) == enabled {
+                    let project = if project_work_mode(&project) == enabled
+                        && crate::workspaces::project_work_mode_set_by_hand(&project)
+                    {
                         project
                     } else {
                         set_project_work_mode(repository, &project, enabled)?
@@ -154,16 +157,26 @@ pub(super) async fn route_work_mode_http(
 }
 
 /// Checks a key with Linear before storing it, so a typo fails here instead of as empty cards.
-/// An empty or missing `apiKey` removes the key.
+/// An empty or missing `apiKey` removes the key. `projectId` sets a project's override,
+/// `workspaceId` a workspace's key, neither the shared key.
 fn set_linear_api_key(
     state: &AppState,
     params: &Map<String, Value>,
 ) -> Result<Value, DomainStateError> {
-    let project_id = params
-        .get("projectId")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|id| !id.is_empty());
+    let text = |key: &str| {
+        params
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+    };
+    let project_id = text("projectId");
+    let workspace_id = text("workspaceId");
+    let scope = match (project_id, workspace_id) {
+        (Some(project_id), _) => LinearKeyScope::Project(project_id),
+        (None, Some(workspace_id)) => LinearKeyScope::Workspace(workspace_id),
+        (None, None) => LinearKeyScope::Shared,
+    };
     let api_key = params
         .get("apiKey")
         .and_then(Value::as_str)
@@ -173,13 +186,14 @@ fn set_linear_api_key(
         Some(key) => Some(verify_linear_api_key(key).map_err(DomainStateError::bad_request)?),
         None => None,
     };
-    store_linear_api_key(&state.paths, project_id, api_key).map_err(|error| DomainStateError {
+    store_linear_api_key(&state.paths, scope, api_key).map_err(|error| DomainStateError {
         code: "internalError",
         message: format!("Could not save the Linear key: {error}"),
     })?;
     Ok(json!({
         "configured": api_key.is_some(),
         "projectId": project_id,
+        "workspaceId": workspace_id,
         "account": account,
     }))
 }

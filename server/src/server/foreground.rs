@@ -330,6 +330,7 @@ pub async fn run_gxserver_foreground(
     let session_chat_async_question_status_task =
         crate::session_chat_async_questions::spawn_async_question_status_task(&state);
     let freebuff_activity_task = crate::freebuff_activity::spawn_freebuff_activity_task(&state);
+    let team_sync_task = crate::team_sync::spawn_team_sync_task(&state);
     /*
     CDXC:Telemetry 2026-08-26:
     Analytics exists only in the long-running daemon. Starting it here rather
@@ -378,6 +379,7 @@ pub async fn run_gxserver_foreground(
     session_chat_fleet_status_task.abort();
     session_chat_async_question_status_task.abort();
     freebuff_activity_task.abort();
+    team_sync_task.abort();
     /*
     The telemetry flush task is AWAITED rather than aborted, because it does a
     final flush after the shutdown broadcast: aborting it would throw away

@@ -245,6 +245,12 @@ impl GhostexGpuiApp {
             GpuiAppModalKind::Feedback => {
                 self.open_gpui_feedback_modal(cx);
             }
+            GpuiAppModalKind::CreateLinearTicket => {
+                self.open_gpui_create_linear_ticket_modal(open_message, cx);
+            }
+            GpuiAppModalKind::WorkLinkPicker => {
+                self.open_gpui_work_link_picker_modal(open_message, cx);
+            }
             // NATIVE-MODAL-OPEN-ARMS: one arm per converted modal kind.
             _ => return false,
         }

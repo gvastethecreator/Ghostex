@@ -11,13 +11,15 @@ import { writeClassicModuleAssets } from '../../tooling/docs-classic-assets';
 const gpuiRoot = fileURLToPath(new URL('.', import.meta.url));
 const repoRoot = path.resolve(gpuiRoot, '..', '..');
 const sidebarOutDir = path.resolve(gpuiRoot, 'dist/sidebar');
-const cefHtmlEntries = ['manage.html'] as const;
+const cefHtmlEntries = ['manage.html', 'work.html'] as const;
 /*
  * CDXC:CefRuntime 2026-06-28-16:18:
  * GPUI CEF entry modules should describe the stable surface they mount, not the historical porting phase. Keep this explicit entry map as the source of truth for the CEF bundle inputs so HTML wrappers, Vite output, and packaged resources stay aligned.
  */
 const cefHtmlEntryScripts = {
   'manage.html': path.resolve(gpuiRoot, 'sidebar/manage-main.tsx'),
+  // CDXC:WorkMode 2026-10-09 SEE-ALSO: the Work view's page (app/work_view/ loads it into the view panel).
+  'work.html': path.resolve(gpuiRoot, 'sidebar/work-main.tsx'),
 } satisfies Record<(typeof cefHtmlEntries)[number], string>;
 
 function inlineCefHtmlAssets(): Plugin {
@@ -351,6 +353,7 @@ export default defineConfig({
        */
       input: {
         manage: path.resolve(gpuiRoot, 'manage.html'),
+        work: path.resolve(gpuiRoot, 'work.html'),
       },
     },
   },

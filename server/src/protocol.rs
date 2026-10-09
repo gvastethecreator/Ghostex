@@ -721,13 +721,64 @@ pub fn endpoint_for(path: &str) -> Option<EndpointDescriptor> {
         session's links like any other session metadata; both take opaque project and session ids.
         */
         | "/api/setProjectWorkMode"
-        | "/api/setSessionWorkLinks" => remote_allowed(path),
+        | "/api/setSessionWorkLinks"
+        // The Link to picker's suggestions and the merged-PR Clean up / Keep answer act on one
+        // session by its ids, like the links themselves.
+        | "/api/listWorkLinkCandidates"
+        | "/api/answerWorkCleanup"
+        /*
+        CDXC:WorkMode 2026-10-09 WHY:
+        Starting work on a ticket and creating a Linear ticket are remote-allowed like
+        createWorktreeSession: a sidebar showing a remote machine's projects starts work there. They
+        use that machine's Linear key without ever returning it, and take only opaque ids and text.
+        */
+        | "/api/startWorkOnTicket"
+        | "/api/createLinearIssue"
+        | "/api/listLinearTeams"
+        | "/api/listLinearProjects" => remote_allowed(path),
+        /*
+        CDXC:WorkMode 2026-10-09 WHY:
+        The Work page reads the daemon that owns the projects, like the sidebar: the list, a
+        ticket's details and its team flow take opaque ids and return what Linear and `gh` say,
+        never a key. Editing the team flow is a setting of this computer's.
+        */
+        "/api/listWorkItems" | "/api/readWorkItem" | "/api/readTeamFlow" => remote_allowed(path),
+        "/api/updateTeamFlow" => full_local(path),
+        /*
+        CDXC:Workspaces 2026-10-09 WHY:
+        Workspaces belong to the daemon that owns the projects, exactly like its Spaces, so a
+        remote gxserver section reads and edits its own; the document carries only bounded ids,
+        names, letters, colors and an account id.
+        */
+        "/api/readWorkspaces"
+        | "/api/createWorkspace"
+        | "/api/updateWorkspace"
+        | "/api/deleteWorkspace"
+        | "/api/moveProjectToWorkspace" => remote_allowed(path),
         /*
         CDXC:WorkMode 2026-10-09 WHY:
         The Linear key is a secret on this computer, so only this computer's clients may set it or
         ask which keys exist.
         */
         "/api/setLinearApiKey" | "/api/readWorkModeStatus" => full_local(path),
+        /*
+        CDXC:TeamSync 2026-10-09 WHY:
+        These hold or use this computer's member token for the team's Convex project, so only this
+        computer's clients may call them; a remote sidebar gets its own machine's team data there.
+        */
+        "/api/joinTeamSync"
+        | "/api/connectTeamSync"
+        | "/api/leaveTeamSync"
+        | "/api/readTeamSyncStatus"
+        | "/api/createTeamSyncInvite"
+        | "/api/setTeamSyncIdentity"
+        | "/api/pingTeamSync"
+        | "/api/listTeamSyncCommands"
+        | "/api/listTicketSlackThreads"
+        | "/api/readTeamFlow"
+        | "/api/setTeamFlow"
+        | "/api/readSlackManifest"
+        | "/api/postSlackWorkingThread" => full_local(path),
         "/api/createQuickProject" | "/api/syncBotProjects" => full_local(path),
         /*
         CDXC:Bots 2026-09-27 WHY:

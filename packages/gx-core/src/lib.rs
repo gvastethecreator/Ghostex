@@ -181,7 +181,7 @@ pub use crate::sidebar_menu::{
     agent_launcher_items, agent_launcher_items_with_accounts, agent_logo_icons, colored_agent_logo,
     hover_strip, menu_to_json, project_header_actions, HeaderCommand, HoverAction, HoverStrip,
     LauncherAgent, MenuCommand, MenuGroup, MenuHost, MenuItem, MenuOpenTarget, MenuSecondary,
-    MenuSplit, SessionActions, SidebarMenus,
+    MenuSplit, SessionActions, SidebarMenus, workspace_menu,
 };
 pub use crate::sidebar_ui::{
     collapse_into_storage, collapse_state_from_storage, hidden_items_from_storage,
@@ -212,6 +212,9 @@ pub use crate::sidebar_view::{
     SessionWork, WorkGithubIssue, WorkLinearIssue, WorkLinearProject, WorkPullRequest,
     ARMED_ACTION_CLOSE_AFTER_DONE, ARMED_ACTION_DELAYED_SEND, LOCAL_MACHINE_ID,
     MACHINE_STATE_CONNECTED, OTHER_SPACE_ID, UNTAGGED_TAG_FILTER,
+};
+pub use crate::sidebar_view::{
+    project_workspace_id, window_spaces, window_workspace, WindowWorkspace,
 };
 pub use crate::workspace_groups::{
     owns_group_command, plan_group_command, CustomTagsPush, CustomTagsPushEffect, GroupCommandPlan,

@@ -11,7 +11,7 @@ use serde_json::Value;
 use crate::de::{Rows, null_as_default};
 use crate::side_state::{
     CustomSessionTagsState, SidebarProjectCollectionsState, SidebarSpacesState,
-    WorkspaceSessionGroupsState,
+    SidebarWorkspacesState, WorkspaceSessionGroupsState,
 };
 use crate::tri::Tri;
 
@@ -49,6 +49,9 @@ pub struct PresentationSnapshot {
     pub sidebar_spaces_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_session_tags: Option<CustomSessionTagsState>,
+    /// Absent on a daemon without workspaces (`capabilities.workspaces`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sidebar_workspaces: Option<SidebarWorkspacesState>,
 }
 
 impl PresentationSnapshot {
@@ -81,6 +84,10 @@ pub struct PresentationCapabilities {
     pub spaces: bool,
     #[serde(default, deserialize_with = "crate::de::null_as_default")]
     pub worktree_sessions: bool,
+    /// The daemon has workspaces: `sidebarWorkspaces`, `workspaceId` on projects and Spaces, and
+    /// the workspace routes. Without it a client shows the machine unfiltered.
+    #[serde(default, deserialize_with = "crate::de::null_as_default")]
+    pub workspaces: bool,
 }
 
 /// One synthetic group per project today (`<projectId>:active`). User-made groups live in
@@ -188,6 +195,18 @@ pub struct PresentationProject {
         skip_serializing_if = "is_false"
     )]
     pub work_mode: bool,
+    /// Work mode is on and a Linear key is set for this project, so it can create Linear tickets.
+    /// Present only when true.
+    #[serde(
+        default,
+        deserialize_with = "crate::de::null_as_default",
+        skip_serializing_if = "is_false"
+    )]
+    pub work_linear: bool,
+    /// The workspace this project belongs to; absent = the default workspace (and on an older
+    /// daemon). A worktree project follows its parent checkout's workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
 }
 
 impl PresentationProject {
@@ -426,6 +445,22 @@ pub struct PresentationSessionWork {
     /// A Linear project is a release the team works on, never a repo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub linear_project: Option<PresentationWorkLinearProject>,
+    /// Some link was set by hand (`ghostex link-session`, the Link to menu), so "Back to
+    /// automatic" has something to undo.
+    #[serde(
+        default,
+        deserialize_with = "crate::de::null_as_default",
+        skip_serializing_if = "std::ops::Not::not"
+    )]
+    pub hand_set: bool,
+    /// The linked PR is merged and the user has not answered the Clean up / Keep offer for it yet
+    /// (server/src/work_mode/cleanup.rs).
+    #[serde(
+        default,
+        deserialize_with = "crate::de::null_as_default",
+        skip_serializing_if = "std::ops::Not::not"
+    )]
+    pub offer_cleanup: bool,
 }
 
 impl PresentationSessionWork {

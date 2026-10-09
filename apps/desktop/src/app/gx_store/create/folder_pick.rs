@@ -132,10 +132,14 @@ impl GhostexGpuiApp {
         request_id: Option<String>,
         cx: &mut gpui::Context<Self>,
     ) {
-        let params = match &name {
+        let mut params = match &name {
             Some(name) => json!({ "name": name, "path": path }),
             None => json!({ "path": path }),
         };
+        // A project added in a window joins that window's workspace (gx_store/workspaces.rs).
+        if let Some(workspace_id) = self.gx_store_window_non_default_workspace_id() {
+            params["workspaceId"] = json!(workspace_id);
+        }
         cx.spawn(async move |this, cx| {
             let result = gx_rpc(None, "/api/addProjectPath", params).await;
             let project_id = result.as_ref().ok().and_then(|response| {

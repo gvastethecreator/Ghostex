@@ -520,6 +520,17 @@ How to use this file:
 - **Easy Connect binary** `binary` (Settings UI row without a settings key; use `ghostex settings open`): Path and version of the Easy Connect binary.
 - **gxserver** `gxserver` (Settings UI row without a settings key; use `ghostex settings open`): Local API the app and phones talk to.
 - **Raw Easy Connect status** `rawStatus` (Settings UI row without a settings key; use `ghostex settings open`): Raw Easy Connect status JSON for bug reports.
+## Workspaces (tab `workspaces`)
+
+### Workspaces
+
+- **Workspace name** `workspaceName` (Settings UI row without a settings key; use `ghostex settings open`): The name and letter shown on the workspace button left of your Spaces.
+- **Workspace color** `workspaceColor` (Settings UI row without a settings key; use `ghostex settings open`): The color of the workspace button.
+- **Work or Personal** `workspaceKind` (Settings UI row without a settings key; use `ghostex settings open`): Work turns work mode on for the workspace's projects by default; Personal leaves it off.
+- **Linear API key** `workspaceLinearApiKey` (Settings UI row without a settings key; use `ghostex settings open`): The Linear key this workspace's projects use, unless a project sets its own.
+- **Claude account** `workspaceClaudeAccount` (Settings UI row without a settings key; use `ghostex settings open`): Which of your Claude accounts agents in this workspace's projects use.
+- **Browser sign-ins** `workspaceBrowserSignins` (Settings UI row without a settings key; use `ghostex settings open`): Each workspace's Browser keeps its own cookies; sign out of every site here.
+- **New workspace** `newWorkspace` (Settings UI row without a settings key; use `ghostex settings open`): Add a workspace, for example one per company you work for.
 ## Hotkeys (tab `hotkeys`)
 
 ### Projects

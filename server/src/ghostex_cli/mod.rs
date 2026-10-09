@@ -42,6 +42,8 @@ pub mod tailcat_tunnel;
 pub mod usage;
 pub mod wait;
 pub mod web;
+mod team;
+mod team_slack;
 mod work_mode;
 
 use rpc::{CliError, CliResult};
@@ -264,6 +266,8 @@ fn is_known_command(name: &str) -> bool {
         "pin-session",
         "park-session",
         "work-mode",
+        "team",
+        "slack",
         "link-session",
         "delayed-send",
         "close-after-done",
@@ -628,6 +632,8 @@ fn run_command(name: &str, args: &[String]) -> CliResult<()> {
             args,
         ),
         "work-mode" => work_mode::work_mode_command(args),
+        "team" => team::team_command(args),
+        "slack" => team_slack::slack_command(args),
         "link-session" => work_mode::link_session_command(args),
         "delayed-send" => {
             // `--cancel` clears the armed automation; otherwise the parser

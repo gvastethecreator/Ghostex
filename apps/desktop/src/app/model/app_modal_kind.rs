@@ -49,6 +49,12 @@ pub(crate) enum GpuiAppModalKind {
     MakeCoordinator,
     /// Send Feedback, from the sidebar's chat-bubble button (feedback_modal_lifecycle.rs).
     Feedback,
+    /// Create a Linear ticket and start work on it, from a work-mode project's menu
+    /// (create_linear_ticket_modal_lifecycle.rs).
+    CreateLinearTicket,
+    /// Link a work-mode session to a PR, Linear issues, a Linear project or a GitHub issue, from
+    /// the session's Link to submenu (work_link_picker_modal_lifecycle.rs).
+    WorkLinkPicker,
     /// "Paste potentially unsafe text?" for terminal paste protection (terminal_input/paste_and_shortcuts.rs).
     TerminalPasteConfirm,
 }
@@ -94,6 +100,8 @@ impl GpuiAppModalKind {
             "newCoordinator" => Some(Self::NewCoordinator),
             "makeCoordinator" => Some(Self::MakeCoordinator),
             "feedback" => Some(Self::Feedback),
+            "createLinearTicket" => Some(Self::CreateLinearTicket),
+            "workLinkPicker" => Some(Self::WorkLinkPicker),
             "terminalPasteConfirm" => Some(Self::TerminalPasteConfirm),
             _ => None,
         }
@@ -137,6 +145,8 @@ impl GpuiAppModalKind {
             Self::NewCoordinator => "newCoordinator",
             Self::MakeCoordinator => "makeCoordinator",
             Self::Feedback => "feedback",
+            Self::CreateLinearTicket => "createLinearTicket",
+            Self::WorkLinkPicker => "workLinkPicker",
             Self::TerminalPasteConfirm => "terminalPasteConfirm",
         }
     }
@@ -178,6 +188,8 @@ impl GpuiAppModalKind {
             Self::NewCoordinator => "Ghostex New Coordinator",
             Self::MakeCoordinator => "Ghostex Make Coordinator",
             Self::Feedback => "Ghostex Send Feedback",
+            Self::CreateLinearTicket => "Ghostex Create Linear Ticket",
+            Self::WorkLinkPicker => "Ghostex Link Session",
             Self::TerminalPasteConfirm => "Ghostex Paste",
         }
     }
@@ -330,6 +342,14 @@ impl GpuiAppModalKind {
                 px(crate::app::window::FEEDBACK_MODAL_WIDTH),
                 px(crate::app::window::FEEDBACK_MODAL_INITIAL_HEIGHT),
             ),
+            Self::CreateLinearTicket => size(
+                px(crate::app::window::CREATE_LINEAR_TICKET_MODAL_WIDTH),
+                px(crate::app::window::CREATE_LINEAR_TICKET_MODAL_INITIAL_HEIGHT),
+            ),
+            Self::WorkLinkPicker => size(
+                px(crate::app::window::WORK_LINK_PICKER_MODAL_WIDTH),
+                px(crate::app::window::WORK_LINK_PICKER_MODAL_INITIAL_HEIGHT),
+            ),
             Self::Extension(id) => extension_modal_window_size(id),
             // `TERMINAL_PASTE_CONFIRM_MODAL_WIDTH` / `_INITIAL_HEIGHT` in window/terminal_paste_confirm_modal.rs.
             Self::TerminalPasteConfirm => size(px(440.0), px(180.0)),
@@ -455,7 +475,11 @@ impl GpuiAppModalKind {
             }),
             // A New Coordinator open names its project and a Make Coordinator open its session,
             // which only the sidebar knows.
-            Self::Extension(_) | Self::NewCoordinator | Self::MakeCoordinator => {
+            Self::Extension(_)
+            | Self::NewCoordinator
+            | Self::MakeCoordinator
+            | Self::CreateLinearTicket
+            | Self::WorkLinkPicker => {
                 serde_json::Value::Null
             }
             Self::UpdateAvailable => serde_json::json!({

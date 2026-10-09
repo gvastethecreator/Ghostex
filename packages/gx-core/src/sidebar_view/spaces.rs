@@ -41,6 +41,8 @@ pub struct Space {
     pub color: String,
     pub member_collection_ids: Vec<String>,
     pub member_project_ids: Vec<String>,
+    /// The workspace the Space belongs to; `None` = the default workspace.
+    pub workspace_id: Option<String>,
 }
 
 /// One machine's Spaces after client normalization.
@@ -58,6 +60,7 @@ pub(crate) struct RawSpace<'a> {
     pub(crate) member_collection_ids: &'a [String],
     pub(crate) member_project_ids: &'a [String],
     pub(crate) name: &'a str,
+    pub(crate) workspace_id: Option<&'a str>,
 }
 
 impl SpacesState {
@@ -78,6 +81,7 @@ impl SpacesState {
                             member_collection_ids: &space.member_collection_ids,
                             member_project_ids: &space.member_project_ids,
                             name: &space.name,
+                            workspace_id: space.workspace_id.as_deref(),
                         },
                     )
                 })
@@ -105,6 +109,7 @@ impl SpacesState {
                             member_collection_ids: &space.member_collection_ids,
                             member_project_ids: &space.member_project_ids,
                             name: &space.name,
+                            workspace_id: space.workspace_id.as_deref(),
                         },
                     )
                 })
@@ -167,6 +172,9 @@ impl SpacesState {
                 name: bounded_text(&candidate.name, MAX_NAME_CHARS)
                     .unwrap_or_else(|| space_id.clone()),
                 space_id: space_id.clone(),
+                workspace_id: candidate
+                    .workspace_id
+                    .and_then(|id| bounded_text(id, MAX_ID_CHARS)),
             };
             sanitized.spaces.insert(space_id.clone(), space);
             sanitized.order.push(space_id);

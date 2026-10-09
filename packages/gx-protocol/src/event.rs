@@ -10,7 +10,7 @@ use crate::peek::peek_event_type;
 use crate::presentation::PresentationSnapshot;
 use crate::side_state::{
     CustomSessionTagsState, SidebarProjectCollectionsState, SidebarSpacesState,
-    WorkspaceSessionGroupsState,
+    SidebarWorkspacesState, WorkspaceSessionGroupsState,
 };
 
 /// Keys every non-chat server frame carries next to `type`.
@@ -104,6 +104,16 @@ pub struct SidebarSpacesChangedFrame {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SidebarWorkspacesChangedFrame {
+    #[serde(flatten)]
+    pub header: EventHeader,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision: Option<i64>,
+    pub sidebar_workspaces: SidebarWorkspacesState,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CustomSessionTagsChangedFrame {
     #[serde(flatten)]
     pub header: EventHeader,
@@ -161,6 +171,7 @@ pub enum ServerEvent {
     WorkspaceGroupsChanged(WorkspaceGroupsChangedFrame),
     SidebarProjectCollectionsChanged(SidebarProjectCollectionsChangedFrame),
     SidebarSpacesChanged(SidebarSpacesChangedFrame),
+    SidebarWorkspacesChanged(SidebarWorkspacesChangedFrame),
     CustomSessionTagsChanged(CustomSessionTagsChangedFrame),
     GlobalSidebarCommandsChanged(GlobalSidebarCommandsChangedFrame),
     /// No payload and no revision: refetch `/api/readNotificationFeed`.
@@ -231,6 +242,7 @@ impl ServerEvent {
             Self::WorkspaceGroupsChanged(_) => "workspaceGroupsChanged",
             Self::SidebarProjectCollectionsChanged(_) => "sidebarProjectCollectionsChanged",
             Self::SidebarSpacesChanged(_) => "sidebarSpacesChanged",
+            Self::SidebarWorkspacesChanged(_) => "sidebarWorkspacesChanged",
             Self::CustomSessionTagsChanged(_) => "customSessionTagsChanged",
             Self::GlobalSidebarCommandsChanged(_) => "globalSidebarCommandsChanged",
             Self::NotificationFeedChanged(_) => "notificationFeedChanged",
@@ -259,6 +271,7 @@ impl ServerEvent {
             Self::WorkspaceGroupsChanged(frame) => &frame.header,
             Self::SidebarProjectCollectionsChanged(frame) => &frame.header,
             Self::SidebarSpacesChanged(frame) => &frame.header,
+            Self::SidebarWorkspacesChanged(frame) => &frame.header,
             Self::CustomSessionTagsChanged(frame) => &frame.header,
             Self::GlobalSidebarCommandsChanged(frame) => &frame.header,
             Self::RendererCommand(frame) => &frame.header,
@@ -309,6 +322,7 @@ impl ServerEvent {
                 source.read().map(Self::SidebarProjectCollectionsChanged)
             }
             "sidebarSpacesChanged" => source.read().map(Self::SidebarSpacesChanged),
+            "sidebarWorkspacesChanged" => source.read().map(Self::SidebarWorkspacesChanged),
             "customSessionTagsChanged" => source.read().map(Self::CustomSessionTagsChanged),
             "globalSidebarCommandsChanged" => source.read().map(Self::GlobalSidebarCommandsChanged),
             "notificationFeedChanged" => source.read().map(Self::NotificationFeedChanged),

@@ -98,7 +98,23 @@ pub(crate) fn presentation_session_work(project: &Value, session: &Value) -> Opt
         output.insert("branch".to_string(), json!(branch));
     }
     if let Some(pull_request) = presentation_pull_request(&targets) {
+        if pull_request.get("state").and_then(Value::as_str) == Some("merged") {
+            let key = work_cleanup_pull_request_key(
+                pull_request
+                    .get("number")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default(),
+                pull_request.get("url").and_then(Value::as_str),
+            );
+            if offers_work_cleanup(session, &key) {
+                output.insert("offerCleanup".to_string(), json!(true));
+            }
+        }
         output.insert("pullRequest".to_string(), pull_request);
+    }
+    // The menu's "Back to automatic" only means something when a link was set by hand.
+    if manual_work_links(session) != ManualWorkLinks::default() {
+        output.insert("handSet".to_string(), json!(true));
     }
 
     let issues: Vec<Option<LinearIssueInfo>> = targets

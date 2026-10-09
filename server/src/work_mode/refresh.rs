@@ -28,8 +28,9 @@ pub(crate) fn refresh_work_caches(paths: &GxserverPaths, projects: &[Value], ses
 
     // Which key each project uses, remembered for the projection.
     let mut keys: HashMap<u64, String> = HashMap::new();
-    for project_id in projects_by_id.keys() {
-        let key = linear_api_key(paths, Some(project_id));
+    for (project_id, project) in &projects_by_id {
+        let workspace_id = crate::workspaces::stored_project_workspace_id(project);
+        let key = linear_api_key(paths, Some(project_id), workspace_id);
         let fingerprint = key.as_deref().map(linear_key_fingerprint);
         remember_project_linear_key(project_id, fingerprint);
         if let (Some(fingerprint), Some(key)) = (fingerprint, key) {

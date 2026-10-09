@@ -194,6 +194,30 @@ impl GhostexGpuiApp {
             "searchPreviousSessionsByText" => {
                 self.handle_gpui_app_modal_previous_sessions_command(command_type, command, cx);
             }
+            // The Workspaces settings page's "Sign out of all sites" (workspace_browser.rs).
+            "clearWorkspaceBrowserSignins" => {
+                if let Some(workspace_id) = command
+                    .get("workspaceId")
+                    .and_then(serde_json::Value::as_str)
+                {
+                    match crate::app::workspace_browser::clear_workspace_browser_signins(
+                        workspace_id,
+                    ) {
+                        Ok(()) => self.dispatch_gpui_workspace_action_toast(
+                            "success",
+                            "Signed out",
+                            "This workspace's Browser is signed out of every site.",
+                            cx,
+                        ),
+                        Err(error) => self.dispatch_gpui_workspace_action_toast(
+                            "error",
+                            "Couldn't sign out",
+                            &error,
+                            cx,
+                        ),
+                    }
+                }
+            }
             "postponePortlessSetupPrompt" | "cancelPortlessSetupPrompt" => {
                 self.handle_gpui_app_modal_settings_command(command_type, command, cx);
             }

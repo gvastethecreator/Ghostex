@@ -495,6 +495,13 @@ impl Core {
                         self.presentation.apply_spaces_enabled(machine, enabled);
                 }
             }
+            ServerEvent::SidebarWorkspacesChanged(frame) => self.handle_side_state(
+                machine,
+                &frame.header.server_id,
+                frame.revision,
+                SideStateUpdate::Workspaces(frame.sidebar_workspaces),
+                output,
+            ),
             ServerEvent::CustomSessionTagsChanged(frame) => self.handle_side_state(
                 machine,
                 &frame.header.server_id,

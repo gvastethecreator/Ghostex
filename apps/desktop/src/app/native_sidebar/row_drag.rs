@@ -82,8 +82,13 @@ impl RowDragPreview {
                 .border_l_2()
                 .border_color(*color)
                 .bg(*background),
+            // A work-mode card with links is two lines tall; the preview keeps that height, with the
+            // icon and title centred on line 1 where they were grabbed.
             RowDragIdentity::Session { session } => row
-                .h(px(super::session_list::SESSION_HEIGHT * scale))
+                .h(px(super::session_list::session_card_height(session) * scale))
+                .pb(px((super::session_list::session_card_height(session)
+                    - super::session_list::SESSION_HEIGHT)
+                    * scale))
                 // The card's own insets, so the icon and title stay where they were grabbed.
                 .pl(px((5.0
                     + super::threads::thread_depth(session)

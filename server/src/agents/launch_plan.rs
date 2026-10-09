@@ -113,10 +113,12 @@ pub(crate) fn create_agent_session_params_for_project(
                 .entry("accountBaseCommand")
                 .or_insert(json!(command));
         }
+        let workspace_account_id = crate::workspaces::project_claude_account_id(db, project)?;
         crate::accounts::launch::apply_new_session(
             db,
             &agent_id,
             agent_icon.as_deref(),
+            workspace_account_id.as_deref(),
             &mut runtime_settings,
         )?
     };

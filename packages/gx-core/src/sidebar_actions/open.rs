@@ -305,6 +305,27 @@ fn plan_project_action(view: &SidebarView, command: &Value) -> Option<SidebarAct
         // editor's own id otherwise, which are the same string here (the workspace project id),
         // except for a remote group whose machine context carries no project id. That is the
         // machine's Chats group, which has no `projectContext` and returned above.
+        // The Create Linear Ticket dialog (apps/desktop/src/app/window/create_linear_ticket_modal.rs),
+        // which calls `/api/createLinearIssue` and `/api/startWorkOnTicket` (server/src/work_mode/).
+        "createLinearTicket" => {
+            let mut open = Map::new();
+            open.insert("type".to_string(), Value::String("open".to_string()));
+            open.insert(
+                "modal".to_string(),
+                Value::String("createLinearTicket".to_string()),
+            );
+            open.insert(
+                "projectId".to_string(),
+                Value::String(project.project_id.clone()),
+            );
+            open.insert(
+                "projectName".to_string(),
+                Value::String(group.core.title.clone()),
+            );
+            Some(SidebarActionPlan::one(ActionEffect::OpenAppModal {
+                payload: Value::Object(open),
+            }))
+        }
         "history" => Some(SidebarActionPlan::one(ActionEffect::OpenAppModal {
             payload: quick_access_sessions(Some(workspace_project_id.as_str()), "closed"),
         })),

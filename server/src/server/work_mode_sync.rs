@@ -12,8 +12,16 @@ use crate::domain::{DomainRepository, DomainStateError};
 use crate::logging::{GxserverLogInput, LogLevel};
 use crate::storage::open_gxserver_database;
 use crate::work_mode::{
-    presentation_session_work, project_work_mode, refresh_work_caches, work_display_title,
+    presentation_session_work, project_has_linear_key, project_work_mode, refresh_work_caches,
+    work_display_title,
 };
+
+/// Which work-mode projects last published `workLinear`, so a pass republishes a project whose
+/// Linear key was set or removed.
+fn published_linear_projects() -> &'static Mutex<HashMap<String, bool>> {
+    static PUBLISHED: OnceLock<Mutex<HashMap<String, bool>>> = OnceLock::new();
+    PUBLISHED.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 /// What each work-mode session last published, so a pass only sends the rows that changed.
 fn published_work() -> &'static Mutex<HashMap<(String, String), String>> {
@@ -56,6 +64,28 @@ pub(crate) fn run_work_mode_refresh_once(state: &Arc<AppState>) -> Result<(), Do
         }
     }
     refresh_work_caches(&state.paths, &projects, &sessions);
+
+    let mut linear_changed = Vec::new();
+    if let Ok(mut published) = published_linear_projects().lock() {
+        for project in &projects {
+            let Some(project_id) = project.get("projectId").and_then(Value::as_str) else {
+                continue;
+            };
+            let has_key = project_has_linear_key(project);
+            if published.insert(project_id.to_string(), has_key) != Some(has_key) {
+                linear_changed.push(project_id.to_string());
+            }
+        }
+    }
+    for project_id in linear_changed {
+        schedule_presentation_project_delta(
+            state,
+            &db,
+            &repository,
+            &project_id,
+            "projectUpdated",
+        )?;
+    }
 
     let projects_by_id: HashMap<&str, &Value> = projects
         .iter()

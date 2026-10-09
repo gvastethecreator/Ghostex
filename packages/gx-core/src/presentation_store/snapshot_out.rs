@@ -246,6 +246,7 @@ impl MachinePresentation {
             sidebar_project_collections: self.side_state().project_collections.clone(),
             sidebar_spaces: self.side_state().spaces.clone(),
             sidebar_spaces_enabled: self.side_state().spaces_enabled,
+            sidebar_workspaces: self.side_state().workspaces.clone(),
             custom_session_tags: self.side_state().custom_session_tags.clone(),
         })
     }

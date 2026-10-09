@@ -15,6 +15,10 @@ pub struct SessionWork {
     pub github_issues: Vec<WorkGithubIssue>,
     /// A release the team works on in Linear, never a repo.
     pub linear_project: Option<WorkLinearProject>,
+    /// Some link was set by hand, so the Link to menu offers "Back to automatic".
+    pub hand_set: bool,
+    /// The linked PR is merged and the Clean up / Keep offer for it is unanswered.
+    pub offer_cleanup: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -95,6 +99,8 @@ impl SessionWork {
                     name: project.name.clone(),
                     url: project.url.clone(),
                 }),
+            hand_set: work.hand_set,
+            offer_cleanup: work.offer_cleanup,
         }
     }
 

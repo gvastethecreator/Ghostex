@@ -40,6 +40,20 @@ pub(crate) fn insert_sidebar_project_collections_presentation_payload(
     Ok(())
 }
 
+/// CDXC:Workspaces 2026-10-09 WHY:
+/// The workspaces document rides the snapshot beside Spaces, so a window can filter its projects
+/// and Spaces by workspace from its first frame.
+pub(crate) fn insert_sidebar_workspaces_presentation_payload(
+    snapshot: &mut Value,
+    db: &Connection,
+) -> Result<(), DomainStateError> {
+    let workspaces = crate::workspaces::read_sidebar_workspaces(db)?;
+    if let Some(snapshot) = snapshot.as_object_mut() {
+        snapshot.insert("sidebarWorkspaces".to_string(), workspaces);
+    }
+    Ok(())
+}
+
 pub(crate) fn insert_sidebar_spaces_presentation_payload(
     snapshot: &mut Value,
     db: &Connection,

@@ -38,7 +38,7 @@ pub(crate) fn browser_cef_profile_for_workspace(
 }
 
 /// Signs a workspace's Browser profile out of everything (see `cef::clear_workspace_browser_profile`).
-#[allow(dead_code)]
+/// The Workspaces settings page's "Sign out of all sites" (`clearWorkspaceBrowserSignins`).
 pub(crate) fn clear_workspace_browser_signins(workspace_id: &str) -> Result<(), String> {
     let profile = workspace_browser_profile(Some(workspace_id));
     if !cef::cef_profile_is_workspace(&profile) {
@@ -50,8 +50,9 @@ pub(crate) fn clear_workspace_browser_signins(workspace_id: &str) -> Result<(), 
 impl GhostexGpuiApp {
     /// The CEF profile a Browser tab or website view opens with in this window.
     pub(crate) fn browser_tab_cef_profile(&self, profile_id: BrowserProfileId) -> String {
-        // The window's workspace id goes here once windows carry one (`None` = the default workspace).
-        browser_cef_profile_for_workspace(profile_id, None)
+        // The window's workspace (`None` = the default workspace, gx_store/workspaces.rs).
+        let workspace_id = self.gx_store_window_non_default_workspace_id();
+        browser_cef_profile_for_workspace(profile_id, workspace_id.as_deref())
     }
 
     /// True when `profile` can create a browser now. A workspace profile whose

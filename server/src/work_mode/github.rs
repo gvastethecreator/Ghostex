@@ -172,7 +172,7 @@ fn parse_pull_request(output: &str) -> Option<WorkPullRequestInfo> {
 }
 
 /// One word for all of a PR's checks: any failure fails it, anything unfinished keeps it pending.
-fn checks_state(rollup: &Value) -> Option<&'static str> {
+pub(super) fn checks_state(rollup: &Value) -> Option<&'static str> {
     let items = rollup.as_array()?;
     if items.is_empty() {
         return None;

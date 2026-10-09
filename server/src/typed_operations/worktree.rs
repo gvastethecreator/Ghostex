@@ -95,7 +95,16 @@ pub(crate) fn build_worktree_command(
                 normalize_worktree_target_path(params.get("worktreePath"), context)?;
             let branch = normalize_optional_git_ref(params.get("branch"), "branch")?;
             let base_ref = normalize_optional_git_ref(params.get("baseRef"), "baseRef")?;
-            let mut args = vec!["worktree".to_string(), "add".to_string(), worktree_path];
+            let mut args = vec!["worktree".to_string(), "add".to_string()];
+            /*
+            CDXC:WorkMode 2026-10-09 WHY:
+            A ticket branch cut from `origin/main` would otherwise track main, so `git status`
+            and `git push` would talk about main instead of the ticket's own branch on origin.
+            */
+            if params.get("noTrack").and_then(Value::as_bool) == Some(true) {
+                args.push("--no-track".to_string());
+            }
+            args.push(worktree_path);
             if let Some(branch) = branch {
                 args.extend(["-b".to_string(), branch]);
             }

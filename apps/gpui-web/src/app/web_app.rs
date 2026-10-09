@@ -244,4 +244,35 @@ impl GhostexGpuiApp {
     pub(crate) fn persist_shell_layout_state(&self) {}
     /// Session rows cannot be dragged onto panes here, so there is no pane drag to finish.
     pub(crate) fn finish_workspace_tab_drag(&mut self, _cx: &mut Context<Self>) {}
+
+    // Workspaces (`gx_store/workspaces.rs`): a page is one window with nothing to save it in, so
+    // its workspace lasts for the page; it has no other windows and no Settings window.
+    pub(crate) fn persist_window_workspace_id(&self) {}
+    pub(crate) fn focus_window_showing_workspace(
+        &self,
+        _workspace_id: &str,
+        _cx: &mut Context<Self>,
+    ) -> bool {
+        false
+    }
+    pub(crate) fn open_workspace_in_new_window(
+        &mut self,
+        _workspace_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.dispatch_gpui_workspace_action_toast(
+            "info",
+            "Not in the browser",
+            "Open a workspace in a new window from the Ghostex app.",
+            cx,
+        );
+    }
+    pub(crate) fn open_workspace_settings_page(&mut self, cx: &mut Context<Self>) {
+        self.dispatch_gpui_workspace_action_toast(
+            "info",
+            "Not in the browser",
+            "Workspace settings are in the Ghostex app's Settings.",
+            cx,
+        );
+    }
 }

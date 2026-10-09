@@ -42,6 +42,10 @@ pub struct SidebarMenus<'a> {
     filter_catalog: TagCatalog,
     spaces: Option<SpacesState>,
     collections: CollectionsState,
+    /// This computer's workspaces, while this computer's section is drawn and its daemon has them.
+    workspaces: Option<ghostex_gx_protocol::SidebarWorkspacesState>,
+    /// The workspace each of this computer's projects is in (worktrees follow their parent).
+    project_workspaces: std::collections::BTreeMap<String, String>,
     /// The drawn machine's daemon id (`S…`), the first part of a session's global ref; absent
     /// until a stream frame has named it.
     server_id: Option<String>,
@@ -92,10 +96,34 @@ impl<'a> SidebarMenus<'a> {
             ),
             // The Spaces submenu follows the same switch the drawn list does, the drawn machine's:
             // with Spaces off the sidebar has none to offer.
+            // Only the window's workspace's Spaces (`sidebar_view/workspaces.rs`).
             spaces: spaces_enabled_on(store, inputs, &machine)
-                .then(|| side_state.and_then(|side| side.spaces.as_ref()))
+                .then(|| crate::sidebar_view::window_spaces(store, inputs, &machine))
                 .flatten()
-                .map(SpacesState::from_wire),
+                .map(|spaces| SpacesState::from_wire(&spaces)),
+            workspaces: crate::sidebar_view::window_workspace(store, inputs, &machine)
+                .map(|workspace| workspace.state.clone()),
+            project_workspaces: match (
+                crate::sidebar_view::window_workspace(store, inputs, &machine),
+                store.loaded(&machine),
+            ) {
+                (Some(workspace), Some(loaded)) => loaded
+                    .projects()
+                    .iter()
+                    .map(|project| {
+                        (
+                            project.project_id.clone(),
+                            crate::sidebar_view::project_workspace_id(
+                                workspace.state,
+                                loaded,
+                                project,
+                            )
+                            .to_string(),
+                        )
+                    })
+                    .collect(),
+                _ => std::collections::BTreeMap::new(),
+            },
             collections: match side_state.and_then(|side| side.project_collections.as_ref()) {
                 Some(state) => CollectionsState::from_wire(state),
                 None => inputs
@@ -125,6 +153,8 @@ impl<'a> SidebarMenus<'a> {
         self.filter_catalog.hash(&mut hasher);
         self.spaces.hash(&mut hasher);
         self.collections.hash(&mut hasher);
+        self.workspaces.hash(&mut hasher);
+        self.project_workspaces.hash(&mut hasher);
         self.server_id.hash(&mut hasher);
         hasher.finish()
     }
@@ -265,6 +295,13 @@ impl<'a> SidebarMenus<'a> {
                 .iter()
                 .any(|group_id| *group_id == group.core.group_id),
             open_targets: &self.host.open_targets,
+            workspace: self.workspaces.as_ref().and_then(|workspaces| {
+                let project_id = group.core.project_context.as_ref()?.project_id.as_str();
+                Some((
+                    workspaces,
+                    self.project_workspaces.get(project_id)?.as_str(),
+                ))
+            }),
         }));
         menu
     }

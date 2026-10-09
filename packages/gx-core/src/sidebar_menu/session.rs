@@ -679,6 +679,9 @@ fn full_menu(
     if !menu.is_empty() {
         menu.push(MenuItem::separator());
     }
+    if let Some(link) = super::link_menu::link_submenu(id, row, group) {
+        menu.push(link);
+    }
     menu.push(super::copy::copy_submenu(id, row, group));
     if advanced.len() > 1 {
         menu.push(MenuItem::submenu("Advanced", "dots", advanced));

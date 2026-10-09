@@ -85,9 +85,81 @@ pub fn update_sidebar_spaces(
             DomainStateError::bad_request("Sidebar spaces update requires a state object.")
         })?;
     let collections = read_sidebar_project_collections(db)?;
-    let normalized = normalize_sidebar_spaces_state(state, &collections);
+    let previous = read_stored_sidebar_spaces_state(db)?;
+    let state = carry_space_workspace_ids(state, &previous);
+    let normalized = normalize_sidebar_spaces_state(&state, &collections);
     write_sidebar_spaces_state(db, &normalized)?;
     Ok(normalized)
+}
+
+/// A Space written without a `workspaceId` keeps the one it had.
+///
+/// CDXC:Workspaces 2026-10-09 WHY:
+/// Clients that predate workspaces rewrite the whole Space document without the field; without
+/// this carry every Space would fall back to the default workspace on their next edit. A Space
+/// that never had one belongs to the default workspace.
+fn carry_space_workspace_ids(state: &Value, previous: &Value) -> Value {
+    let mut carried = state.clone();
+    let Some(spaces) = carried.get_mut("spaces").and_then(Value::as_object_mut) else {
+        return carried;
+    };
+    for (space_id, space) in spaces.iter_mut() {
+        let Some(space) = space.as_object_mut() else {
+            continue;
+        };
+        if space.contains_key("workspaceId") {
+            continue;
+        }
+        if let Some(workspace_id) = previous
+            .get("spaces")
+            .and_then(|spaces| spaces.get(space_id.trim()))
+            .and_then(|space| space.get("workspaceId"))
+        {
+            space.insert("workspaceId".to_string(), workspace_id.clone());
+        }
+    }
+    carried
+}
+
+/// Moves every Space of a deleted workspace to the default workspace, and drops a project that
+/// left for another workspace from the Spaces that list it directly. Returns the new document
+/// when it changed.
+pub fn rehome_sidebar_spaces_for_workspaces(
+    db: &Connection,
+    deleted_workspace_id: Option<&str>,
+    moved_project_ids: &[String],
+) -> Result<Option<Value>, DomainStateError> {
+    let previous = read_stored_sidebar_spaces_state(db)?;
+    let mut next = previous.clone();
+    if let Some(spaces) = next.get_mut("spaces").and_then(Value::as_object_mut) {
+        for space in spaces.values_mut() {
+            let Some(space) = space.as_object_mut() else {
+                continue;
+            };
+            if deleted_workspace_id.is_some()
+                && space.get("workspaceId").and_then(Value::as_str) == deleted_workspace_id
+            {
+                space.remove("workspaceId");
+            }
+            if let Some(members) = space
+                .get_mut("memberProjectIds")
+                .and_then(Value::as_array_mut)
+            {
+                members.retain(|member| {
+                    !member
+                        .as_str()
+                        .is_some_and(|id| moved_project_ids.iter().any(|moved| moved == id))
+                });
+            }
+        }
+    }
+    let collections = read_sidebar_project_collections(db)?;
+    let normalized = normalize_sidebar_spaces_state(&next, &collections);
+    if normalized == previous {
+        return Ok(None);
+    }
+    write_sidebar_spaces_state(db, &normalized)?;
+    Ok(Some(normalized))
 }
 
 /// Re-apply the cross-document invariants after the collections document
@@ -358,17 +430,23 @@ pub fn normalize_sidebar_spaces_state(state: &Value, collections_state: &Value) 
         let icon = trimmed_bounded_text(space_state.get("icon"), MAX_ICON_CHARS)
             .unwrap_or_else(|| DEFAULT_SIDEBAR_SPACE_ICON.to_string());
         let color = normalized_space_color(space_state.get("color"), spaces.len());
-        spaces.insert(
-            space_id.clone(),
-            json!({
-                "color": color,
-                "icon": icon,
-                "memberCollectionIds": member_collection_ids,
-                "memberProjectIds": member_project_ids,
-                "name": name,
-                "spaceId": space_id,
-            }),
-        );
+        let mut space = json!({
+            "color": color,
+            "icon": icon,
+            "memberCollectionIds": member_collection_ids,
+            "memberProjectIds": member_project_ids,
+            "name": name,
+            "spaceId": space_id,
+        });
+        // CDXC:Workspaces 2026-10-09 WHY: absent means the default workspace, so the stored
+        // document of an install that never made a second workspace stays byte-identical.
+        if let Some(workspace_id) =
+            trimmed_bounded_text(space_state.get("workspaceId"), MAX_ID_CHARS)
+                .filter(|id| id != crate::workspaces::DEFAULT_WORKSPACE_ID)
+        {
+            space["workspaceId"] = Value::String(workspace_id);
+        }
+        spaces.insert(space_id.clone(), space);
         order.push(space_id);
     }
     json!({

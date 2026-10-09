@@ -25,6 +25,9 @@ pub struct ProjectMenuInput<'a> {
     /// The project ids the user hid from the list.
     pub hidden_group: bool,
     pub open_targets: &'a [MenuOpenTarget],
+    /// This computer's workspaces and the one the project is in; `None` for a remote machine's
+    /// project or a daemon without workspaces.
+    pub workspace: Option<(&'a ghostex_gx_protocol::SidebarWorkspacesState, &'a str)>,
 }
 
 /// `createNativeProjectMenu`.
@@ -159,6 +162,16 @@ pub fn project_menu(input: &ProjectMenuInput<'_>) -> Vec<MenuItem> {
     }
     // CDXC:WorkMode 2026-10-09 DECISION:
     // User: work mode is a per-project switch: right-click the project → Work mode, on by default for Work-workspace projects (later) and off in Personal. Only this computer's projects: `/api/setProjectWorkMode` answers for the gxserver the app talks to.
+    if let Some((workspaces, project_workspace_id)) = input
+        .workspace
+        .filter(|_| project.bot_profile.is_none() && !group.is_remote && !group.is_stale)
+    {
+        menu.push(super::workspace::move_to_workspace_menu(
+            workspaces,
+            project.project_id.as_str(),
+            project_workspace_id,
+        ));
+    }
     if project.bot_profile.is_none() && !group.is_remote && !group.is_stale {
         menu.push(
             MenuItem::row(
