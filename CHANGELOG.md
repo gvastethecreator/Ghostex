@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+## 10.16.0 - 2026-10-09
+
+**Ghostex 10.16.0 is out.** Chat View no longer starts a terminal it doesn't need, the phone opens chats at once, custom agents can keep their own Claude or Codex login, and the Files editor handles wide tables, selections and long code lines properly.
+
+### ⚡ Speed
+- **Chat View no longer runs a terminal in the background:** a session's terminal starts the first time you switch to it, and your last three stay warm. Terminal View works exactly as before.
+- **On Windows, switching between Chat and Terminal resizes the agent straight away** instead of waiting for a size check.
+- **Settings > General > Faster rendering (experimental) redraws only what changed,** which uses less CPU while agents stream and you scroll; GPUI is updated to the latest upstream.
+
+### 💬 Chat
+- **`#123` issue and PR numbers link to the project's GitHub,** and only real 6- and 8-digit hex colors show a color swatch.
+- **Long code blocks are capped** with an expand button and scroll inside, charts draw in, and list markers and finished tasks are quieter.
+- **A message is never sent twice** when the computer is slow, and its preview bubble always clears.
+- **Codex's weekly limit shows in the status line** on plans that only have a weekly limit.
+- **View and Switch Account in More actions open on click and close on a second click.**
+- **A pane shows its blue attention outline** whenever its session's sidebar dot is blue.
+
+### 👤 Accounts
+- **Custom agents that use their own login keep it:** an agent that sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME`, or runs its own wrapper, runs as-is, and Ghostex shows "Uses its own login" instead of offering accounts, thanks to @landygg.
+- **Continue automatically is on by default,** and at a limit Ghostex uses another account.
+- **An account whose subscription access was disabled is skipped,** and a message to one of its sessions first moves it to an account with usage; Settings > Accounts says why it turned Manual.
+- **The terminal view's ⋯ menu offers Switch Account** for Claude and Codex, with each account's usage.
+
+### 📂 Files
+- **Wide tables fit the editor like the chat's,** wrapping long columns and scrolling sideways when they still can't fit, with Open in window, Copy as Markdown and Copy as CSV on hover.
+- **Typing over a selection replaces it,** wrapped code lines keep their background, and the editor's scrollbar is always shown.
+- **The floating files list opens only from its button** and slides in from the right, without moving the bar behind it.
+- **Files opened from outside the project before the last update open again** instead of asking to be reopened from a chat link.
+
+### 🪟 Windows and dialogs
+- **Menus with hotkeys widen to fit Windows' spelled-out shortcuts,** and modal scrollbars sit 1px from the window edge.
+
+### 📱 Phone
+- **Chats open at once:** a Chat View session no longer connects its terminal until you switch to it, and chat uses one warm connection per computer instead of a new SSH command per request.
+
 ## 10.15.5 - 2026-10-08
 
 **Ghostex 10.15.5 is out.** Windows close when you click away, every conversation keeps its own model, `!` commands get a cleaner card, and the app waits for its background service instead of asking you to click.
