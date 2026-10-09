@@ -144,10 +144,14 @@ const TERMINAL_AGENT_BAR_DICTATE_ICON: &str = "titlebar/microphone.svg";
 const TERMINAL_AGENT_BAR_STOP_DICTATING_ICON: &str = "titlebar/player-stop.svg";
 const TERMINAL_AGENT_BAR_EXPORT_TRANSCRIPT_ICON: &str = "titlebar/file-export.svg";
 const TERMINAL_AGENT_BAR_SWITCH_ACCOUNT_ICON: &str = "titlebar/user-circle.svg";
-const TERMINAL_AGENT_BAR_SUBMENU_CHEVRON_ICON: &str = "titlebar/chevron-left.svg";
-/// The Switch Account flyout: opens to the LEFT of the menu (the menu hugs the
-/// pane's right edge), bottom-aligned with it, slightly wider for agent names.
+const TERMINAL_AGENT_BAR_SUBMENU_CHEVRON_ICON: &str = "titlebar/chevron-right.svg";
+/// The Switch Account flyout: bottom-aligned with the menu (its row sits near the window's bottom,
+/// so a flyout hung from the row would run off it), slightly wider for agent names. It opens to
+/// the RIGHT of the menu, like the chat menu's submenus, and to the left only when the window has
+/// no room on the right (the menu hugs the right edge).
 const TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_WIDTH: f32 = 220.0;
+/// Room the flyout keeps clear of the window's right edge before it flips to the left.
+const TERMINAL_AGENT_BAR_FLYOUT_WINDOW_MARGIN: f32 = 8.0;
 const TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_GAP: f32 = 4.0;
 const TERMINAL_AGENT_BAR_COPY_SESSION_ID_ICON: &str = "titlebar/copy.svg";
 
@@ -670,12 +674,12 @@ impl GhostexGpuiApp {
                 // keep the menu up, closed it. A press inside the menu or the
                 // flyout is therefore not a dismissal; the rows close the menu
                 // themselves when they should.
-                let menu_bounds = TerminalBarPopupBounds::default();
+                let menu_bounds = self.agents_terminal_action_bar_menu_measure.clone();
                 let flyout_bounds = TerminalBarPopupBounds::default();
                 let (inside_menu, inside_flyout) = (menu_bounds.clone(), flyout_bounds.clone());
                 this.on_mouse_down_out(cx.listener(
                     move |this, event: &MouseDownEvent, _window, cx| {
-                        if inside_menu.get().contains(&event.position)
+                        if inside_menu.get().0.contains(&event.position)
                             || inside_flyout.get().contains(&event.position)
                         {
                             return;
@@ -700,10 +704,14 @@ impl GhostexGpuiApp {
         surface: TerminalAgentBarSurface,
         session_id: TerminalSessionId,
         suffix: &str,
-        menu_bounds: &TerminalBarPopupBounds,
+        menu_bounds: &TerminalBarMenuMeasure,
         flyout_bounds: &TerminalBarPopupBounds,
         cx: &mut gpui::Context<Self>,
     ) -> AnyElement {
+        // Where the menu was last painted and how wide the window was: the flyout opens to the
+        // right unless it would run past the window's right edge. Nothing is measured on the
+        // frame the menu first opens, and the flyout cannot be open yet, so it starts on the right.
+        let (painted_menu, window_width) = menu_bounds.get();
         let switchable_agents = self
             .agents_sidebar_session_for_terminal(session_id)
             .map(|session| session.switchable_agents.clone())
@@ -745,7 +753,7 @@ impl GhostexGpuiApp {
                 .blur_radius(px(22.0)),
             ])
             .occlude()
-            .child(terminal_agent_bar_popup_bounds_probe(menu_bounds));
+            .child(terminal_agent_bar_menu_probe(menu_bounds));
 
         for row in TERMINAL_AGENT_BAR_MENU_ROWS {
             match row {
@@ -766,11 +774,18 @@ impl GhostexGpuiApp {
             }
         }
         if self.agents_terminal_action_bar_account_submenu_open {
+            let opens_left = |flyout_width: f32| {
+                painted_menu.size.width > px(0.0)
+                    && painted_menu.right()
+                        + px(TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_GAP + flyout_width)
+                        > window_width - px(TERMINAL_AGENT_BAR_FLYOUT_WINDOW_MARGIN)
+            };
             if accounts_target.is_some() {
                 if let Some((_, rows)) = self.agents_terminal_action_bar_account_page.clone() {
                     menu = menu.child(
                         self.render_terminal_agent_bar_account_page(
                             menu_width,
+                            opens_left(account_flyout::ACCOUNT_PAGE_WIDTH),
                             &rows,
                             suffix,
                             flyout_bounds,
@@ -782,6 +797,7 @@ impl GhostexGpuiApp {
                 menu = menu.child(self.render_terminal_agent_bar_account_submenu(
                     session_id,
                     menu_width,
+                    opens_left(TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_WIDTH),
                     &switchable_agents,
                     suffix,
                     flyout_bounds,
@@ -851,17 +867,20 @@ impl GhostexGpuiApp {
         &self,
         session_id: TerminalSessionId,
         menu_width: f32,
+        opens_left: bool,
         switchable_agents: &[GpuiSwitchableSessionAgent],
         suffix: &str,
         flyout_bounds: &TerminalBarPopupBounds,
         cx: &mut gpui::Context<Self>,
     ) -> AnyElement {
+        let offset = px(menu_width + TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_GAP);
         let mut submenu = div()
             .id(format!(
                 "ghostex-gpui-terminal-agent-bar-account-submenu-{suffix}"
             ))
             .absolute()
-            .right(px(menu_width + TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_GAP))
+            .when(opens_left, |this| this.right(offset))
+            .when(!opens_left, |this| this.left(offset))
             .bottom_0()
             .w(px(TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_WIDTH))
             .flex()
@@ -1471,6 +1490,23 @@ fn terminal_agent_bar_menu_group_label(label: &'static str) -> AnyElement {
 /// Where a popup of the ⋯ menu was last painted, so the anchor's dismissal can tell a press on it
 /// from a press elsewhere.
 type TerminalBarPopupBounds = std::rc::Rc<std::cell::Cell<gpui::Bounds<gpui::Pixels>>>;
+
+/// Where the ⋯ menu was last painted and the window's width then. Kept on the app, so the next
+/// render knows which side of the menu has room for the flyout.
+pub(crate) type TerminalBarMenuMeasure =
+    std::rc::Rc<std::cell::Cell<(gpui::Bounds<gpui::Pixels>, gpui::Pixels)>>;
+
+/// An invisible child that records the menu's painted bounds and the window's width.
+fn terminal_agent_bar_menu_probe(measure: &TerminalBarMenuMeasure) -> AnyElement {
+    let measure = measure.clone();
+    gpui::canvas(
+        move |painted, window, _| measure.set((painted, window.viewport_size().width)),
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .size_full()
+    .into_any_element()
+}
 
 /// An invisible child that records its parent's painted bounds.
 fn terminal_agent_bar_popup_bounds_probe(bounds: &TerminalBarPopupBounds) -> AnyElement {

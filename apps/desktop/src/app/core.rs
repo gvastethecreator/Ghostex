@@ -476,6 +476,10 @@ pub struct GhostexGpuiApp {
     /// the accounts were asked for, and the rows gx-core's `sessionAccounts` page last published
     /// (`gx_store/sidebar_accounts.rs`), the same rows the sidebar row's Switch Account shows.
     pub(crate) agents_terminal_action_bar_account_page: Option<(String, Vec<serde_json::Value>)>,
+    /// The ⋯ menu's last painted bounds and the window width then, which decide the side its
+    /// flyout opens on and which presses are inside the menu.
+    pub(crate) agents_terminal_action_bar_menu_measure:
+        super::render::terminal_agent_action_bar::TerminalBarMenuMeasure,
     /// Sessions whose current compatibility state has already been considered
     /// for the saved automatic Chat preference, together with the effective
     /// Default Agent View each one was considered under. These observations

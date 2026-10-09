@@ -31,7 +31,7 @@ use super::{
 use crate::app::model::*;
 use crate::*;
 
-const ACCOUNT_PAGE_WIDTH: f32 = 280.0;
+pub(super) const ACCOUNT_PAGE_WIDTH: f32 = 280.0;
 const CHECK_ICON: &str = "titlebar/check.svg";
 
 impl GhostexGpuiApp {
@@ -84,17 +84,20 @@ impl GhostexGpuiApp {
     pub(super) fn render_terminal_agent_bar_account_page(
         &self,
         menu_width: f32,
+        opens_left: bool,
         rows: &[Value],
         suffix: &str,
         flyout_bounds: &super::TerminalBarPopupBounds,
         cx: &mut gpui::Context<Self>,
     ) -> AnyElement {
+        let offset = px(menu_width + TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_GAP);
         let mut flyout = div()
             .id(format!(
                 "ghostex-gpui-terminal-agent-bar-account-page-{suffix}"
             ))
             .absolute()
-            .right(px(menu_width + TERMINAL_AGENT_BAR_ACCOUNT_SUBMENU_GAP))
+            .when(opens_left, |this| this.right(offset))
+            .when(!opens_left, |this| this.left(offset))
             .bottom_0()
             .w(px(ACCOUNT_PAGE_WIDTH))
             .font_family(crate::ui_fonts::UI_FONT)
